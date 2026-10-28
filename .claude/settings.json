@@ -1,0 +1,55 @@
+{
+  "permissions": {
+    "defaultMode": "default",
+    "disableBypassPermissionsMode": "disable",
+    "blockReadsOutsideWorkingDirectories": true,
+    "deny": [
+      "Bash(sudo *)",
+      "Bash(su *)",
+      "Bash(pkexec *)",
+      "Bash(apt *)",
+      "Bash(apt-get *)",
+      "Bash(dpkg *)",
+      "Bash(snap *)",
+      "Bash(flatpak *)",
+      "Bash(cargo install *)",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(git push *)",
+      "Bash(git commit *)",
+      "Bash(git reset *)",
+      "Bash(git rebase *)",
+      "Bash(git stash *)",
+      "Bash(git checkout *)",
+      "Bash(git clean *)",
+      "Bash(git remote *)",
+      "Bash(git config *)",
+      "Read(~/.ssh/**)",
+      "Read(~/.gnupg/**)",
+      "Read(~/.config/**)",
+      "Read(~/.local/share/keyrings/**)",
+      "Read(~/.mozilla/**)",
+      "Read(~/.git-credentials)"
+    ],
+    "ask": [
+      "Bash(rm *)",
+      "Bash(mv *)",
+      "Bash(cargo add *)",
+      "Bash(cargo update *)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "allowUnsandboxedCommands": false,
+    "autoAllowBashIfSandboxed": false,
+    "filesystem": {
+      "denyRead": ["~/"],
+      "allowRead": [".", "~/.cargo", "~/.rustup"],
+      "allowWrite": ["~/.cargo/registry", "~/.cargo/git"]
+    },
+    "network": {
+      "allowedDomains": ["crates.io", "index.crates.io", "static.crates.io"]
+    }
+  }
+}

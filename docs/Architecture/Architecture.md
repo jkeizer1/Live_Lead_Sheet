@@ -1,6 +1,6 @@
 # Live Lead Sheet — Architecture
 
-Revision 4 — 28 Oct 2026
+Revision 5 — 28 Oct 2026
 
 Builds on the Concept Brief (Revision 8) and the Experience Functional
 Specification (Revision 5). Sets the principles, the main parts, how
@@ -242,6 +242,110 @@ adapter.
 - Strict language modes; every error handled and reported in full; no
   silent defaults.
 - Each dependency justified against writing the small piece ourselves.
+
+## Decision record
+
+Why each choice was made, and what was set aside — so the reasoning
+survives without the conversations behind it.
+
+**D-1 Our own vocabulary, not MusicXML or MIDI, between links.**
+MIDI carries notes but no chord names, key, sections, or knowledge of
+what is coming. MusicXML has an excellent chord model but is a document
+format: no notion of "now", no streaming, and no place for our concepts
+(rhythm patterns assigned to bars, lead part, *no root*, triggers as
+actions, the tempo slider). MIDI 2.0's Flex Data messages (chord name,
+key, time signature, tempo) are real-time but cover only "now", with no
+structure or look-ahead, and few receivers support them — kept as a
+possible later output. Hence: our own vocabulary, MusicXML's harmony
+names (root, kind, bass, degree) borrowed, encodings only at the edges.
+
+**D-2 Rust.** Compared with C17 and Python:
+
+- *C17* — fewest dependencies (libasound, GLFW, libGL from distro
+  packages; a generated GL loader and `stb_truetype` vendored) and the
+  most stable over years, but the compiler cannot force every musical
+  case to be handled, and thread races are found only at run time.
+- *Python* — timing thread and drawing in one process contend on the
+  interpreter lock; set aside for this program (unlike the router).
+- *Rust* — exhaustive matching for the vocabulary, data races caught at
+  compile time. Its risk is dependency sprawl, managed by the allow-list.
+
+**D-3 Measured crate counts (Linux, transitive, Oct 2026).**
+
+| Stack | Crates |
+|---|---|
+| `glfw` (defaults off) + `gl` + `alsa` — OpenGL 3.3 | 19 |
+| `glfw` (defaults off) + `wgpu` + `alsa` — chosen | 73 (69 with only Vulkan and WGSL) |
+| `winit` + `glutin` + `gl` + `alsa` | 85 |
+| `glfw` (defaults on) + `gl` + `alsa` | 110 |
+
+`wgpu` alone is 58. Its major version was 0.19 in January 2024 and 30 in
+October 2026: expect breaking releases every few months, hence pinning.
+
+**D-4 wgpu (WebGPU) for the GPU.** Alternatives set aside:
+
+- *OpenGL 3.3* — fewest crates and not deprecated on Linux or Windows,
+  but Apple deprecated it in 2018 (frozen at 4.1); chose the modern API.
+- *Vulkan directly (`ash`)* — few crates, stable, modern, but hundreds of
+  lines of boilerplate (memory, synchronisation, image layouts) before
+  the first triangle.
+- *SDL3's GPU API* — one C library, WebGPU-like, but shaders must be
+  supplied per backend (SPIR-V, Metal, DXIL) and its Rust binding's
+  maturity is uncertain.
+
+wgpu keeps the shader concepts of OpenGL (vertex, fragment, WGSL), hides
+Vulkan's boilerplate, runs on Vulkan, Metal and Direct3D 12, and is the
+same API browsers use.
+
+**D-5 Shaders, not CPU drawing.** Drawing on the CPU and uploading the
+frame (as the `pixels` crate does — it still needs wgpu underneath) costs
+14.7 MB per frame at 2560 × 1440 (33 MB at 4K): about 1–2 ms to clear or
+copy, 1–3 ms to upload, and far more to draw antialiased glyphs on one
+core. With instanced shaders, a full redraw of a few thousand records
+costs the GPU almost nothing, so no dirty-rectangle or layer caching is
+needed. A CPU drawing library (`tiny-skia`) with a CPU presenter
+(`softbuffer`) was considered and set aside for this reason.
+
+**D-6 Native windows for V1, browser later.** A browser client is
+possible: the render crate compiles to WebAssembly and the WGSL shaders
+are the browser's own shading language. But as of October 2026, Chrome on
+Linux enables WebGPU by default only on Intel Gen12+ and on NVIDIA under
+Wayland — an AMD RX 9070 needs the `enable-unsafe-webgpu` flag — and
+Firefox on Linux has it only in Nightly (wgpu could fall back to WebGL2).
+A browser would make authoring controls easy, at the cost of an HTML and
+JavaScript layer and a local web server. V1 stays native; the render
+crate is kept browser-ready (no windowing, files or threads inside it).
+
+## Development environment
+
+The development machine: Linux Mint 22 (Ubuntu 24.04 base), Cinnamon on
+X11, AMD Radeon RX 9070.
+
+**System packages:**
+
+```bash
+sudo apt install build-essential cmake pkg-config libasound2-dev \
+     libglfw3-dev mesa-vulkan-drivers libvulkan1 vulkan-tools
+```
+
+None of these is Mint-specific; all are standard Linux layers. The only
+Linux-specific part of *our* code is the ALSA MIDI output.
+
+**Vulkan, checked 28 Oct 2026 with `vulkaninfo --summary`:**
+
+- GPU0: AMD Radeon RX 9070, driver RADV, Mesa 25.2.8, Vulkan 1.4.
+  RADV warns it is "not a conformant Vulkan implementation" — a
+  certification notice for this recent GPU generation, not a fault.
+- GPU1: llvmpipe, Mesa's CPU Vulkan — the automatic fallback when no GPU
+  is usable. wgpu is asked for the high-performance adapter, so it picks
+  the RX 9070.
+- Vulkan loader 1.3.275; surface extensions for X11 and Wayland present.
+
+**GLFW:** the `glfw` crate first looks for the system library through
+`pkg-config`; if it is missing or too old (the crate may expect GLFW 3.4;
+Ubuntu 24.04 may ship 3.3), it builds its bundled copy with `cmake`.
+With default features off, the X11 backend must be enabled explicitly.
+To be confirmed in the spike.
 
 ## Next
 
