@@ -1,6 +1,6 @@
 # Live Lead Sheet — Concept Brief
 
-Revision 7 — 27 Oct 2026
+Revision 8 — 28 Oct 2026
 
 ## Purpose
 
@@ -144,6 +144,28 @@ an instrument.
 **Song file.** The song is saved as plain text in a notation of our own —
 simple, clear to the musician reading or editing it by hand, and
 unambiguous to the program.
+
+## A building block
+
+The Live Lead Sheet is the first link in a chain, not only an end in
+itself. What it knows — key, meter, sections, tempo, bar and beat, the
+chord now and the chords coming — is published for other programs to
+follow, alongside the MIDI it sends. Its own screen follows the same
+published information.
+
+Later links could be:
+
+- a melody generator that follows the chord changes;
+- a transform, *e.g.* a transposition that keeps to the key;
+- Strudel or another generative or feedback-based processor;
+- a recorder that captures a melody played over the song and merges it
+  into the song as a new part;
+- other musicians over the internet, playing the same song together.
+
+None of these is built in V1, but the design must allow them. MIDI
+alone cannot carry this: it has notes, but no chord names, key, section
+or knowledge of what comes next. The MIDI router stays at the MIDI
+level; the chain runs at this musical level.
 
 ## Roles
 

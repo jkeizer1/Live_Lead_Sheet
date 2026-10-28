@@ -1,14 +1,11 @@
 # Live Lead Sheet — Experience Functional Specification
 
-Revision 1 — 27 Oct 2026
+Revision 5 — 28 Oct 2026
 
 Builds on the Concept Brief, Revision 7. Covers **V1: the leader** — a
 chordal song with its own slash rhythm and a bass accompaniment, on one
 screen. Requirements are in the musician's terms; nothing here chooses a
 language, library or internal design.
-
-Items marked *(proposed)* are new suggestions not yet agreed in the
-Concept Brief.
 
 ## 1. Play screen
 
@@ -20,7 +17,12 @@ order, by name, with its repeat count. The current section and the
 position within it are marked.
 
 **EFS-1.3 Counter.** Large and plain: `Repeat: 3 of 4   Bar: 2   Count: 1`.
-Count advances on each beat of the meter's grouping.
+Count follows the time signature, one count per unit of its lower number:
+4/4 counts 1–4, 3/4 counts 1–3, 6/8 counts 1–6, 5/8 counts 1–5, and
+2/2 (cut time) counts 1–2.
+
+**EFS-1.3a Playhead.** The playhead glides smoothly through the bar and
+pulses brightly on each count.
 
 **EFS-1.4 Tempo.** The current tempo in bpm, and the slider setting when
 it differs from the written tempo.
@@ -38,6 +40,27 @@ set in the song. Each area has, top to bottom:
 - a **pitch staff** with clef, key signature and time signature (C and ¢
   for common and cut time), showing each voicing as stacked noteheads,
   only at change points.
+
+**EFS-1.5a Chord naming.** Every chord name, on the strip, the wheel and
+in the authoring view, follows the standard convention:
+
+- the root is a capital letter, with its accidental: C, F♯, B♭;
+- minor is a lower-case **m**: Am, Am7, F♯m7♭5;
+- major seventh and its extensions use upper-case **M**: CM7, CM9 — so
+  C7 (dominant) and CM7 (major seventh) can never be confused;
+- a plain major triad is the letter alone: C;
+- diminished °, half-diminished ø, augmented +: B°, Bø7, C+;
+- an inversion or other bass note after a slash: C/E.
+
+Roman numerals follow the same rule: upper case for major (I, IV, V7),
+lower case for minor (ii, vi), with ° ø + as above (vii°).
+
+**EFS-1.5b Clefs.** Each part's clef is set in the song and never changes
+while playing: treble for a chord part, bass for a bass part, or a grand
+staff (treble and bass braced) for a chord part whose voicings run well
+below middle C. Notes outside the staff use ledger lines or an 8va/8vb
+line. The rhythm line uses the neutral (percussion) clef. Other clefs and
+mixed clefs within a part are not needed.
 
 **EFS-1.6 The strip.** Bars run left to right in one long strip, in the
 order they will actually be played — repeats are written out, not shown
@@ -81,10 +104,13 @@ which parts are hidden — never silently.
 every control. Chord symbols, counter and wheel are readable at arm's
 length.
 
+**EFS-1.14 Warnings region.** A small region of the play screen lists
+warnings as they happen (see section 8). It never covers the music.
+
 ## 2. Transport and timing
 
-**EFS-2.1 Play and stop.** Play from the start of the song, or from the
-start of any chosen section. Stop sends MIDI Stop and silences every part
+**EFS-2.1 Play and stop.** Play from the start of the song, from the
+start of the current section, or from the start of any chosen section. Stop sends MIDI Stop and silences every part
 (All Notes Off) on every port in use.
 
 **EFS-2.2 Tempo.** Each section has a written tempo, or carries on the
@@ -92,7 +118,7 @@ previous section's tempo.
 
 **EFS-2.3 Tempo slider.** For practice, a slider scales the written
 tempo, as a percentage, so tempo changes between sections keep their
-proportions. *(proposed: 50–150 %.)*
+proportions. Range 50–150 %.
 
 **EFS-2.4 Steady time.** Tempo is even, with no drift over a long
 performance.
@@ -100,17 +126,20 @@ performance.
 **EFS-2.5 MIDI clock.** MIDI clock (24 per quarter note) and Start/Stop,
 sent to each chosen output port.
 
-**EFS-2.6 Beat clock as notes.** A note pulse for devices that follow
-notes better than MIDI clock. Port, channel, note number, velocity and
-rate (per beat, per eighth…) are set by the musician. *(proposed: a
-different note on the first beat of each bar, so a sequencer without a
-reset input can be reset from it.)*
+**EFS-2.6 Beat clock as notes.** A note pulse, one per count, for devices
+that follow notes better than MIDI clock. Port, channel and note number
+are set by the musician. Count 1 of each bar is sent at full velocity,
+every other count at half — 127 and 64 unless the song sets other
+values — so a MIDI-to-CV converter can
+trigger a percussive voice and set its VCA level from the same stream,
+and the bar's first beat is always distinguishable.
 
-**EFS-2.7 Count-in.** *(proposed)* An optional one-bar count-in: clock
-and beat notes run, parts are silent, and the counter counts down.
+**EFS-2.7 Count-in.** An optional count-in of one or two bars (two help
+at fast tempos): clock and beat notes run, parts are silent, and the
+counter counts down.
 
-**EFS-2.8 Loop for practice.** *(proposed)* Loop the current section
-until released, regardless of its written repeats.
+**EFS-2.8 Loop for practice.** Loop the current section until released,
+regardless of its written repeats.
 
 ## 3. Parts and MIDI output
 
@@ -126,8 +155,8 @@ chord's root, in the octave set for the part.
 the change; the next pulse sounds the new chord. Two chords never sound
 at once in one part.
 
-**EFS-3.5 Note length.** *(proposed)* Each part has a gate length, as a
-percentage of each pulse's written value.
+**EFS-3.5 Note length.** Each part has a gate length, as a percentage of
+each pulse's written value; 50 % unless set otherwise.
 
 **EFS-3.6 Velocity.** One velocity per part in V1.
 
@@ -141,8 +170,9 @@ the key wheel.
 **EFS-4.2** A trigger is shown above the strip at its position and listed
 in the triggers panel.
 
-**EFS-4.3** *(proposed)* In V1 a trigger can send one plain MIDI message
-— note, CC or program change — to a chosen port and channel. Device
+**EFS-4.3** In V1 a trigger sends one plain MIDI message to a chosen
+port and channel: a note (number, velocity and length — many devices
+respond to notes but not to CCs), a CC, or a program change. Device
 profiles, which turn a named action into the right messages for a given
 device, come later.
 
@@ -153,6 +183,12 @@ device, come later.
 **EFS-5.2 Sections.** Add, name, reorder and remove sections. For each:
 repeat count, key (twelve roots, major or minor, chosen from a list),
 meter with its beat grouping, and tempo (written, or carry on).
+
+**EFS-5.2a Minor keys.** A minor key uses the natural-minor key
+signature, as in standard notation. Chords that use the raised sixth or
+seventh degree (*e.g.* E7 in A minor) are written with accidentals,
+named by their actual notes, and shown on the wheel as the degree's
+alternative chord. A section never has to choose a minor form.
 
 **EFS-5.3 Chords.** Start a section from a library progression, then
 change any chord, or where it falls within the bar.
@@ -175,6 +211,11 @@ away.
 **EFS-5.9 Library.** Browse library progressions and rhythm patterns,
 and save a progression or rhythm from the song into the library.
 
+**EFS-5.10 Navigation marks — later.** Not in V1, but the song structure
+must leave room for the standard navigation marks: D.C., D.S., segno,
+Coda and To Coda, Fine, and first and second endings. When they arrive,
+the strip still shows bars in the order they will actually be played.
+
 ## 6. Song file and library files
 
 **EFS-6.1** A song is one plain-text file in our own notation: simple,
@@ -188,7 +229,12 @@ hand-edited file loads as written.
 message names the file, the line, what is wrong, and what to type
 instead — *e.g.* `blues.song line 14: "IV9b" is not a chord. Try IV9 or IV7b9.`
 
-**EFS-6.4** Library progressions and rhythm patterns are plain-text files
+**EFS-6.4 MusicXML.** A song can be saved as a MusicXML file, so it
+opens in notation software: chord symbols, key and time signatures,
+sections, and each part's notes as actually played (voicings on their
+rhythms).
+
+**EFS-6.5** Library progressions and rhythm patterns are plain-text files
 in the same notation.
 
 ## 7. Starter library
@@ -203,25 +249,23 @@ basic 6/8 pulse, a bossa-style comp.
 
 ## 8. Messages and failures
 
-**EFS-8.1** Nothing fails silently. Every failure tells the musician what
-happened and exactly what to do, in a few plain words, readable
-mid-session — *e.g.* `Port "FH-2" not found. Plug it in, then press Play.`
+**EFS-8.1 Keep playing.** The program keeps playing through failures. An
+instrument or port that vanishes does not stop the song: the leader
+keeps sending, and a message sent to a missing receiver simply goes
+nowhere. Senders and receivers stay independent.
 
-**EFS-8.2** If an output port disappears while playing, the music keeps
-time on the other ports and the screen says which port was lost.
+**EFS-8.2 Nothing silent.** Every failure appears in the warnings region
+(EFS-1.14): what happened and exactly what to do, in a few plain words,
+readable mid-session — *e.g.* `FH-2 gone. Plug it back in; it rejoins on
+the next bar.`
+
+**EFS-8.3 No sound alerts.** The program never signals a failure with a
+sound.
 
 ## 9. Not in V1
 
 Listener and recorder roles; colour-phrase parts; device profiles;
-alternative tunings; modes and modal vamps; several windows or monitors.
-
-## Open questions
-
-1. Count in compound meters: in 6/8, count 1–2 (the felt beats) or 1–6?
-2. Playhead: glide smoothly through the bar, or step beat by beat?
-3. Accept or drop the *(proposed)* items: slider range (2.3), bar-start
-   note (2.6), count-in (2.7), practice loop (2.8), gate length (3.5),
-   plain-MIDI triggers (4.3).
-4. Minor keys: does a section just say "minor", with the wheel showing
-   all common minor-form chords — or does the section choose natural,
-   harmonic or melodic?
+alternative tunings; modes and modal vamps; navigation marks (D.C.,
+D.S., Coda…); SATB voices (one line per voice, one channel per voice);
+other programs following the song (see the Concept Brief, "A building
+block"); several windows or monitors.
