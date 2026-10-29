@@ -1,6 +1,6 @@
 # Live Lead Sheet — Architecture
 
-Revision 5 — 28 Oct 2026
+Revision 6 — 29 Oct 2026
 
 Builds on the Concept Brief (Revision 8) and the Experience Functional
 Specification (Revision 5). Sets the principles, the main parts, how
@@ -217,8 +217,8 @@ the same dark, soft-contrast style.
 
 | Crate | Holds |
 |---|---|
-| vocabulary | the musical language (A-1, A-2) |
-| player | musical time, the clock, publishing (A-5 – A-7) |
+| vocabulary | the musical language (A-1, A-2), including musical time (D-7) |
+| player | the clock, publishing (A-5 – A-7) |
 | render | layout (vocabulary → instance records) and GPU drawing |
 | alsa output | the MIDI output (A-3) |
 | app | windows, authoring, wiring the parts together |
@@ -316,6 +316,34 @@ A browser would make authoring controls easy, at the cost of an HTML and
 JavaScript layer and a local web server. V1 stays native; the render
 crate is kept browser-ready (no windowing, files or threads inside it).
 
+**D-7 Musical time: whole ticks, 5040 per quarter note, in a `u64`.**
+Musical time (A-7) is a count of ticks, a whole number, so adding and
+comparing positions is exact and never drifts.
+
+- *Why 5040* — it is 2⁴ · 3² · 5 · 7, so a quarter note divides exactly
+  into halves, thirds, fifths, sevenths and their products: triplets,
+  quintuplets, septuplets, dotted values, and down to sixty-fourth notes.
+  A MIDI clock pulse (24 per quarter) is exactly 210 ticks. The common
+  960 per quarter cannot hold sevenths; fractions (numerator and
+  denominator) are exact for anything but add work to every comparison.
+- *Why `u64`* — a `u32` of ticks would last about 47 hours at 300 bpm,
+  enough for a performance but a limit to keep in mind; a `u64` costs
+  nothing on a 64-bit machine and removes the question.
+- *Clock time from an anchor* — the instant of each tick is computed
+  from an anchor (the clock time and tick at which playing started or
+  the tempo last changed): anchor time + ticks since the anchor × the
+  tick's length, in integer nanoseconds. Instants are never found by
+  adding one interval after another, so rounding cannot accumulate; the
+  error is under a nanosecond at every tick, at any length of
+  performance (EFS-2.4). A tempo change, or the slider, sets a new anchor.
+- *Naming* — **tick** means only our unit of musical time. The 24-per-
+  quarter MIDI messages are always **clock pulses**, never ticks, even
+  though MIDI's own documents say "tick" loosely. Then 210 ticks per
+  pulse can never be misread.
+
+Set aside: 960 per quarter (no sevenths), fractions (slower, no gain
+for the music we need), and floating-point seconds (rounding drifts).
+
 ## Development environment
 
 The development machine: Linux Mint 22 (Ubuntu 24.04 base), Cinnamon on
@@ -354,4 +382,4 @@ To be confirmed in the spike.
    playhead; alongside, an ALSA thread sending MIDI clock and beat
    notes. Measure frame time and clock evenness.
 2. **Song notation:** first draft, worked through on a 12-bar blues.
-3. **Exact musical time:** its representation, settled in the spike.
+3. **Exact musical time:** settled — D-7.

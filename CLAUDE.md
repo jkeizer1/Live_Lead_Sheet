@@ -40,6 +40,12 @@ code only in adapters), but do not build them.
   windowed program or MIDI output must be tried, tell Jim the exact
   command (`cargo run ...`) and what to look for.
 - Work in small steps; say what you are about to change before changing it.
+- Never modify `.gitignore`; ask Jim for new ignore rules. Use
+  `--vcs none` with `cargo new`/`cargo init`.
+- External crate versions live only in `[workspace.dependencies]` in the
+  root `Cargo.toml`, written as compatible versions (e.g. `"0.12.1"`, not
+  `"=0.12.1"`); `Cargo.lock` is the exact pin and is committed. Crates use
+  `{ workspace = true }`.
 
 ## Coding rules
 
@@ -58,6 +64,12 @@ code only in adapters), but do not build them.
   or string-keyed maps standing in for a type.
 - Justify every dependency against writing a small, one-off piece.
 - Comments explain why, briefly. Jim reads code carefully; keep it plain.
+- `lib.rs` holds only module declarations and the crate's doc comment;
+  all code lives in purpose-named module files.
+- Measurement and test programs go in the crate's `examples/` folder;
+  throwaway experiments go in `/scratch`.
+- Measurement programs (frame time, timing spread) run with `--release`;
+  tests run in debug.
 
 ## Messages to the musician
 

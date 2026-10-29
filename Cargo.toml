@@ -12,6 +12,16 @@ members = [
 edition = "2024"
 publish = false
 
+# External crate versions live only here (see CLAUDE.md); Cargo.lock holds
+# the exact pin. Each crate is on the allow-list in Architecture.md.
+[workspace.dependencies]
+alsa = "0.12.1"
+
+# Release builds normally let integer overflow wrap around silently; keep
+# the check so an overflow stops with a report instead (no silent failures).
+[profile.release]
+overflow-checks = true
+
 # One place for the strict settings; every crate opts in with
 # `[lints] workspace = true`.
 [workspace.lints.rust]
