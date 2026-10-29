@@ -70,6 +70,32 @@ code only in adapters), but do not build them.
   throwaway experiments go in `/scratch`.
 - Measurement programs (frame time, timing spread) run with `--release`;
   tests run in debug.
+- **No math without units.** Every quantity's type or name states its
+  unit (`ticks`, `instant_ns`, `milli_quarters_per_minute`,
+  `NANOSECONDS_PER_MINUTE`); no bare numbers standing for quantities.
+  Comments on calculations show the units, and how they cancel.
+
+## Conventions everywhere
+
+These apply to code, code comments, doc comments, test names, error
+messages and documents alike:
+
+- **Terms** are those defined in `docs/Architecture/Musical Time and
+  Clock.md`, used with exactly those meanings: tick, count, pulse
+  (MIDI clock pulse), score position, score length, instant, duration,
+  tempo, anchor. "Tick" never means a MIDI clock pulse.
+- **Units** in every name and every calculation comment
+  (`length_ticks`, `instant_ns`, `TICKS_PER_QUARTER_NOTE`); a comment
+  showing arithmetic shows the units and how they cancel.
+- **Plurals** as in ordinary English: `ticks`, `counts`, "5040 ticks",
+  "1 tick"; in a rate the word after "per" stays singular
+  (`ticks_per_quarter_note`, "ticks/q").
+- **Numbers:** in documents and comments, no digit grouping (20160). In
+  Rust literals, use underscore separators (`60_000_000_000`); clippy's
+  pedantic lints require them, and an underscore cannot be misread as an
+  operator.
+- **Products** of an expression and a unit are written with × or in
+  words, never a bare space: "(1/d) × w", not "1/d w".
 
 ## Messages to the musician
 
@@ -90,6 +116,15 @@ bright white fields or dropdowns.
   folders — git keeps history.
 - Short and focused. Conceptual docs stay free of design detail and are
   written in generic roles, with Jim's setup as the example.
+- **No math without units** in documents either: every number in a
+  calculation carries its unit, and formulas show how units cancel.
+  Write numbers without digit grouping (20160, not 20 160).
+- Use ordinary English plurals with unit words: *5040 ticks*,
+  *24 pulses*, *1 tick*. In a rate the word after "per" or "/" stays
+  singular, as in "meters per second": *ticks/q*. Abbreviations are never
+  pluralized (*60 s*, *4 q*).
+- In formulas, state each symbol's unit once in a symbols table; don't
+  put units in square brackets after names.
 - Explanations target Jim's background: C, older C++, Java, ABAP,
   enterprise integration and architecture. He is learning Rust — explain
   Rust-specific idioms the first time they appear.
