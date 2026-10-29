@@ -1,0 +1,25 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/vocabulary",
+    "crates/player",
+    "crates/render",
+    "crates/alsa_output",
+    "crates/app",
+]
+
+[workspace.package]
+edition = "2024"
+publish = false
+
+# One place for the strict settings; every crate opts in with
+# `[lints] workspace = true`.
+[workspace.lints.rust]
+warnings = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+# No panics from unwrap/expect outside tests (clippy.toml exempts tests).
+unwrap_used = "deny"
+expect_used = "deny"
