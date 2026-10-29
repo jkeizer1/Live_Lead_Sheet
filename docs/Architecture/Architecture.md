@@ -1,6 +1,6 @@
 # Live Lead Sheet — Architecture
 
-Revision 6 — 29 Oct 2026
+Revision 7 — 29 Oct 2026
 
 Builds on the Concept Brief (Revision 8) and the Experience Functional
 Specification (Revision 5). Sets the principles, the main parts, how
@@ -343,6 +343,49 @@ comparing positions is exact and never drifts.
 
 Set aside: 960 per quarter (no sevenths), fractions (slower, no gain
 for the music we need), and floating-point seconds (rounding drifts).
+
+**D-8 Keeping time — proposed, not decided.** How the timing thread gets
+each MIDI message out at its instant. Three options:
+
+- *A. Sleep and send.* The thread sleeps until each instant computed
+  from the anchor (D-7) — an absolute deadline, so oversleeps do not add
+  up — and sends the message directly. Simplest; one clock; stop, slider,
+  loop and tempo changes act at once, since nothing is sent early. But
+  every late wake-up reaches the device late: usually under 0.1 ms on an
+  ordinary kernel, milliseconds under load (drawing, a busy core) unless
+  the thread gets real-time priority, which needs a system permissions
+  change.
+- *B. ALSA queue with its own tempo, stamped in ticks.* The queue's
+  tempo is set in microseconds per quarter note and the kernel sends each
+  event on time. Delivery no longer depends on our thread waking up. But
+  the queue is a second clock: its tempo is a whole number of
+  microseconds, so at 140 bpm it drifts about 3.6 ms an hour from ours;
+  tempo changes must be scheduled as queue events; and whatever is queued
+  must be removed on stop, a slider move or a loop release.
+- *C. ALSA queue stamped in real time from our anchor.* The thread
+  computes each instant from the anchor and queues the event a short
+  lead ahead (about 50 ms), stamped in nanoseconds; the queue has no
+  tempo. Kernel delivery as in B, one clock as in A. Stop removes pending
+  events, then sends Stop and All Notes Off directly.
+
+**Recommendation: C.** Timing is not disturbed by drawing, there is only
+the player's clock (A-7), and the short lead keeps changes immediate to
+a musician. A is the fallback if C proves awkward.
+
+**Open points:**
+
+1. Whether the anchor's clock should be the queue's own real time,
+   rather than the system's monotonic clock mapped onto the queue.
+2. The ALSA sequencer timer's resolution: the high-resolution timer
+   (hrtimer) or the system timer, whose ticks may be milliseconds
+   apart — to check on this machine before relying on C.
+3. Whether a tempo change re-anchors at the end of the queued window
+   (taking effect up to one lead later) instead of removing queued
+   events.
+
+To be measured in the spike: the spread of clock pulses as received by a
+second ALSA client, under drawing load. For scale, one byte on a MIDI
+cable takes 0.32 ms.
 
 ## Development environment
 
