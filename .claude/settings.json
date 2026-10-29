@@ -2,7 +2,7 @@
   "permissions": {
     "defaultMode": "default",
     "disableBypassPermissionsMode": "disable",
-    "blockReadsOutsideWorkingDirectories": true,
+    "blockReadsOutsideWorkingDirectories": false,
     "deny": [
       "Bash(sudo *)",
       "Bash(su *)",
@@ -29,7 +29,10 @@
       "Read(~/.config/**)",
       "Read(~/.local/share/keyrings/**)",
       "Read(~/.mozilla/**)",
-      "Read(~/.git-credentials)"
+      "Read(~/.git-credentials)",
+      "Read(~/.claude/**)",
+      "Read(~/.claude.json)",
+      "Read(~/.bash_history)"
     ],
     "ask": [
       "Bash(rm *)",
@@ -44,9 +47,18 @@
     "allowUnsandboxedCommands": false,
     "autoAllowBashIfSandboxed": false,
     "filesystem": {
-      "denyRead": ["~/"],
-      "allowRead": [".", "~/.cargo", "~/.rustup"],
-      "allowWrite": ["~/.cargo/registry", "~/.cargo/git"]
+      "denyRead": [
+        "~/.ssh",
+        "~/.gnupg",
+        "~/.config",
+        "~/.local/share/keyrings",
+        "~/.mozilla",
+        "~/.git-credentials",
+        "~/.claude",
+        "~/.claude.json",
+        "~/.bash_history"
+      ],
+      "allowWrite": ["/home/jim/.cargo/registry", "/home/jim/.cargo/git"]
     },
     "network": {
       "allowedDomains": ["crates.io", "index.crates.io", "static.crates.io"]

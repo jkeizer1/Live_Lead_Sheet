@@ -1,6 +1,6 @@
 # Working with Claude Code
 
-Revision 1 — 28 Oct 2026
+Revision 2 — 28 Oct 2026
 
 How Claude Code is set up for this project, what protects the rest of the
 computer, and what doesn't. Based on the Claude Code documentation as of
@@ -35,9 +35,12 @@ kernel enforces:
   `~/.cargo/git`). Everything else in the home folder and the system is
   read-only to the command — it cannot delete, move or rename anything
   outside.
-- **Reads** blocked across the home folder, except this project and the
-  Rust toolchain (`~/.cargo`, `~/.rustup`). Note the sandbox's default is
-  to allow reading the whole computer; our settings narrow it.
+- **Reads** blocked for the private folders, named one by one: `~/.ssh`,
+  `~/.gnupg`, `~/.config`, the keyring, `~/.mozilla`,
+  `~/.git-credentials`, Claude Code's own `~/.claude` and `~/.claude.json`,
+  and `~/.bash_history`. The sandbox's default is to allow reading the
+  whole computer; this list narrows it. (Blocking the whole home folder
+  and re-allowing the toolchain did not work — see "Lessons" below.)
 - **Network** only through Claude Code's proxy, and only to crates.io.
 - If the sandbox can't start, Claude Code exits rather than running
   unprotected (`failIfUnavailable`), and Claude can't ask to run a
@@ -49,8 +52,9 @@ and answer yes or no. Some things are refused outright: `sudo`, `su`,
 `apt`, `dpkg`, `snap`, `flatpak`, `cargo install`, `curl`, `wget`, git
 commands that change history or remotes, and reading `~/.ssh`,
 `~/.gnupg`, `~/.config`, the keyring and browser profiles. Claude's own
-file-reading tools refuse anything outside the project
-(`blockReadsOutsideWorkingDirectories`). Bypass mode is disabled.
+file-reading tools ask before reading outside the project, and refuse the
+private folders above, plus `~/.claude`, `~/.claude.json` and
+`~/.bash_history`. Bypass mode is disabled.
 
 **3. Your habits.** The prompts only protect you if you read them — see
 "Each session" below.
@@ -59,9 +63,10 @@ file-reading tools refuse anything outside the project
 
 **Can it be kept to this folder?** Yes, for writing: the sandbox blocks
 shell commands from writing outside it, and Claude's edit tool asks
-before touching any file. For reading: our settings block the home
-folder; system files outside home (such as `/etc`) stay readable, as for
-any program you run.
+before touching any file. For reading: the private folders are blocked;
+other files in your home folder and system files (such as `/etc`) are
+readable, as for any program you run — but every command is shown to you
+before it runs.
 
 **Can it be stopped from deleting, moving or renaming outside the
 project?** Yes — at kernel level for shell commands (sandbox), and by
@@ -152,6 +157,8 @@ A deny rule anywhere wins over an allow rule anywhere.
    - `claude doctor` (in a terminal) — check for settings warnings.
 7. **First task — check `cargo` works inside the sandbox.** If it fails
    writing `~/.cargo/.package-cache`, add that path to `allowWrite`.
+   Settings are read at start-up: after any change, `/exit` and start
+   `claude` again.
 
 ## Each session
 
@@ -163,6 +170,25 @@ A deny rule anywhere wins over an allow rule anywhere.
 - Use "Yes, and don't ask again" only for harmless commands
   (`cargo build`, `cargo test`).
 - Before any package install: Timeshift, then run the command yourself.
+
+## Lessons from the first session (28 Oct 2026)
+
+- **`blockReadsOutsideWorkingDirectories: true` also fences the
+  sandbox.** Permission rules and sandbox settings are merged, so this
+  setting hid the whole home folder — including `~/.cargo` and `~/.rustup`
+  — from shell commands, and no `allowRead` exception (with `~` or full
+  paths) got through. `cargo` was "not found". Fix: set it to `false`,
+  and deny the private folders by name instead, in both the sandbox's
+  `denyRead` and the permission `Read(...)` deny rules.
+- **A new Claude session does not remember earlier ones.** It may
+  suggest a fix that was already tried. Settings decisions are recorded
+  here, not in the chat.
+- **Edit the guard yourself.** Decline Claude's offers (including the
+  `update-config` skill) to change `.claude/settings.json`; make the
+  change in your editor, check it with `claude doctor` or
+  `python3 -m json.tool`, and restart.
+- **`!` at the prompt runs a command outside the sandbox.** Useful for
+  diagnosis; use it deliberately.
 
 ## Sources
 
