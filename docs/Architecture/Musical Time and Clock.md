@@ -1,11 +1,12 @@
 # Live Lead Sheet — Musical Time and Clock
 
-Revision 11 — 29 Oct 2026
+Revision 12 — 29 Oct 2026
 
 How the program represents *where* things are in a song, *how long* they
 last, and *when* they happen. Every term is defined before it is used;
-every number carries its unit; every choice gives its reason. Supersedes
-the short form of D-7 in Architecture.md, which should point here.
+every number carries its unit; every choice gives its reason. This is
+the full reference for decisions D-7 and D-8; Architecture.md holds
+short summaries that point here.
 
 **Rule: no math without units.** Every quantity in this document, in the
 code (type and variable names) and in tests carries its unit.
@@ -22,7 +23,7 @@ that no digit grouping can be misread as an operator.
 | w | whole note | 4 q = 20160 ticks |
 | pulse | MIDI clock pulse | 1/24 of a quarter note = 210 ticks |
 | count | one count of a bar | one whole note (w) divided by the time signature's lower number: in 4/4, 1/4 of a whole note = 5040 ticks; in 6/8, 1/8 of a whole note = 2520 ticks |
-| min, s, ns | minute, second, nanosecond | 1 min = 60 s; 1 s = 1000000000 ns |
+| min, s, ms, µs, ns | minute, second, millisecond, microsecond, nanosecond | 1 min = 60 s; 1 s = 1000 ms = 1000000 µs = 1000000000 ns |
 | mq | milli-quarter | 1/1000 of a quarter note — used only for tempo |
 | mq/min | tempo | milli-quarters per minute; 120 BPM = 120000 mq/min |
 
@@ -236,8 +237,9 @@ no cost. For comparison, Pro Tools counts 960 ticks/q in its display and
 ([Avid](https://apps.avid.com/protoolsfirsthelp/version12.3/enu/Pro%20Tools%20First%20Help/Arr1.conductors.31.09.html));
 960 = 2⁶ × 3 × 5 cannot divide a quarter by 9 or 7.
 
-*Open for Jim:* keep 5040 ticks/q, or choose 144 or 720 so the number
-contains only factors actually used.
+**Decided (Jim, 29 Oct 2026): 5040 ticks/q.** It covers every
+subdivision above, septuplets included, at no extra cost over 144 or
+720 ticks/q.
 
 ## 5. The clock
 
@@ -246,9 +248,54 @@ time in nanoseconds that never changes speed and never jumps. Tempo
 never changes the clock; tempo only changes how positions are converted
 to instants.
 
-Which counter that is — Linux's monotonic clock, or the ALSA sequencer
-queue's own real-time count — is decision D-8 (pending). Section 8
-explains why only one may be used.
+**Decided (Jim, 29 Oct 2026, D-8):** the clock is **the ALSA sequencer
+queue's own real time** — the real-time count of the one queue the
+program creates for its MIDI output.
+
+- **Who reads it.** The player reads it for every conversion between
+  position and instant (section 6). The screen reads it once per frame
+  to place the playhead. No other counter of real time is used for
+  music.
+- **Who supplies it.** The ALSA output adapter. The player and the
+  screen ask the adapter for the current instant; nothing outside the
+  adapter knows it comes from ALSA, so platform code stays in the
+  adapter.
+- **The queue's timer.** The program selects the ALSA high-resolution
+  timer (HR timer) for its queue explicitly, rather than relying on the
+  default, and checks at start-up that the queue really uses it. If the
+  HR timer is unavailable, this is reported in the warnings region
+  (A-8, EFS-1.14). The program never falls back to another timer
+  silently.
+- **How events are stamped.** Every event handed to the queue carries
+  its instant, in real time, computed from the current anchor
+  (section 6). The queue has no tempo of its own: tempo exists only in
+  the anchor.
+- **Lead window: 50 ms.** Events are handed to the queue up to 50 ms
+  before their instant. The kernel then delivers each one at its instant,
+  so delivery does not depend on the program's own thread waking on
+  time — for example while the screen is drawing. Section 8 says what
+  happens to events already queued when the music changes.
+- **Fallback.** If the spike shows problems with the queue, the
+  alternative is a thread that sleeps until absolute deadlines on Linux's
+  monotonic clock and sends each event directly, measured under load.
+
+**Evidence** (Jim's machine, 29 Oct 2026, from `/proc/asound/timers`,
+`/proc/asound/seq/timer` and `lsmod`):
+
+| Item | Found |
+|---|---|
+| HR timer | present; resolution 0.001 µs (1 ns) |
+| `snd_hrtimer` module | loaded, used by `snd_timer` |
+| Default for an existing queue | already the HR timer |
+| System timer | resolution 1000 µs (1 ms) |
+| Queue skew | 65536/65536 = 1.0 (the queue runs at its timer's own rate) |
+
+Resolution is the smallest step the timer can count, not how accurately
+events arrive. Delivery accuracy is measured in the spike: the spread of
+clock pulses as received by a second ALSA client, under drawing load.
+For scale, one byte on a MIDI cable takes 0.32 ms.
+
+Section 8 explains why only one clock may be used.
 
 ## 6. Converting between position and instant
 
@@ -354,29 +401,60 @@ the anchor, never by adding 20833333 ns repeatedly.
 
 ## 8. Anchors in practice
 
+The player hands events to the queue in position order, up to 50 ms
+ahead (section 5). **A change in the music takes effect at the end of
+what is already queued** — the first position not yet handed to the
+queue. Queued events are removed only where a case below says so.
+
 A new anchor is made at:
 
 - **Play** — (start position, the instant playing starts,
   written tempo × slider).
 - **A section with a new written tempo** — at its first position, using
   the instant computed for that position from the previous anchor.
-- **A slider change** — at the next position not yet handed to the MIDI
-  output (D-8 proposes handing events to ALSA up to about 50 ms ahead;
-  the slider then takes effect within 50 ms).
+  Nothing at or after that position has been queued yet, so nothing is
+  removed.
+- **A slider change** — at the first position not yet queued, using the
+  instant computed for that position from the previous anchor. Nothing
+  is removed. Since at most 50 ms of events are queued, the slider takes
+  effect within 50 ms.
 - **Play from a section** — as for Play, with the start position being
   that section's first position.
 - **Practice loop** — each time the loop goes back to the start of its
   section: (that section's first position, the instant of the jump,
   current tempo). Playing goes back; the positions themselves are
   unchanged.
-- **Loop release, stop and restart** — as for Play.
+- **Restart after stop** — as for Play.
+
+**Loop release** (EFS-2.8) means "carry on into the next section", so
+playing never stops and **MIDI Stop is never sent**. Like a tempo
+change, the release takes effect at the first position not yet queued:
+
+- *The jump back has not been queued yet* — almost always, since the
+  jump is queued only within 50 ms of the section's end. The player
+  carries on into the next section. Nothing is removed.
+- *The jump back has already been queued* — the release came within the
+  last 50 ms before the jump. The queued events are removed, and a
+  Note Off is sent directly for exactly the notes the player knows are
+  sounding. All Notes Off is **not** sent: it would also cut notes the
+  musician is playing on the same channel. A new anchor is made at the
+  next section's first position, at the instant the jump would have
+  happened, with the current tempo.
+
+**Stop** (EFS-2.1), in this order:
+
+1. Remove all queued events.
+2. Send a Note Off directly for each note the player knows is sounding.
+3. Send MIDI Stop.
+4. Send All Notes Off on every port in use, as a final safety net.
 
 **Why one clock only.** If positions were converted using one clock and
 the MIDI output delivered events by another, any offset or rate
-difference between the two would appear as timing error. Both the
-program and the ALSA queue keep their own real-time count from their own
-starting moment. Using either one as *the* clock, and never mixing them,
-removes the problem (D-8).
+difference between the two would appear as timing error. Linux's
+monotonic clock and the ALSA queue each keep their own real-time count
+from their own starting moment. Using the queue's real time as *the*
+clock, for conversions, for delivery and for the playhead, removes the
+problem (section 5).
 
 ## 9. Displayed tempo versus internal tempo
 
@@ -444,6 +522,5 @@ each section's tempo in its own counts, so this is always explicit.
 
 ## 11. Open decisions
 
-1. Keep 5040 ticks/q, or 144 / 720 ticks/q (section 4).
-2. Which counter is the clock, ALSA timer resolution, and the lead
-   window — D-8 in Architecture.md.
+None. The tick size (section 4) and the clock (section 5, D-8) are
+decided.
