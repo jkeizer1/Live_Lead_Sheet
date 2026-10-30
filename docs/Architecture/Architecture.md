@@ -1,9 +1,9 @@
 # Live Lead Sheet — Architecture
 
-Revision 14 — 30 Oct 2026
+Revision 15 — 30 Oct 2026
 
 Builds on the Concept Brief (Revision 9) and the Experience Functional
-Specification (Revision 6). Sets the principles, the main parts, how
+Specification (Revision 7). Sets the principles, the main parts, how
 they talk, and the technology for V1.
 
 **Focus.** V1 is the Live Lead Sheet itself: the leader, on one native
@@ -425,6 +425,14 @@ first and set aside (D-9).
 
 ## Next
 
+From the last session notes: "Resume point: spike step 5, the ALSA work
+- crates/alsa_output/src/queue_clock.rs is still untracked and not declared in lib.rs. It's the screen's read-only handle on the queue clock (D-8). It gets declared, and SequencerOutput::now reuses its read_queue_instant; that edit was stopped before it ran.
+- Still to do:
+  - a sending thread in app (24 clock pulses per quarter note, a beat note per quarter, stamped up to 50 ms ahead, instants computed from an anchor);
+  - the playhead and wheel driven by the queue clock instead of std::time::Instant;
+  - frame-time statistics printed on exit;
+  - after that, a receiver that measures clock evenness while the window draws."
+
 1. **Spike:** at 2560 × 1440, draw an 8-bar strip (chord symbols, rhythm
    line, staff) and the wheel with the three shaders, with a moving
    playhead; alongside, an ALSA thread sending MIDI clock and beat
@@ -435,3 +443,17 @@ first and set aside (D-9).
    a key other than C, with its key signature after each clef and chord
    names and voicings spelled by the key; and a key change within the
    strip, drawn as in standard notation (EFS-1.9).
+5. **Layout options** (deferred until the functions are complete): the
+   spike's sizes are the legible minimum, so a crowded screen gains room
+   by other means —
+   - a third row of chord symbols for the densest bars;
+   - n bars across in place of a fixed 8, or two lines of 4 bars stacked
+     at a larger size;
+   - the wheel drawn smaller in a corner, or left out when it cannot
+     fit;
+   - a **Big** view for a screen shared by several musicians (e.g. a
+     family jam on a large screen): one setting that enlarges symbols
+     and voicings for simpler songs, with the same fit check showing
+     where a dense song no longer fits.
+
+   Views showing parts beyond the lead bring their own layout problems.

@@ -70,8 +70,14 @@ impl Instant {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InstantError {
-    PastLastInstant { instant: Instant, duration: Duration },
-    SecondInstantLater { first: Instant, second: Instant },
+    PastLastInstant {
+        instant: Instant,
+        duration: Duration,
+    },
+    SecondInstantLater {
+        first: Instant,
+        second: Instant,
+    },
 }
 
 impl fmt::Display for InstantError {

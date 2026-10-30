@@ -1,6 +1,6 @@
 # Live Lead Sheet — Experience Functional Specification
 
-Revision 6 — 30 Oct 2026
+Revision 7 — 30 Oct 2026
 
 Builds on the Concept Brief, Revision 9. Covers **V1: the leader** — a
 chordal song with its own slash rhythm and a bass accompaniment, on one
@@ -40,6 +40,13 @@ set in the song. Each area has, top to bottom:
 - a **pitch staff** with clef, key signature and time signature (C and ¢
   for common and cut time), showing each voicing as stacked noteheads,
   only at change points.
+
+Chord symbols and voicings have one size throughout the song, the
+smallest that stays legible; bars never widen to make room, and nothing
+shrinks to fit. Chord symbols stand on one row, each starting on its
+pulse's stem. Where a bar's symbols would touch, that bar alternates them
+between a lower and an upper row, continuing into the next bar if it is
+crowded too.
 
 The pitch staff is shown by default. A plainly visible control beside
 each part's pitch staff hides it and shows it again, at any time, also

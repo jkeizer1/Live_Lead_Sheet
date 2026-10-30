@@ -258,7 +258,10 @@ mod tests {
     #[test]
     fn whole_number_times_length_is_exact() {
         let bar: ScoreLength = ScoreLength::from_note_value(1, 1).unwrap();
-        assert_eq!(bar.checked_mul(4).unwrap().ticks(), 4 * TICKS_PER_WHOLE_NOTE);
+        assert_eq!(
+            bar.checked_mul(4).unwrap().ticks(),
+            4 * TICKS_PER_WHOLE_NOTE
+        );
         assert_eq!(bar.checked_mul(0).unwrap(), ScoreLength::ZERO);
     }
 

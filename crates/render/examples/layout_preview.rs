@@ -15,7 +15,7 @@ use std::process::ExitCode;
 use render::glyph_atlas::GlyphAtlas;
 use render::glyph_instance::GlyphInstance;
 use render::line_instance::LineInstance;
-use render::spike_music::{SPIKE_CHORDS, SpikeChord, spike_music};
+use render::spike_music::{SpikeChord, chord_at, spike_music};
 use render::strip_layout::{BARS_IN_STRIP, StripGeometry, staff_control_label, strip_lines};
 use render::wheel_instance::WheelInstance;
 use render::wheel_layout::{wheel_labels, wheel_layout};
@@ -88,11 +88,18 @@ fn run() -> Result<(), String> {
     spike_music(&geometry, &atlas, &mut lines, &mut glyphs).map_err(|e| e.to_string())?;
     staff_control_label(&geometry, &atlas, &mut glyphs).map_err(|e| e.to_string())?;
     // The wheel follows the chord under the playhead, as in the app.
-    let current: SpikeChord = SPIKE_CHORDS[bar];
-    let wheel: WheelInstance = wheel_layout(width, height, current.degree, true);
-    let outside_key_chord: Option<&str> = match current.degree {
-        Some(_) => None,
-        None => Some(current.symbol),
+    let current: Option<SpikeChord> = chord_at(playhead_fraction);
+    let wheel: WheelInstance =
+        wheel_layout(width, height, current.and_then(|chord| chord.degree), true);
+    let outside_key_chord: Option<&str> = match current {
+        Some(SpikeChord {
+            symbol,
+            degree: None,
+        }) => Some(symbol),
+        Some(SpikeChord {
+            degree: Some(_), ..
+        })
+        | None => None,
     };
     wheel_labels(&wheel, &atlas, outside_key_chord, &mut glyphs).map_err(|e| e.to_string())?;
 
