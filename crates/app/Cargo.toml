@@ -9,6 +9,8 @@ vocabulary = { path = "../vocabulary" }
 player = { path = "../player" }
 render = { path = "../render" }
 alsa_output = { path = "../alsa_output" }
+winit = { workspace = true }
+wgpu = { workspace = true }
 
 [lints]
 workspace = true
