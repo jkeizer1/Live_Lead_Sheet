@@ -33,7 +33,10 @@ code only in adapters), but do not build them.
 - **Never add a crate without asking.** The allow-list is in
   Architecture.md ("Technology — V1"). Propose a crate with its purpose,
   its `cargo tree` count, and the alternative of writing the piece
-  ourselves.
+  ourselves. Prefer standard, widely used crates maintained by an
+  organisation or several people. Avoid single-author crates and
+  abandonment risk, even at the cost of a higher crate count. A proposal
+  states who maintains the crate and how widely it is used.
 - **Stay inside this folder.** Do not read, write, move or delete
   anything outside the project, except what `cargo` itself needs.
 - **Jim runs the program.** Build and run tests yourself; when the

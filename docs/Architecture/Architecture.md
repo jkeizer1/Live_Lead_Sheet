@@ -1,6 +1,6 @@
 # Live Lead Sheet — Architecture
 
-Revision 11 — 29 Oct 2026
+Revision 12 — 29 Oct 2026
 
 Builds on the Concept Brief (Revision 8) and the Experience Functional
 Specification (Revision 5). Sets the principles, the main parts, how
@@ -186,12 +186,14 @@ committed. Starting list:
 | Crate | Purpose |
 |---|---|
 | `alsa` | MIDI out through the ALSA sequencer |
-| `glfw` (default features off) | window and input |
+| `winit` (default features off; `x11`) | window and input |
 | `wgpu` (pinned) | GPU drawing |
 
-Measured: about 70 crates in all, almost all of them wgpu's. wgpu changes
-its major version every few months; it is pinned and upgraded only by
-choice.
+Crates are chosen for quality first and count second: standard, widely
+used, maintained by an organisation or several people (CLAUDE.md; D-9).
+Measured: 106 crates in all (103 without build tools), almost all of them
+wgpu's and winit's. wgpu changes its major version every few months; it
+is pinned and upgraded only by choice.
 
 **GPU: WebGPU through wgpu.** A modern API at roughly OpenGL's level —
 vertex and fragment shaders in WGSL — over Vulkan on Linux (and Metal or
@@ -276,9 +278,10 @@ names (root, kind, bass, degree) borrowed, encodings only at the edges.
 | Stack | Crates |
 |---|---|
 | `glfw` (defaults off) + `gl` + `alsa` — OpenGL 3.3 | 19 |
-| `glfw` (defaults off) + `wgpu` + `alsa` — chosen | 73 (69 with only Vulkan and WGSL) |
+| `glfw` (defaults off) + `wgpu` + `alsa` — first choice, replaced by D-9 | 73 (69 with only Vulkan and WGSL) |
 | `winit` + `glutin` + `gl` + `alsa` | 85 |
 | `glfw` (defaults on) + `gl` + `alsa` | 110 |
+| `winit` (`x11`) + `wgpu` (Vulkan, WGSL) — chosen (D-9), without `alsa` | 106 (103 without build tools) |
 
 `wgpu` alone is 58. Its major version was 0.19 in January 2024 and 30 in
 October 2026: expect breaking releases every few months, hence pinning.
@@ -361,6 +364,32 @@ The full decision — reading the clock, the timer evidence, re-anchoring,
 loop release and stop — is in sections 5 and 8 of
 [Musical Time and Clock](Musical%20Time%20and%20Clock.md).
 
+**D-9 Window: `winit`, not `glfw`; crate quality before crate count.**
+Decided by Jim, 29 Oct 2026. The crate rule is: standard, widely used
+crates maintained by an organisation or several people; avoid
+single-author crates and abandonment risk, even at the cost of a higher
+count (CLAUDE.md). Against it:
+
+- `winit` (the `rust-windowing` organisation) is the standard window
+  crate beside `wgpu` (Bevy, egui and wgpu's own examples use it).
+- `glfw` is a thin Rust wrapper kept on a personal repository, over the
+  well-supported C library GLFW. Besides the maintenance risk it did not
+  build here: the crate wants GLFW 3.4, Ubuntu 24.04 ships 3.3.10, so it
+  builds its bundled copy with `cmake`, which stops for missing X11
+  development headers. `winit` builds with no system packages.
+- Cost: 106 crates (103 without build tools) against 85 for `glfw` +
+  `wgpu`. Accepted.
+- `winit` is pinned to its stable 0.30 line; 0.31 is still a beta.
+  Wayland is left out for V1 (the development machine runs X11) and can
+  be added by enabling its feature.
+- `alsa` (one main author, but the binding the Rust audio ecosystem
+  builds on, and confined to the ALSA output adapter) is kept for V1 as a
+  known single-author dependency. Its replacement boundary is that
+  adapter.
+- The smaller crates `winit` and `wgpu` pull in (for example `x11rb`,
+  `x11-dl`, `xkbcommon-dl`, `gpu-allocator`) are inherited, not chosen;
+  `Cargo.lock` pins them.
+
 ## Development environment
 
 The development machine: Linux Mint 22 (Ubuntu 24.04 base), Cinnamon on
@@ -369,8 +398,8 @@ X11, AMD Radeon RX 9070.
 **System packages:**
 
 ```bash
-sudo apt install build-essential cmake pkg-config libasound2-dev \
-     libglfw3-dev mesa-vulkan-drivers libvulkan1 vulkan-tools
+sudo apt install build-essential pkg-config libasound2-dev \
+     mesa-vulkan-drivers libvulkan1 vulkan-tools
 ```
 
 None of these is Mint-specific; all are standard Linux layers. The only
@@ -386,11 +415,11 @@ Linux-specific part of *our* code is the ALSA MIDI output.
   the RX 9070.
 - Vulkan loader 1.3.275; surface extensions for X11 and Wayland present.
 
-**GLFW:** the `glfw` crate first looks for the system library through
-`pkg-config`; if it is missing or too old (the crate may expect GLFW 3.4;
-Ubuntu 24.04 may ship 3.3), it builds its bundled copy with `cmake`.
-With default features off, the X11 backend must be enabled explicitly.
-To be confirmed in the spike.
+**Window:** `winit` with default features off and `x11` enabled
+explicitly. It loads the X11 libraries at run time, so it needs no
+development packages and no `cmake` (checked 29 Oct 2026: it builds on
+the development machine without installing anything). `glfw` was tried
+first and set aside (D-9).
 
 ## Next
 

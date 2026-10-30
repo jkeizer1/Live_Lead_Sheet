@@ -16,6 +16,8 @@ publish = false
 # the exact pin. Each crate is on the allow-list in Architecture.md.
 [workspace.dependencies]
 alsa = "0.12.1"
+winit = { version = "0.30.13", default-features = false, features = ["rwh_06", "x11"] }
+wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "vulkan", "wgsl"] }
 
 # Release builds normally let integer overflow wrap around silently; keep
 # the check so an overflow stops with a report instead (no silent failures).
