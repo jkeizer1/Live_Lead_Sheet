@@ -6,6 +6,7 @@ publish.workspace = true
 
 [dependencies]
 alsa = { workspace = true }
+vocabulary = { path = "../vocabulary" }
 
 [lints]
 workspace = true

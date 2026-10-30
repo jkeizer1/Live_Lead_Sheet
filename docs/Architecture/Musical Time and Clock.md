@@ -1,6 +1,6 @@
 # Live Lead Sheet — Musical Time and Clock
 
-Revision 12 — 29 Oct 2026
+Revision 14 — 29 Oct 2026
 
 How the program represents *where* things are in a song, *how long* they
 last, and *when* they happen. Every term is defined before it is used;
@@ -260,24 +260,39 @@ program creates for its MIDI output.
   screen ask the adapter for the current instant; nothing outside the
   adapter knows it comes from ALSA, so platform code stays in the
   adapter.
-- **The queue's timer.** The program selects the ALSA high-resolution
-  timer (HR timer) for its queue explicitly, rather than relying on the
-  default, and checks at start-up that the queue really uses it. If the
-  HR timer is unavailable, this is reported in the warnings region
-  (A-8, EFS-1.14). The program never falls back to another timer
-  silently.
+- **The queue's timer.** The program does not select a timer. A new
+  queue gets the ALSA high-resolution timer (HR timer) by default on
+  Jim's machine (evidence below). After creating the queue, the ALSA
+  output adapter reads `/proc/asound/seq/timer`, finds the line
+  "Timer for queue N : ..." for its own queue number N, and checks that
+  the timer is named "HR timer". If the line is missing, unreadable, or
+  names another timer, this is reported in the warnings region (A-8,
+  EFS-1.14); the program keeps running and never hides it.
+  The check catches the slow system timer (events about ±2 ms off), but
+  it does **not** guarantee fine delivery: with the HR timer the queue
+  still releases events on a 1 ms grid (measurements below).
+  *Explicit selection is not needed.* It would need the C calls
+  `snd_seq_queue_timer_set_type` and `snd_seq_set_queue_timer`, which the
+  `alsa` crate (0.12.1) does not offer, and it keeps its `snd_seq_t`
+  handle private, so a separate FFI binding cannot reach our queue. It
+  was also tried (the Linux MIDI Router's spike 1 clock source with
+  `--high-resolution-timer`, 29 Oct 2026): pulse intervals at 120 q/min
+  were 19.999 to 21.024 ms with it, against 19.998 to 21.001 ms from our
+  queue's default, so it changes nothing on this machine.
 - **How events are stamped.** Every event handed to the queue carries
   its instant, in real time, computed from the current anchor
   (section 6). The queue has no tempo of its own: tempo exists only in
   the anchor.
 - **Lead window: 50 ms.** Events are handed to the queue up to 50 ms
-  before their instant. The kernel then delivers each one at its instant,
-  so delivery does not depend on the program's own thread waking on
-  time — for example while the screen is drawing. Section 8 says what
-  happens to events already queued when the music changes.
-- **Fallback.** If the spike shows problems with the queue, the
-  alternative is a thread that sleeps until absolute deadlines on Linux's
-  monotonic clock and sends each event directly, measured under load.
+  before their instant. The kernel then delivers each one **between 0
+  and 1 ms after its instant**, on the queue's 1 ms grid, whatever the
+  program's own threads are doing — for example while the screen is
+  drawing. Section 8 says what happens to events already queued when the
+  music changes.
+- **Fallback, tested and not adopted.** A thread that sleeps until each
+  instant and sends the event at once was measured against the queue
+  (below). It is ten times more exact for 99% of pulses but its worst
+  case is worse than the queue's under heavy load, so the queue stays.
 
 **Evidence** (Jim's machine, 29 Oct 2026, from `/proc/asound/timers`,
 `/proc/asound/seq/timer` and `lsmod`):
@@ -291,9 +306,54 @@ program creates for its MIDI output.
 | Queue skew | 65536/65536 = 1.0 (the queue runs at its timer's own rate) |
 
 Resolution is the smallest step the timer can count, not how accurately
-events arrive. Delivery accuracy is measured in the spike: the spread of
-clock pulses as received by a second ALSA client, under drawing load.
-For scale, one byte on a MIDI cable takes 0.32 ms.
+events arrive. Delivery accuracy was measured as described next.
+
+**Delivery measured** (Jim's machine, 29 Oct 2026; examples
+`delivery_spread` and `deadline_spread` in the `alsa_output` crate,
+release build, 3000 clock pulses per row). A second ALSA client of the
+same program receives the pulses; the kernel stamps each arrival with
+the queue's real time. *Delay* is arrival instant minus the instant the
+pulse was meant for. *Load* is busy threads competing for the 24 hardware
+threads of the CPU.
+
+| Sender | Tempo, load | Median | p99 | Worst | Jitter (p99 − min) |
+|---|---|---|---|---|---|
+| Queue (adopted) | 120 q/min, none | 0.626 ms | 0.960 ms | 0.961 ms | 0.833 ms |
+| Queue | 240 q/min, 16 threads | 0.515 ms | 0.932 ms | 0.932 ms | 0.916 ms |
+| Queue | 240 q/min, 32 threads | 0.580 ms | 0.997 ms | 0.997 ms | 0.916 ms |
+| Sleep to deadline | 120 q/min, none | 0.058 ms | 0.062 ms | 0.871 ms | 0.035 ms |
+| Sleep to deadline | 240 q/min, 32 threads | 0.057 ms | 0.062 ms | 2.973 ms | 0.006 ms |
+| Sleep, then busy-wait last 200 µs | 120 q/min, none | 0.001 ms | 0.003 ms | 1.805 ms | 0.002 ms |
+| Sleep, then busy-wait last 200 µs | 240 q/min, 32 threads | 0.001 ms | 2.652 ms | 6.321 ms | 2.651 ms |
+
+What this shows:
+
+- The queue releases every pulse within 1 ms after its instant, with or
+  without load. Its average lateness (0.5 ms) is harmless: everything is
+  late together. Pulses arrive on a 1 ms grid (intervals of 9.999 to
+  11.000 ms around the ideal 10.417 ms at 240 q/min).
+- Sleeping to deadlines is typically about ten times more exact, but under
+  oversubscription about 1 pulse in 1000 arrives up to 3 ms late, and even
+  idle one pulse was 0.87 ms late. Busy-waiting is exact on a free CPU
+  and worse than the queue when the CPU is oversubscribed (the waiting
+  thread is descheduled).
+- 32 busy threads on 24 hardware threads is harsher than the real program.
+  3000 pulses give only 3 samples at p99.9, so tail figures are rough.
+
+**Is it audible?** The adopted queue's worst case, 1 ms, is far below
+what listeners are generally reported to notice. From memory of the
+timing-perception literature, not checked for this document: a trained
+listener detects a timing deviation in a steady rhythm only from about
+2 to 5 ms, and a hit that is early or late by under 10 ms is heard as
+feel, not as an error. The followers' own timing is coarser still: USB
+MIDI delivers in 1 ms frames, and a MIDI cable takes 0.32 ms per byte.
+Even the worst case measured for any sender, 6.3 ms for a single pulse in
+the harshest run, is at the edge of what a trained listener notices, and
+only if the follower steps on every pulse. So the choice between senders
+rests on predictability, not on audibility. The listening test (Part B of
+the Linux MIDI Router's spike 1) has not been done for this program; it
+remains the final check, with the real drawing load, through the
+followers Jim uses.
 
 Section 8 explains why only one clock may be used.
 

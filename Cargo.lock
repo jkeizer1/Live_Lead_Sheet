@@ -30,6 +30,7 @@ name = "alsa_output"
 version = "0.0.0"
 dependencies = [
  "alsa",
+ "vocabulary",
 ]
 
 [[package]]

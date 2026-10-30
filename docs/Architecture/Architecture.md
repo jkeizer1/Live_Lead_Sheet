@@ -1,6 +1,6 @@
 # Live Lead Sheet — Architecture
 
-Revision 9 — 29 Oct 2026
+Revision 11 — 29 Oct 2026
 
 Builds on the Concept Brief (Revision 8) and the Experience Functional
 Specification (Revision 5). Sets the principles, the main parts, how
@@ -336,16 +336,26 @@ reasons for each choice — is
 Decided by Jim, 29 Oct 2026. The player converts every position to an
 instant from an anchor (D-7) and hands the event to the ALSA sequencer
 queue up to 50 ms ahead, stamped in real time; the queue has no tempo,
-and the kernel delivers each event on time, so drawing cannot disturb
-timing. The same queue's real time is read by the player for every
-conversion and by the screen once per frame, supplied by the ALSA output
-adapter. The queue uses the HR timer, selected explicitly and checked at
-start-up; if it is unavailable, that is reported in the warnings region.
+and the kernel delivers each event between 0 and 1 ms after its instant
+whatever the program is doing, so drawing cannot disturb timing. The same
+queue's real time is read by the player for every conversion and by the
+screen once per frame, supplied by the ALSA output adapter. The queue is
+expected to use the HR timer (the default on this machine); the adapter
+checks this at start-up by reading `/proc/asound/seq/timer` and reports
+anything else in the warnings region. Explicit timer selection is not
+needed: it was tried and changes nothing here (and the `alsa` crate
+cannot do it without `unsafe` code and a new dependency).
 Tempo changes and loop release take effect at the end of what is
 already queued; Stop clears the queue. Set aside: a queue with its own
-tempo (a second clock, which drifts from ours). Fallback if the spike
-shows problems: a thread sleeping to absolute deadlines on the monotonic
-clock.
+tempo (a second clock, which drifts from ours).
+
+*Measured, 29 Oct 2026:* the queue's delivery is bounded at 1 ms and
+unaffected by load (worst 0.997 ms, 240 q/min, 32 busy threads). The
+fallback, a thread sleeping to absolute deadlines, was tested and not
+adopted: ten times more exact for 99% of pulses, but up to 3 ms late once
+in a thousand under heavy load, and 6.3 ms with busy-waiting. A 1 ms
+bound is below what listeners generally notice; the final check is the
+listening test with real drawing load.
 
 The full decision — reading the clock, the timer evidence, re-anchoring,
 loop release and stop — is in sections 5 and 8 of
