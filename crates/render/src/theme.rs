@@ -11,3 +11,28 @@ pub const BACKGROUND: wgpu::Color = wgpu::Color {
     b: 0.0130,
     a: 1.0,
 };
+
+/// Staff lines: sRGB (110, 116, 128), as linear light (same conversion as
+/// `BACKGROUND`). Soft, well below white.
+pub const STAFF_LINE: [f32; 4] = [0.156, 0.175, 0.216, 1.0];
+
+/// Barlines: sRGB (150, 156, 168), a little brighter than the staff lines.
+pub const BARLINE: [f32; 4] = [0.305, 0.333, 0.392, 1.0];
+
+/// Playhead: sRGB (214, 160, 90), a soft amber.
+pub const PLAYHEAD: [f32; 4] = [0.672, 0.350, 0.103, 1.0];
+
+/// Wheel wedge tints by function, soft and a little muted. sRGB (120, 160,
+/// 200), (124, 176, 136), (208, 140, 112) and, with colour off, a neutral
+/// (140, 146, 160), as linear light.
+pub const WHEEL_TONIC: [f32; 4] = [0.188, 0.352, 0.578, 1.0];
+pub const WHEEL_SUBDOMINANT: [f32; 4] = [0.202, 0.434, 0.246, 1.0];
+pub const WHEEL_DOMINANT: [f32; 4] = [0.631, 0.262, 0.162, 1.0];
+pub const WHEEL_NEUTRAL: [f32; 4] = [0.262, 0.287, 0.352, 1.0];
+
+/// Text (chord symbols, wheel labels): sRGB (206, 210, 218), light but not
+/// white.
+pub const TEXT: [f32; 4] = [0.617, 0.644, 0.701, 1.0];
+
+/// Notes, rests, clef and stems: sRGB (176, 182, 194), a step below text.
+pub const NOTE: [f32; 4] = [0.434, 0.468, 0.539, 1.0];

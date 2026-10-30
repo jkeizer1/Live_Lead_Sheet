@@ -21,6 +21,15 @@ pub enum RenderError {
     SurfaceLost,
     /// The GPU driver rejected the frame.
     SurfaceRejectedFrame,
+    /// A frame asked for more lines than the line buffer holds.
+    TooManyLines { given: usize, capacity: usize },
+    /// A frame asked for more glyphs than the glyph buffer holds.
+    TooManyGlyphs { given: usize, capacity: usize },
+    /// The glyph atlas compiled into the program is malformed. Line 0 means
+    /// the table as a whole, or the image.
+    AtlasUnreadable { line_number: usize, reason: String },
+    /// The layout asked for a glyph the atlas does not have.
+    GlyphMissing { font: &'static str, codepoint: char },
 }
 
 impl fmt::Display for RenderError {
@@ -53,6 +62,28 @@ impl fmt::Display for RenderError {
                     "The window's drawing surface was lost. Restart the program."
                 )
             }
+            RenderError::TooManyLines { given, capacity } => write!(
+                f,
+                "A frame asked for {given} lines; the most that fit is {capacity}."
+            ),
+            RenderError::TooManyGlyphs { given, capacity } => write!(
+                f,
+                "A frame asked for {given} glyphs; the most that fit is {capacity}."
+            ),
+            RenderError::AtlasUnreadable {
+                line_number,
+                reason,
+            } => write!(
+                f,
+                "The glyph atlas is damaged (glyphs.txt line {line_number}: {reason}). \
+                 Rebuild it: cargo run --release -p atlas_tool"
+            ),
+            RenderError::GlyphMissing { font, codepoint } => write!(
+                f,
+                "The glyph atlas has no {font} glyph U+{:04X} ({codepoint:?}). Add it to \
+                 atlas_tool's glyph list and rebuild: cargo run --release -p atlas_tool",
+                u32::from(*codepoint)
+            ),
             RenderError::SurfaceRejectedFrame => {
                 write!(
                     f,

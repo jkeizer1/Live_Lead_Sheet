@@ -4,19 +4,30 @@
 
 use crate::block_on::block_on;
 use crate::error::RenderError;
+use crate::glyph_atlas::GlyphAtlas;
+use crate::glyph_instance::GlyphInstance;
+use crate::glyph_pipeline::GlyphPipeline;
+use crate::line_instance::LineInstance;
+use crate::line_pipeline::LinePipeline;
 use crate::theme;
+use crate::wheel_instance::WheelInstance;
+use crate::wheel_pipeline::WheelPipeline;
 
 pub struct Renderer {
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     configuration: wgpu::SurfaceConfiguration,
+    line_pipeline: LinePipeline,
+    wheel_pipeline: WheelPipeline,
+    glyph_pipeline: GlyphPipeline,
     adapter_summary: String,
 }
 
 impl Renderer {
     /// Chooses the high-performance adapter that can draw to `surface`,
-    /// starts it, and configures the surface for a window of the given size.
+    /// starts it, configures the surface for a window of the given size, and
+    /// uploads the glyph atlas.
     ///
     /// # Errors
     ///
@@ -27,6 +38,7 @@ impl Renderer {
         surface: wgpu::Surface<'static>,
         width_pixels: u32,
         height_pixels: u32,
+        atlas: &GlyphAtlas,
     ) -> Result<Renderer, RenderError> {
         let adapter: wgpu::Adapter =
             block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
@@ -65,11 +77,18 @@ impl Renderer {
             configuration.format,
             configuration.present_mode
         );
+        let line_pipeline: LinePipeline = LinePipeline::new(&device, configuration.format);
+        let wheel_pipeline: WheelPipeline = WheelPipeline::new(&device, configuration.format);
+        let glyph_pipeline: GlyphPipeline =
+            GlyphPipeline::new(&device, &queue, configuration.format, atlas);
         Ok(Renderer {
             surface,
             device,
             queue,
             configuration,
+            line_pipeline,
+            wheel_pipeline,
+            glyph_pipeline,
             adapter_summary,
         })
     }
@@ -91,14 +110,36 @@ impl Renderer {
         self.surface.configure(&self.device, &self.configuration);
     }
 
-    /// Draws one frame: for now, the background colour.
+    /// Draws one frame: the background, the wheel, the lines, then the
+    /// glyphs on top.
     ///
     /// # Errors
     ///
     /// When the surface is lost or the driver rejects the frame. A frame
     /// that simply cannot be drawn now (window hidden, surface out of date)
     /// is skipped, and the next call tries again.
-    pub fn draw_frame(&mut self) -> Result<(), RenderError> {
+    pub fn draw_frame(
+        &mut self,
+        lines: &[LineInstance],
+        glyphs: &[GlyphInstance],
+        wheel: &WheelInstance,
+    ) -> Result<(), RenderError> {
+        // Window sizes are far below 2^24, so the conversion to f32 is exact.
+        #[allow(clippy::cast_precision_loss)]
+        let (width_pixels, height_pixels): (f32, f32) = (
+            self.configuration.width as f32,
+            self.configuration.height as f32,
+        );
+        self.wheel_pipeline
+            .prepare(&self.queue, width_pixels, height_pixels, wheel);
+        self.glyph_pipeline
+            .prepare(&self.queue, width_pixels, height_pixels, glyphs)?;
+        self.line_pipeline.prepare(
+            &self.queue,
+            self.configuration.width,
+            self.configuration.height,
+            lines,
+        )?;
         let surface_texture: wgpu::SurfaceTexture = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(texture) => texture,
             wgpu::CurrentSurfaceTexture::Suboptimal(texture) => {
@@ -134,8 +175,7 @@ impl Renderer {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         {
-            // Clearing is the whole pass: it draws nothing else yet.
-            let _pass: wgpu::RenderPass<'_> =
+            let mut pass: wgpu::RenderPass<'_> =
                 encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("background"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -149,6 +189,9 @@ impl Renderer {
                     })],
                     ..wgpu::RenderPassDescriptor::default()
                 });
+            self.wheel_pipeline.draw(&mut pass);
+            self.line_pipeline.draw(&mut pass);
+            self.glyph_pipeline.draw(&mut pass);
         }
         self.queue.submit(std::iter::once(encoder.finish()));
     }

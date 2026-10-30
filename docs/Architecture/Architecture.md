@@ -1,6 +1,6 @@
 # Live Lead Sheet — Architecture
 
-Revision 12 — 29 Oct 2026
+Revision 13 — 30 Oct 2026
 
 Builds on the Concept Brief (Revision 8) and the Experience Functional
 Specification (Revision 5). Sets the principles, the main parts, how
@@ -188,6 +188,7 @@ committed. Starting list:
 | `alsa` | MIDI out through the ALSA sequencer |
 | `winit` (default features off; `x11`) | window and input |
 | `wgpu` (pinned) | GPU drawing |
+| `ttf-parser` | reading glyph outlines in the offline atlas tool only; not in the program (approved by Jim, 30 Oct 2026; harfbuzz organisation, no dependencies of its own) |
 
 Crates are chosen for quality first and count second: standard, widely
 used, maintained by an organisation or several people (CLAUDE.md; D-9).
@@ -225,6 +226,7 @@ the same dark, soft-contrast style.
 | render | layout (vocabulary → instance records) and GPU drawing |
 | alsa output | the MIDI output (A-3), and the clock it supplies (A-7, D-8) |
 | app | windows, authoring, wiring the parts together |
+| atlas tool | offline: builds the glyph atlas from the fonts in `assets/fonts` (run by hand; not part of the program) |
 
 The render crate takes a drawing surface and the published stream —
 nothing else: no windowing, files or threads inside it. That keeps

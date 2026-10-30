@@ -6,6 +6,7 @@ members = [
     "crates/render",
     "crates/alsa_output",
     "crates/app",
+    "crates/atlas_tool",
 ]
 
 [workspace.package]
@@ -17,6 +18,8 @@ publish = false
 [workspace.dependencies]
 alsa = "0.12.1"
 winit = { version = "0.30.13", default-features = false, features = ["rwh_06", "x11"] }
+# Offline atlas builder only (crates/atlas_tool); never in the program.
+ttf-parser = "0.25.1"
 wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "vulkan", "wgsl"] }
 
 # Release builds normally let integer overflow wrap around silently; keep
@@ -35,3 +38,6 @@ pedantic = { level = "deny", priority = -1 }
 # No panics from unwrap/expect outside tests (clippy.toml exempts tests).
 unwrap_used = "deny"
 expect_used = "deny"
+# Names carry their axis and unit (origin_x_pixels, origin_y_pixels, see
+# CLAUDE.md); this lint takes such x/y pairs for typos.
+similar_names = "allow"

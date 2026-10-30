@@ -1,0 +1,11 @@
+[package]
+name = "atlas_tool"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+ttf-parser = { workspace = true }
+
+[lints]
+workspace = true
