@@ -37,9 +37,10 @@ pub struct MusicGlyph {
     pub codepoint: char,
 }
 
-/// The music glyphs the lead sheet draws: clefs, noteheads, rests, flags,
-/// accidentals, the augmentation dot and time-signature digits.
-pub const MUSIC_GLYPHS: [MusicGlyph; 32] = [
+/// The music glyphs the lead sheet draws: clefs, noteheads (round and
+/// slash), rests, flags, accidentals, the augmentation dot and
+/// time-signature digits.
+pub const MUSIC_GLYPHS: [MusicGlyph; 36] = [
     MusicGlyph {
         smufl_name: "gClef",
         codepoint: '\u{E050}',
@@ -47,6 +48,10 @@ pub const MUSIC_GLYPHS: [MusicGlyph; 32] = [
     MusicGlyph {
         smufl_name: "fClef",
         codepoint: '\u{E062}',
+    },
+    MusicGlyph {
+        smufl_name: "unpitchedPercussionClef1",
+        codepoint: '\u{E069}',
     },
     MusicGlyph {
         smufl_name: "noteheadWhole",
@@ -59,6 +64,18 @@ pub const MUSIC_GLYPHS: [MusicGlyph; 32] = [
     MusicGlyph {
         smufl_name: "noteheadBlack",
         codepoint: '\u{E0A4}',
+    },
+    MusicGlyph {
+        smufl_name: "noteheadSlashVerticalEnds",
+        codepoint: '\u{E100}',
+    },
+    MusicGlyph {
+        smufl_name: "noteheadSlashWhiteWhole",
+        codepoint: '\u{E102}',
+    },
+    MusicGlyph {
+        smufl_name: "noteheadSlashWhiteHalf",
+        codepoint: '\u{E103}',
     },
     MusicGlyph {
         smufl_name: "restWhole",

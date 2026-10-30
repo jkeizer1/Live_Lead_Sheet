@@ -1,6 +1,6 @@
 # Live Lead Sheet — Concept Brief
 
-Revision 8 — 28 Oct 2026
+Revision 9 — 30 Oct 2026
 
 ## Purpose
 
@@ -102,10 +102,10 @@ tried and compared:
 - *Half shift* — when the playhead passes the middle, the strip shifts
   left by half its length in one quick, short slide; bars stay in order.
 
-**Key changes** are announced ahead: a double barline with the new key
-signature where the section starts, the cautionary key signature before
-it, "Next: E♭" faintly on the wheel once the change is in view, and an
-entry in the triggers panel.
+**Key changes** are shown as in standard notation: a double barline with
+the new key signature at the bar where the change takes effect, and the
+cautionary key signature at the end of the bar before. The triggers panel
+lists the change as well.
 
 **Triggers panel.** A side panel listing triggers as they approach,
 fire, and pass.
@@ -122,7 +122,9 @@ current section's key and following the lead part's chords:
   label; the one actually playing lights up;
 - wedges subtly coloured by function — tonic, subdominant, dominant —
   with an option to turn colour off;
-- the current chord filled, the next one outlined;
+- the current chord's wedge brightened and outlined, the others dimmed.
+  The wheel shows only what is playing now; what comes next is read
+  from the staff;
 - a chord outside the key is shown in the centre, by name, rather than
   forced onto a wedge.
 

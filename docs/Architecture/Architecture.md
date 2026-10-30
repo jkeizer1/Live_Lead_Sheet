@@ -1,9 +1,9 @@
 # Live Lead Sheet — Architecture
 
-Revision 13 — 30 Oct 2026
+Revision 14 — 30 Oct 2026
 
-Builds on the Concept Brief (Revision 8) and the Experience Functional
-Specification (Revision 5). Sets the principles, the main parts, how
+Builds on the Concept Brief (Revision 9) and the Experience Functional
+Specification (Revision 6). Sets the principles, the main parts, how
 they talk, and the technology for V1.
 
 **Focus.** V1 is the Live Lead Sheet itself: the leader, on one native
@@ -431,3 +431,7 @@ first and set aside (D-9).
    notes. Measure frame time and clock evenness.
 2. **Song notation:** first draft, worked through on a 12-bar blues.
 3. **Exact musical time:** settled — D-7.
+4. **Key signatures and key changes** (a later spike, deferred): a song in
+   a key other than C, with its key signature after each clef and chord
+   names and voicings spelled by the key; and a key change within the
+   strip, drawn as in standard notation (EFS-1.9).

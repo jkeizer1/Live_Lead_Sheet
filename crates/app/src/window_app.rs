@@ -10,13 +10,14 @@ use render::glyph_atlas::GlyphAtlas;
 use render::glyph_instance::GlyphInstance;
 use render::line_instance::LineInstance;
 use render::renderer::Renderer;
-use render::spike_music::spike_music;
-use render::strip_layout::{BARS_IN_STRIP, StripGeometry, strip_lines};
+use render::spike_music::{SPIKE_CHORDS, SpikeChord, spike_music};
+use render::strip_layout::{BARS_IN_STRIP, StripGeometry, staff_control_label, strip_lines};
 use render::wheel_instance::WheelInstance;
 use render::wheel_layout::{wheel_labels, wheel_layout};
 use winit::application::ApplicationHandler;
+use winit::dpi::PhysicalPosition;
 use winit::dpi::PhysicalSize;
-use winit::event::{ElementState, KeyEvent, WindowEvent};
+use winit::event::{ElementState, KeyEvent, MouseButton, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowId};
@@ -66,6 +67,11 @@ struct OpenWindow {
     started_at: Instant,
     /// Wheel tinted by function; the C key switches it off and on.
     color_by_function: bool,
+    /// The part's pitch staff: shown by default; its control hides it and
+    /// shows it again (EFS-1.5).
+    pitch_staff_shown: bool,
+    /// Where the pointer is in the window, once it has moved over it.
+    cursor: Option<PhysicalPosition<f64>>,
 }
 
 struct WindowApp {
@@ -104,6 +110,8 @@ impl WindowApp {
             atlas,
             started_at: Instant::now(),
             color_by_function: true,
+            pitch_staff_shown: true,
+            cursor: None,
         })
     }
 }
@@ -150,6 +158,21 @@ impl ApplicationHandler for WindowApp {
             } if character.eq_ignore_ascii_case("c") => {
                 open_window.color_by_function = !open_window.color_by_function;
             }
+            WindowEvent::CursorMoved { position, .. } => {
+                open_window.cursor = Some(position);
+            }
+            WindowEvent::CursorLeft { .. } => {
+                open_window.cursor = None;
+            }
+            WindowEvent::MouseInput {
+                state: ElementState::Pressed,
+                button: MouseButton::Left,
+                ..
+            } => {
+                if clicked_staff_control(open_window) {
+                    open_window.pitch_staff_shown = !open_window.pitch_staff_shown;
+                }
+            }
             WindowEvent::Resized(size) => {
                 open_window.renderer.resize(size.width, size.height);
             }
@@ -172,21 +195,53 @@ fn draw(open_window: &mut OpenWindow) -> Result<(), RenderError> {
     let strip_seconds: f32 = SPIKE_SECONDS_PER_BAR * f32::from(BARS_IN_STRIP);
     // The playhead wraps to the first bar after the last.
     let playhead_fraction: f32 = (elapsed_seconds / strip_seconds).fract();
-    // Spike: the wheel's current wedge steps once per bar. The value is
-    // non-negative and far below usize's range.
+    // The bar under the playhead: fraction × 8 bars, rounded down. The
+    // fraction is 0 to 1, so the bar is 0 to 8; min keeps it on the last
+    // bar at exactly 1.
+    let bars_in_strip: usize = usize::from(BARS_IN_STRIP);
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let current_wedge: usize = (elapsed_seconds / SPIKE_SECONDS_PER_BAR).floor() as usize;
+    let bar: usize =
+        ((playhead_fraction * f32::from(BARS_IN_STRIP)).floor() as usize).min(bars_in_strip - 1);
+    // The wheel shows the chord playing now (EFS-1.10).
+    let current_chord: SpikeChord = SPIKE_CHORDS[bar];
 
-    let geometry: StripGeometry = StripGeometry::new(width_pixels, height_pixels);
+    let geometry: StripGeometry =
+        StripGeometry::new(width_pixels, height_pixels, open_window.pitch_staff_shown);
     let mut lines: Vec<LineInstance> = strip_lines(&geometry, playhead_fraction);
     let mut glyphs: Vec<GlyphInstance> = Vec::new();
     spike_music(&geometry, &open_window.atlas, &mut lines, &mut glyphs)?;
+    staff_control_label(&geometry, &open_window.atlas, &mut glyphs)?;
     let wheel: WheelInstance = wheel_layout(
         width_pixels,
         height_pixels,
-        current_wedge,
+        current_chord.degree,
         open_window.color_by_function,
     );
-    wheel_labels(&wheel, &open_window.atlas, &mut glyphs)?;
+    // A chord outside the key has no wedge; the centre names it.
+    let outside_key_chord: Option<&str> = match current_chord.degree {
+        Some(_) => None,
+        None => Some(current_chord.symbol),
+    };
+    wheel_labels(&wheel, &open_window.atlas, outside_key_chord, &mut glyphs)?;
     open_window.renderer.draw_frame(&lines, &glyphs, &wheel)
+}
+
+/// Whether the pointer is on the staff control, laid out as it is drawn now.
+fn clicked_staff_control(open_window: &OpenWindow) -> bool {
+    let Some(cursor) = open_window.cursor else {
+        return false;
+    };
+    let size: PhysicalSize<u32> = open_window.window.inner_size();
+    // Window sizes and positions are far below 2^24, so f32 holds them
+    // to well within a pixel.
+    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+    let (width_pixels, height_pixels, x_pixels, y_pixels): (f32, f32, f32, f32) = (
+        size.width as f32,
+        size.height as f32,
+        cursor.x as f32,
+        cursor.y as f32,
+    );
+    StripGeometry::new(width_pixels, height_pixels, open_window.pitch_staff_shown)
+        .staff_control
+        .contains(x_pixels, y_pixels)
 }

@@ -1,8 +1,8 @@
 # Live Lead Sheet — Experience Functional Specification
 
-Revision 5 — 28 Oct 2026
+Revision 6 — 30 Oct 2026
 
-Builds on the Concept Brief, Revision 7. Covers **V1: the leader** — a
+Builds on the Concept Brief, Revision 9. Covers **V1: the leader** — a
 chordal song with its own slash rhythm and a bass accompaniment, on one
 screen. Requirements are in the musician's terms; nothing here chooses a
 language, library or internal design.
@@ -41,6 +41,11 @@ set in the song. Each area has, top to bottom:
   for common and cut time), showing each voicing as stacked noteheads,
   only at change points.
 
+The pitch staff is shown by default. A plainly visible control beside
+each part's pitch staff hides it and shows it again, at any time, also
+while playing. Hidden, the part keeps its chord symbols and rhythm line,
+and the space goes to other parts (EFS-1.12).
+
 **EFS-1.5a Chord naming.** Every chord name, on the strip, the wheel and
 in the authoring view, follows the standard convention:
 
@@ -74,10 +79,10 @@ playhead.
 available, selectable while playing, so they can be compared:
 *rewrite in place* and *half shift*.
 
-**EFS-1.9 Key changes.** A key change shows a double barline and the new
-key signature where it takes effect, and the cautionary key signature at
-the end of the bar before. Once it is in view, the wheel shows
-"Next: E♭" faintly, and the triggers panel lists it.
+**EFS-1.9 Key changes.** As in standard notation: a key change shows a
+double barline and the new key signature at the bar where it takes
+effect, and the cautionary key signature at the end of the bar before.
+The triggers panel lists it (EFS-1.11).
 
 **EFS-1.10 Key wheel.** One large wheel for the song:
 
@@ -86,7 +91,9 @@ the end of the bar before. Once it is in view, the wheel shows
   by the key;
 - in minor keys, a degree with two common chords keeps one wedge, with
   the alternative as a second, smaller label;
-- the lead part's current chord filled, its next chord outlined;
+- the lead part's current chord: its wedge brightened and outlined, the
+  other wedges dimmed, with colour on or off. The wheel shows only what is
+  playing now; what comes next is read from the staff;
 - a chord outside the key shown in the centre, by name;
 - subtle colour by function (tonic, subdominant, dominant), with colour
   switchable off.

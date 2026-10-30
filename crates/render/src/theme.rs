@@ -36,3 +36,13 @@ pub const TEXT: [f32; 4] = [0.617, 0.644, 0.701, 1.0];
 
 /// Notes, rests, clef and stems: sRGB (176, 182, 194), a step below text.
 pub const NOTE: [f32; 4] = [0.434, 0.468, 0.539, 1.0];
+
+/// The hide/show staff control: a thin border, sRGB (96, 102, 114), and a
+/// label a step below text, sRGB (168, 174, 186). Plainly visible, never
+/// bright.
+pub const CONTROL_BORDER: [f32; 4] = [0.117, 0.133, 0.168, 1.0];
+pub const CONTROL_TEXT: [f32; 4] = [0.392, 0.423, 0.491, 1.0];
+
+/// The current wedge's numeral: the background colour, sRGB (24, 26, 30),
+/// dark on the bright fill, where light text would lose its contrast.
+pub const WHEEL_CURRENT_NUMERAL: [f32; 4] = [0.0091, 0.0103, 0.0130, 1.0];

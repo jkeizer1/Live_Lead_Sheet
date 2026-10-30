@@ -1,10 +1,13 @@
 //! Draws the spike frame's lines and glyphs on the CPU into a greyscale
 //! image, to check the layout without a window or GPU. The wheel's wedges
-//! are left out (its labels are drawn); brightness stands for colour.
+//! are left out (its labels are drawn); brightness stands for
+//! colour.
 //!
-//! `cargo run --release -p render --example layout_preview -- [WIDTH HEIGHT]`
+//! `cargo run --release -p render --example layout_preview -- [WIDTH HEIGHT] [hidden] [bar=N]`
 //!
-//! Writes `scratch/layout_preview.pgm` (default 2560 × 1440).
+//! Writes `scratch/layout_preview.pgm` (default 2560 × 1440, pitch staff
+//! shown, playhead in bar 2; `hidden` draws it with the pitch staff
+//! hidden, `bar=N` puts the playhead in bar N, 0 to 7).
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -12,13 +15,13 @@ use std::process::ExitCode;
 use render::glyph_atlas::GlyphAtlas;
 use render::glyph_instance::GlyphInstance;
 use render::line_instance::LineInstance;
-use render::spike_music::spike_music;
-use render::strip_layout::{StripGeometry, strip_lines};
+use render::spike_music::{SPIKE_CHORDS, SpikeChord, spike_music};
+use render::strip_layout::{BARS_IN_STRIP, StripGeometry, staff_control_label, strip_lines};
 use render::wheel_instance::WheelInstance;
 use render::wheel_layout::{wheel_labels, wheel_layout};
 
-/// The playhead in the preview: a third of the way through the strip.
-const PREVIEW_PLAYHEAD_FRACTION: f32 = 0.33;
+/// The bar the playhead is in, unless `bar=N` says otherwise.
+const PREVIEW_BAR: usize = 2;
 
 fn main() -> ExitCode {
     match run() {
@@ -31,7 +34,30 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<(), String> {
-    let arguments: Vec<String> = std::env::args().skip(1).collect();
+    let mut arguments: Vec<String> = std::env::args().skip(1).collect();
+    let bars_in_strip: usize = usize::from(BARS_IN_STRIP);
+    let bar: usize = match arguments
+        .iter()
+        .position(|argument| argument.starts_with("bar="))
+    {
+        Some(index) => {
+            let argument: String = arguments.remove(index);
+            let bar: usize = argument["bar=".len()..]
+                .parse()
+                .map_err(|_| format!("{argument:?}: give bar=N with N from 0 to 7."))?;
+            if bar >= bars_in_strip {
+                return Err(format!("{argument:?}: give bar=N with N from 0 to 7."));
+            }
+            bar
+        }
+        None => PREVIEW_BAR,
+    };
+    let pitch_staff_shown: bool = if arguments.last().is_some_and(|last| last == "hidden") {
+        arguments.pop();
+        false
+    } else {
+        true
+    };
     let (width_pixels, height_pixels): (u32, u32) = match arguments.as_slice() {
         [] => (2560, 1440),
         [width, height] => (
@@ -42,19 +68,33 @@ fn run() -> Result<(), String> {
                 .parse()
                 .map_err(|_| format!("Height {height:?} is not a whole number."))?,
         ),
-        _ => return Err("Give no size, or WIDTH HEIGHT in pixels.".to_string()),
+        _ => {
+            return Err(
+                "Give no size, or WIDTH HEIGHT in pixels; then hidden if wanted.".to_string(),
+            );
+        }
     };
     // Preview sizes are far below 2^24, so the conversion to f32 is exact.
     #[allow(clippy::cast_precision_loss)]
     let (width, height): (f32, f32) = (width_pixels as f32, height_pixels as f32);
 
     let atlas: GlyphAtlas = GlyphAtlas::embedded().map_err(|e| e.to_string())?;
-    let geometry: StripGeometry = StripGeometry::new(width, height);
-    let mut lines: Vec<LineInstance> = strip_lines(&geometry, PREVIEW_PLAYHEAD_FRACTION);
+    let geometry: StripGeometry = StripGeometry::new(width, height, pitch_staff_shown);
+    // The playhead in the middle of its bar: (bar + ½) ÷ 8 bars.
+    #[allow(clippy::cast_precision_loss)] // bar is 0 to 7
+    let playhead_fraction: f32 = (bar as f32 + 0.5) / f32::from(BARS_IN_STRIP);
+    let mut lines: Vec<LineInstance> = strip_lines(&geometry, playhead_fraction);
     let mut glyphs: Vec<GlyphInstance> = Vec::new();
     spike_music(&geometry, &atlas, &mut lines, &mut glyphs).map_err(|e| e.to_string())?;
-    let wheel: WheelInstance = wheel_layout(width, height, 0, true);
-    wheel_labels(&wheel, &atlas, &mut glyphs).map_err(|e| e.to_string())?;
+    staff_control_label(&geometry, &atlas, &mut glyphs).map_err(|e| e.to_string())?;
+    // The wheel follows the chord under the playhead, as in the app.
+    let current: SpikeChord = SPIKE_CHORDS[bar];
+    let wheel: WheelInstance = wheel_layout(width, height, current.degree, true);
+    let outside_key_chord: Option<&str> = match current.degree {
+        Some(_) => None,
+        None => Some(current.symbol),
+    };
+    wheel_labels(&wheel, &atlas, outside_key_chord, &mut glyphs).map_err(|e| e.to_string())?;
 
     let mut image: Image = Image::new(width_pixels, height_pixels)?;
     for line in &lines {
@@ -112,24 +152,42 @@ impl Image {
         self.brightness[index] = old + (brightness - old) * amount;
     }
 
-    /// Lines here are horizontal or vertical (staff, barlines, stems,
-    /// playhead), so a filled rectangle is enough for the preview.
+    /// As the line shader: each pixel near the line is covered by how far
+    /// inside its edge it is, across the line; the ends are cut square.
     fn draw_line(&mut self, line: &LineInstance) {
         let half: f32 = line.thickness_pixels / 2.0;
-        let left: f32 = line.start_x_pixels.min(line.end_x_pixels);
-        let right: f32 = line.start_x_pixels.max(line.end_x_pixels);
-        let top: f32 = line.start_y_pixels.min(line.end_y_pixels);
-        let bottom: f32 = line.start_y_pixels.max(line.end_y_pixels);
-        let horizontal: bool = (line.start_y_pixels - line.end_y_pixels).abs() < 0.001;
-        let (x0, x1, y0, y1): (f32, f32, f32, f32) = if horizontal {
-            (left, right, top - half, top + half)
-        } else {
-            (left - half, left + half, top, bottom)
-        };
+        let (start_x, start_y): (f32, f32) = (line.start_x_pixels, line.start_y_pixels);
+        let (along_x, along_y): (f32, f32) =
+            (line.end_x_pixels - start_x, line.end_y_pixels - start_y);
+        let length: f32 = along_x.hypot(along_y);
+        if length <= 0.0 {
+            return;
+        }
+        let (direction_x, direction_y): (f32, f32) = (along_x / length, along_y / length);
+        let margin: f32 = half + 1.0;
         let shade: f32 = luminance(line.color_linear_rgba);
-        for row in pixel_range(y0, y1) {
-            for column in pixel_range(x0, x1) {
-                self.blend(column, row, shade, 1.0);
+        let rows = pixel_range(
+            start_y.min(line.end_y_pixels) - margin,
+            start_y.max(line.end_y_pixels) + margin,
+        );
+        for row in rows {
+            let columns = pixel_range(
+                start_x.min(line.end_x_pixels) - margin,
+                start_x.max(line.end_x_pixels) + margin,
+            );
+            for column in columns {
+                #[allow(clippy::cast_precision_loss)]
+                let (x, y): (f32, f32) =
+                    (column as f32 + 0.5 - start_x, row as f32 + 0.5 - start_y);
+                let along: f32 = x * direction_x + y * direction_y;
+                if !(0.0..=length).contains(&along) {
+                    continue;
+                }
+                let across: f32 = (x * direction_y - y * direction_x).abs();
+                let coverage: f32 = (half - across + 0.5).clamp(0.0, 1.0);
+                if coverage > 0.0 {
+                    self.blend(column, row, shade, coverage);
+                }
             }
         }
     }

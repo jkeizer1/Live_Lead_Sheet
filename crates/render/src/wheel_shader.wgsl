@@ -1,9 +1,11 @@
 // Wheel shader: one quad over the wheel; every pixel works out its own wedge,
-// the gaps between wedges, and the fill or outline, so no geometry is built.
+// the gaps between wedges, and the current chord's fill and outline, so no
+// geometry is built. Only the current chord stands out: brightened and
+// outlined, the other wedges dimmed (EFS-1.10).
 
 struct Wedge {
     color: vec4<f32>,
-    // x: 0 idle, 1 current (filled), 2 next (outlined)
+    // x: 0 idle, 1 current (brightened and outlined)
     mode: vec4<f32>,
 }
 
@@ -21,10 +23,12 @@ const PI: f32 = 3.14159265;
 const WEDGE_ANGLE_RADIANS: f32 = 0.8975979; // 2π / 7
 const GAP_HALF_FRACTION_OF_OUTER: f32 = 0.006;
 const OUTLINE_FRACTION_OF_OUTER: f32 = 0.014;
-const IDLE_ALPHA: f32 = 0.22;
-const CURRENT_ALPHA: f32 = 0.9;
-const OUTLINE_ALPHA: f32 = 0.95;
-
+const IDLE_ALPHA: f32 = 0.14;
+// The current wedge: its tint lifted this far towards white, so it stands
+// out even when every wedge shares one tint (colour off), and its outline
+// lifted further.
+const CURRENT_LIFT: f32 = 0.25;
+const OUTLINE_LIFT: f32 = 0.5;
 var<private> CORNERS: array<vec2<f32>, 6> = array<vec2<f32>, 6>(
     vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, -1.0), vec2<f32>(-1.0, 1.0),
     vec2<f32>(-1.0, 1.0), vec2<f32>(1.0, -1.0), vec2<f32>(1.0, 1.0),
@@ -79,11 +83,13 @@ fn fragment_main(in: Varying) -> @location(0) vec4<f32> {
     let in_outline_band: f32 = clamp(gap_half + outline_width + 0.5 - to_edge, 0.0, 1.0);
 
     let wedge: Wedge = wheel.wedges[index];
-    var alpha: f32 = inside * IDLE_ALPHA;
-    if (wedge.mode.x > 1.5) {
-        alpha = max(alpha, inside * in_outline_band * OUTLINE_ALPHA);
-    } else if (wedge.mode.x > 0.5) {
-        alpha = inside * CURRENT_ALPHA;
+    if (wedge.mode.x > 0.5) {
+        // Current: a lifted fill, opaque, with a lighter outline over its
+        // edge.
+        let fill_color: vec3<f32> = mix(wedge.color.rgb, vec3<f32>(1.0), CURRENT_LIFT);
+        let outline_color: vec3<f32> = mix(wedge.color.rgb, vec3<f32>(1.0), OUTLINE_LIFT);
+        let color: vec3<f32> = mix(fill_color, outline_color, in_outline_band);
+        return vec4<f32>(color, inside);
     }
-    return vec4<f32>(wedge.color.rgb, alpha);
+    return vec4<f32>(wedge.color.rgb, inside * IDLE_ALPHA);
 }
