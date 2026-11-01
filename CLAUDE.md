@@ -157,4 +157,7 @@ bright white fields or dropdowns.
 
 ## Commands
 
-To be filled in after the spike (build, test, run).
+`README.md` lists every command: the program, tests, the checking and
+measuring examples, and the tools, each with what it does and where its
+output goes. When a program, example or control is added, changed or
+removed, update `README.md` in the same step.
