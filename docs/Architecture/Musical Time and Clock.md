@@ -1,6 +1,6 @@
 # Live Lead Sheet — Musical Time and Clock
 
-Revision 14 — 29 Oct 2026
+Revision 15 — 1 Nov 2026
 
 How the program represents *where* things are in a song, *how long* they
 last, and *when* they happen. Every term is defined before it is used;
@@ -516,7 +516,223 @@ from their own starting moment. Using the queue's real time as *the*
 clock, for conversions, for delivery and for the playhead, removes the
 problem (section 5).
 
-## 9. Displayed tempo versus internal tempo
+## 9. Sending MIDI clock
+
+The player owns the MIDI clock (EFS-2.5): it creates the clock and its
+followers count it. This section gives the MIDI messages, what a clock
+owner canonically does with them, and how the player does that with the
+clock of section 5.
+
+**The messages** (MIDI 1.0, System Real-Time and System Common):
+
+| Message | Byte | What the owner means by it |
+|---|---|---|
+| Timing Clock | F8 | one pulse; 24 pulses/q |
+| Start | FA | play from the song's beginning; the next Timing Clock is its first pulse |
+| Stop | FC | stop; followers keep their position |
+| Continue | FB | play from the followers' current position; the next Timing Clock is its first pulse |
+| Song Position Pointer | F2 | while stopped: set the position, in MIDI beats |
+
+A MIDI beat is a sixteenth note: 6 pulses × 210 ticks/pulse = 1260 ticks.
+No message carries a tempo: tempo is the rate of Timing Clock.
+
+**What a clock owner canonically does:**
+
+- *Set the tempo:* send Timing Clock every 1 ÷ (24 pulses/q × tempo).
+- *Start from the beginning:* Start, then the first Timing Clock at the
+  downbeat.
+- *Start from a position:* while stopped, Song Position Pointer with the
+  position in MIDI beats, then Continue, then the first Timing Clock at
+  that position. Followers may need a short gap after Song Position
+  Pointer to locate (section 15, facts to verify).
+- *Change tempo:* change the interval between pulses from the pulse where
+  the change is written. Nothing else is sent.
+- *While stopped:* many owners keep sending Timing Clock, so followers
+  know the tempo before Start (O-2).
+
+**How the player does it.** Every message is stamped in real time from
+the current anchor and handed to the ALSA sequencer queue up to 50 ms
+ahead (section 5), like every other event:
+
+- **Timing Clock** at every multiple of 210 ticks, its instant computed
+  from the anchor (example 5), never by adding intervals.
+- **Play from the start** (EFS-2.1): Start, then the first Timing Clock,
+  both at the instant of P = 0 ticks. Start must be delivered first
+  (section 15, facts to verify).
+- **Play from a section:** Song Position Pointer =
+  P ÷ 1260 ticks/MIDI beat, then Continue, then the first Timing Clock at
+  the section's instant. A Song Position Pointer reaches at most
+  16383 MIDI beats × 1260 ticks/MIDI beat = 20642580 ticks, about
+  1023 bars of 4/4.
+- **Tempo changes** (written or slider): nothing extra is sent. The new
+  anchor (section 8) changes the instants of the pulses not yet queued.
+- **Count-in** (EFS-2.7): Timing Clock and beat notes run during the
+  count-in; Start is sent at its end (proposed, below).
+- **Stop:** the steps of section 8.
+
+**Starting followers in step (proposed, to be tested — O-2, O-3).**
+Discussed with Jim, 1 Nov 2026. A follower measures the interval between
+Timing Clock pulses, so it needs a few pulses before its tempo is right;
+a clock divider such as the 4MS Quad Clock Divider is reported to need
+2 or 3. Start is a separate thing: it resets a follower to its start
+(an FH-2 can turn it into a reset gate). So *locking* needs pulses
+before the downbeat, and *lining up* needs one clean Start. The count-in
+serves both the musician (time to prepare) and the followers (time to
+lock).
+
+Three ways to start:
+
+| | During the count-in | At the start position | Lock time for followers |
+|---|---|---|---|
+| **A. Clock runs while stopped** | pulses (already running) | Start, or Song Position Pointer then Continue | always; locked before Play |
+| **B. Clock starts with the count-in** | pulses only, no Start | Start, or Song Position Pointer then Continue | the whole count-in: 96 pulses per bar of 4/4 |
+| **C. Two starts** (Jim's first idea) | Start at count-in position 0 | Stop, then Start, or Song Position Pointer then Continue | the whole count-in |
+
+**Proposed: B, with A as well.**
+
+- *B (O-3: Start just before the start position).* One bar of 4/4 is
+  4 counts × 24 pulses/count = 96 pulses, far more than the 2 or 3 a
+  divider needs. Followers stay stopped during the count-in, so drum
+  sequencers do not play the count-in bars, and they start on the
+  downbeat on a single Start (one reset gate). For play from a section,
+  Song Position Pointer is sent at the start of the count-in, while
+  followers are stopped, as MIDI requires; the whole count-in is then
+  the gap followers need to locate.
+- *A (O-2: send Timing Clock while stopped).* It covers what B cannot:
+  with the count-in off, B gives no pulses before the downbeat, and the
+  first counts could be unsteady. Followers re-lock during the first
+  pulses if the song's first tempo differs from the tempo the clock ran
+  at while stopped.
+- *C is set aside unless testing needs it.* A second Start while
+  followers run is not handled alike (some restart, some ignore it), and
+  the Stop between gives two resets and lets sequencers play the
+  count-in. C helps only if a device ignores pulses until it has
+  received Start.
+
+**Not every setup has an FH-2.** B and A use only standard MIDI
+messages, so they work the same when followers receive MIDI directly:
+for example a disting NT running its own sequencers, a drum machine, or
+a computer program. Nothing may depend on an FH-2 feature such as its
+reset gates.
+
+**Testing** (Architecture.md, Next): with the FH-2 and a Quad Clock
+Divider, the expected case, and with the disting NT receiving MIDI
+directly. Open fact: whether the FH-2 passes MIDI clock to its gate
+outputs while the transport is stopped, which A depends on through an
+FH-2.
+
+## 10. Player states
+
+| State | Meaning |
+|---|---|
+| Stopped | not playing; nothing queued (before the first Play, and after Stop) |
+| Counting in | clock and beat notes run, parts are silent, the counter counts down (EFS-2.7) |
+| Playing | clock, beat notes and all parts sound |
+
+Play moves Stopped to Counting in (with a count-in) or to Playing; the
+end of the count-in moves Counting in to Playing; Stop moves either to
+Stopped. Each Play, play from a section, and loop jump makes an anchor
+(section 8).
+
+## 11. The screen keeps out of the MIDI path
+
+The MIDI path has priority; the screen only follows (A-5).
+
+- **The player never waits for the screen.** It publishes the song
+  events (A-6: started, stopped, section, bar, count, tempo, warnings) on
+  a channel, and the screen takes all pending ones each frame. Commands
+  from the screen (Play, Stop, play from, slider, loop release) travel
+  the other way as typed messages on their own channel. A MIDI controller
+  (EFS-9.1) sends the same typed commands, translated from its MIDI input,
+  so remote control changes nothing in the player.
+- **The screen draws each frame from the latest state, not from its own
+  previous frame.** Once per frame it reads the queue's real time T on its
+  own read-only handle (`queue_clock.rs`) and places the playhead at the
+  position for T, from the anchor in effect (section 6, instant →
+  position). How the screen gets the anchor in effect, when a new anchor
+  has been made for a position not yet reached (a slider change, section
+  8), is O-11.
+- **Repair.** A late or dropped frame leaves nothing to catch up on: the
+  next frame is computed from the latest state and is correct. The screen
+  keeps no animation state that could drift.
+- The screen never writes to the ALSA sequencer.
+
+## 12. Following an external MIDI clock (future, not V1)
+
+Not in V1: the requirement is EFS-2.9, marked later. Kept here so that
+V1 does not block it.
+
+**What a clock follower canonically does:**
+
+- Counts Timing Clock; each pulse advances it 1/24 of a quarter note.
+- On Start: goes to its start position; the next Timing Clock is the
+  first pulse.
+- On Continue: the next Timing Clock is the next pulse from where it
+  stopped (or from a received Song Position Pointer).
+- On Stop: stops sounding and keeps its position.
+- Tempo is not received. It is measured from the interval between
+  pulses, and is needed only for what falls between pulses.
+
+While following, the screen's transport controls are disabled and the
+player follows the clock owner's Start, Stop and Continue (EFS-2.9).
+Where playing starts, and whether a count-in is played, is still the
+player's own choice, set on the play screen (EFS-2.1, EFS-2.7), for
+Start and Continue alike.
+
+**How it could be done.** An ALSA sequencer queue cannot itself follow
+an external MIDI clock, so the player counts pulses:
+
+- The external source's port (e.g. the FH-2) is subscribed to the
+  player's input port with timestamping on the player's queue in real
+  time. Each received Timing Clock then carries the queue's real time of
+  its arrival, set by the kernel, not by when the player's thread woke.
+- A **pulse anchor** (k₀, P₀) says "pulse k₀ is position P₀":
+
+  ```
+  P = P₀ + (k − k₀) × 210 ticks/pulse
+  ```
+
+  Unit check: `pulses × ticks/pulse` → ticks.
+- Events at Pₖ are sent at once; events after Pₖ and before Pₖ₊₁ are
+  stamped in real time:
+
+  ```
+  T = Tₖ + (P − Pₖ) × I ÷ 210 ticks/pulse
+  ```
+
+  Unit check: `ticks × ns/pulse ÷ ticks/pulse` → ns.
+- Displayed tempo:
+  `B = 60000000000 ns/min × 1000 mq/q ÷ (24 pulses/q × I)`.
+  Unit check: `ns/min × mq/q ÷ (pulses/q × ns/pulse)` → mq/min.
+- **Song Position Pointer** while stopped: the play position becomes
+  (MIDI beats received) × 1260 ticks/MIDI beat.
+- **Start or Continue:** the start position S is the song's beginning
+  (0 ticks) or the play position, as the start control says. Without a
+  count-in the pulse anchor is (0 pulses, S). With a count-in of C
+  pulses, the first C pulses count in and the pulse anchor is
+  (C, S); C = bars × L_bar ÷ 210 ticks/pulse, with L_bar the bar length
+  at S. Unit check: `ticks ÷ ticks/pulse` → pulses.
+- **Clock lost:** if no Timing Clock arrives for 1 s while playing
+  (EFS-2.9; a starting value, to be tested), the player stops, sends
+  Note Off for every sounding note, and shows the message of EFS-2.9.
+  It can wake for this check without a timer of its own: after each pulse
+  it schedules an Echo event to its own input port at that pulse's
+  arrival plus 1 s, and ignores the Echo if a later pulse came first.
+- While the clock source is external, Stopped means waiting for Start or
+  Continue from the clock owner.
+
+| Symbol | Meaning | Unit |
+|---|---|---|
+| k, k₀ | pulse count since Start or Continue; k₀ at the pulse anchor | pulses |
+| Pₖ, Tₖ | position and arrival instant of pulse k | ticks, ns |
+| I | measured interval between pulses | ns/pulse |
+
+Here the player sends notes as soon as its thread wakes, so its timing
+depends on that thread. Following has priority over drawing (EFS-2.9);
+whether that needs a real-time thread priority, which is a system
+setting, is measured when following is spiked.
+
+## 13. Displayed tempo versus internal tempo
 
 **Decided (Jim, 29 Oct 2026):** the tempo the musician enters and sees,
 in BPM, counts the time signature's **counts** per minute — the note
@@ -550,7 +766,7 @@ plays the eighth notes of the 6/8 at the speed of the quarter notes of
 the 4/4 — the music halves in quarter-note speed. The song file states
 each section's tempo in its own counts, so this is always explicit.
 
-## 10. Names in the code
+## 14. Names in the code
 
 - **Units in names.** Every quantity's name or type states its unit:
   `TICKS_PER_QUARTER_NOTE`, `NANOSECONDS_PER_MINUTE`, a tempo field
@@ -580,7 +796,35 @@ each section's tempo in its own counts, so this is always explicit.
 - "Instant" means a clock reading in ns; "duration" means a difference
   of instants.
 
-## 11. Open decisions
+## 15. Open decisions and facts to verify
 
-None. The tick size (section 4) and the clock (section 5, D-8) are
-decided.
+The tick size (section 4) and the clock (section 5, D-8) are decided.
+
+**Open, sending MIDI clock (V1):**
+
+- **O-2** Send Timing Clock while stopped? *Proposed: yes (section 9,
+  A), to be tested.*
+- **O-3** Count-in: send Start at the start of the count-in, or just
+  before the start position? *Proposed: just before the start position
+  (section 9, B), to be tested.*
+- **O-11** How the screen gets the anchor in effect when a new anchor has
+  been made for a position not yet reached (section 11).
+
+**Following an external clock (future, section 12).** Decided by Jim,
+1 Nov 2026, and written into EFS-2.9: O-1 (the slider is disabled),
+O-5 (Song Position Pointer is honoured), O-6 (1 s, to be tested), O-7
+(the screen's transport is disabled and the screen follows), O-8
+(following comes before drawing), O-9 (the clock is not passed on) and
+O-10 (the clock source changes only while stopped), and O-12 (where to
+start and the count-in are set on the play screen for both clock
+sources; EFS-2.1, EFS-2.7). None is still open.
+
+**Facts to verify before relying on them:**
+
+- **Order at equal instants.** Events stamped with the same instant
+  (Start and the first Timing Clock) are delivered in the order sent.
+- **Gap after Song Position Pointer.** How long followers (the FH-2 and
+  the other devices in use) need before Continue. With a count-in, the
+  count-in is the gap (section 9); without one, it must be measured.
+- **FH-2 clock while stopped.** Whether the FH-2 passes MIDI clock to
+  its gate outputs while the transport is stopped (section 9, A).

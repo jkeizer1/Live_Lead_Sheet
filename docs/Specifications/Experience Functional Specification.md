@@ -1,6 +1,6 @@
 # Live Lead Sheet — Experience Functional Specification
 
-Revision 7 — 30 Oct 2026
+Revision 8 — 1 Nov 2026
 
 Builds on the Concept Brief, Revision 9. Covers **V1: the leader** — a
 chordal song with its own slash rhythm and a bass accompaniment, on one
@@ -124,7 +124,12 @@ warnings as they happen (see section 8). It never covers the music.
 ## 2. Transport and timing
 
 **EFS-2.1 Play and stop.** Play from the start of the song, from the
-start of the current section, or from the start of any chosen section. Stop sends MIDI Stop and silences every part
+start of the current section, or from the start of any chosen section.
+A start control on the play screen chooses between two modes: start from
+the beginning of the song, or start at the play position (the start of
+the current or chosen section). Where to start is the player's choice,
+set on the play screen, whichever clock source is in use (EFS-2.9).
+Stop sends MIDI Stop and silences every part
 (All Notes Off) on every port in use.
 
 **EFS-2.2 Tempo.** Each section has a written tempo, or carries on the
@@ -150,10 +155,38 @@ and the bar's first beat is always distinguishable.
 
 **EFS-2.7 Count-in.** An optional count-in of one or two bars (two help
 at fast tempos): clock and beat notes run, parts are silent, and the
-counter counts down.
+counter counts down. It is switched on and off on the play screen. When
+on, it is played on every start, before the start position (EFS-2.1);
+when off, playing begins at the start position.
 
 **EFS-2.8 Loop for practice.** Loop the current section until released,
 regardless of its written repeats.
+
+**EFS-2.9 Following an external MIDI clock — later.** Not in V1, but
+nothing in V1 may block it. A plainly visible clock-source control
+chooses *internal* (the program sends MIDI clock, EFS-2.5) or *external*
+(it follows the MIDI clock arriving on one chosen input, e.g. from the
+FH-2). The clock source can be changed only while stopped: one source is
+in charge of transport at a time. While following:
+
+- The clock owner's Start, Stop, Continue and Song Position Pointer
+  control the transport. The screen's Play, Stop and play-from controls
+  are disabled; the screen follows what arrives.
+- A received Song Position Pointer sets the play position. On Start or
+  Continue from the clock owner, playing starts where the start control
+  says (EFS-2.1), with the count-in if it is on (EFS-2.7).
+- Tempo is the clock owner's. The tempo shown (EFS-1.4) is the tempo
+  measured from the incoming clock; the tempo slider is disabled (greyed
+  out or hidden, settled with the screen layout); written tempo changes
+  have no effect.
+- If no clock arrives for 1 s while playing, the program stops, silences
+  its parts, and says so, e.g.
+  `No clock from FH-2. Stopped. Press Play on FH-2 to restart.`
+  The 1 s is a starting value, to be tested; it may need to be shorter.
+- The incoming clock is not passed on to the program's outputs; that is
+  a MIDI router's job.
+- Following the clock and the score comes first; the screen may lag and
+  catch up.
 
 ## 3. Parts and MIDI output
 
@@ -276,10 +309,22 @@ the next bar.`
 **EFS-8.3 No sound alerts.** The program never signals a failure with a
 sound.
 
-## 9. Not in V1
+## 9. Remote control
+
+**EFS-9.1 Remote control from a MIDI controller.** Every control on the
+play screen can also be worked from the buttons, knobs and sliders of a
+MIDI controller (e.g. a Launch Control XL 3), so the musician can run the
+player from a distance without reaching for the mouse. A control added
+to the play screen is therefore always one a MIDI controller can work.
+In V1, built after the mouse controls work; the mouse controls never
+wait for it. How controls are assigned to the controller's buttons,
+knobs and sliders is settled before it is built.
+
+## 10. Not in V1
 
 Listener and recorder roles; colour-phrase parts; device profiles;
 alternative tunings; modes and modal vamps; navigation marks (D.C.,
 D.S., Coda…); SATB voices (one line per voice, one channel per voice);
 other programs following the song (see the Concept Brief, "A building
-block"); several windows or monitors.
+block"); several windows or monitors; following an external MIDI clock
+(EFS-2.9).

@@ -1,6 +1,6 @@
 # Live Lead Sheet — Architecture
 
-Revision 15 — 30 Oct 2026
+Revision 16 — 1 Nov 2026
 
 Builds on the Concept Brief (Revision 9) and the Experience Functional
 Specification (Revision 7). Sets the principles, the main parts, how
@@ -362,8 +362,26 @@ in a thousand under heavy load, and 6.3 ms with busy-waiting. A 1 ms
 bound is below what listeners generally notice; the final check is the
 listening test with real drawing load.
 
+*Other platforms (future work, not V1):* the pattern carries over
+unchanged. Each operating system's own MIDI scheduler takes events stamped
+with an instant and delivers them itself: on macOS, CoreMIDI (`MIDISend`
+with a future `MIDITimeStamp`, in host time); on Windows 11, Windows MIDI
+Services (scheduled, timestamped sending). Each platform gets its own
+output adapter offering the same four things: read the current instant,
+schedule an event at an instant, remove pending events, send at once.
+Events are stamped in real time, not in ticks on a tempo queue: ALSA's
+tick queue has no counterpart on the other platforms. Only an output with
+no scheduler of its own (legacy Windows `midiOut`, which sends at once)
+needs a sender thread sleeping to deadlines, written in that adapter
+against that adapter's clock. Such a thread is bounded only at real-time
+thread priority (the measurements above are at normal priority), so that
+adapter would be measured first. A sleep crate such as `spin_sleep` was
+considered and set aside: it is the sleep-then-busy-wait method measured
+above, it waits on a second clock (`std::time::Instant`), and it has a
+single author.
+
 The full decision — reading the clock, the timer evidence, re-anchoring,
-loop release and stop — is in sections 5 and 8 of
+loop release and stop, sending MIDI clock — is in sections 5, 8 and 9 of
 [Musical Time and Clock](Musical%20Time%20and%20Clock.md).
 
 **D-9 Window: `winit`, not `glfw`; crate quality before crate count.**
@@ -432,6 +450,34 @@ From the last session notes: "Resume point: spike step 5, the ALSA work
   - the playhead and wheel driven by the queue clock instead of std::time::Instant;
   - frame-time statistics printed on exit;
   - after that, a receiver that measures clock evenness while the window draws."
+
+**First, high priority (Jim, 1 Nov 2026): the start-sequence test.**
+Before the sending thread of spike step 5, settle how followers are
+started in step (O-2, O-3; proposal and table in section 9 of
+[Musical Time and Clock](Musical%20Time%20and%20Clock.md)). The three
+variants:
+
+- **A:** Timing Clock runs while stopped; Start at the start position.
+- **B (proposed):** Timing Clock starts with the count-in; Start, or
+  Song Position Pointer then Continue, at the start position.
+- **C:** Start at the count-in's position 0, then Stop and a second
+  start at the start position.
+
+An `alsa_output` example, `start_sequence`, sends one variant at a fixed
+tempo, stamped in real time on the queue as in D-8, with options for the
+variant, tempo, count-in bars (0, 1 or 2), start from the beginning or
+from a position, and the destination port. Jim runs it:
+
+1. Through the FH-2 to a Quad Clock Divider and a drum sequence — the
+   expected case.
+2. Directly to the disting NT and its own sequencers, with no FH-2 — the
+   case for setups without one.
+
+What to watch: whether the divider is steady by the downbeat; whether
+sequences start exactly on the downbeat; whether anything plays during
+the count-in; with the count-in off, how many counts are unsteady; and
+whether the FH-2 passes clock to its gate outputs while stopped. Results
+go in `crates/alsa_output/examples/results.md`, and decide O-2 and O-3.
 
 1. **Spike:** at 2560 × 1440, draw an 8-bar strip (chord symbols, rhythm
    line, staff) and the wheel with the three shaders, with a moving
