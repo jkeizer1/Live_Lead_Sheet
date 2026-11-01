@@ -22,6 +22,22 @@ browser and network clients are future work — keep the code from
 blocking them (render crate takes only a surface and the stream; platform
 code only in adapters), but do not build them.
 
+## Design approach
+
+- **Top down.** Work from the functional requirements to the canonical
+  behaviour (e.g. how a MIDI device owns or follows MIDI clock), then to
+  our design, and only then to the platform (ALSA). Performance
+  measurements check a design; they do not lead it.
+- **Each function at its proper level.** Implement functionality in the
+  layer or module whose purpose it serves, at that layer's level of
+  detail: score logic in the player, scheduling and timestamps in ALSA,
+  drawing in the renderer.
+- **Canonical or reference patterns first.** Start from the standard
+  pattern (the MIDI specification, alsa-lib's own documentation and
+  examples). Do not lean on internet code that does not follow such
+  patterns. Working code is not the only goal: code that follows the
+  design directly, in its modules and its names, stays maintainable.
+
 ## Working agreement
 
 - **Jim commits and pushes.** Never run `git commit`, `git push`,
@@ -43,12 +59,15 @@ code only in adapters), but do not build them.
   windowed program or MIDI output must be tried, tell Jim the exact
   command (`cargo run ...`) and what to look for.
 - Work in small steps; say what you are about to change before changing it.
+- **Answers:** concise, each of Jim's questions answered directly and in
+  order. Check the documentation before disputing a fact Jim states.
 - Never modify `.gitignore`; ask Jim for new ignore rules. Use
   `--vcs none` with `cargo new`/`cargo init`.
 - External crate versions live only in `[workspace.dependencies]` in the
   root `Cargo.toml`, written as compatible versions (e.g. `"0.12.1"`, not
   `"=0.12.1"`); `Cargo.lock` is the exact pin and is committed. Crates use
   `{ workspace = true }`.
+- "Format with cargo fmt -p <crate>, never --all."
 
 ## Coding rules
 
@@ -87,6 +106,9 @@ messages and documents alike:
   Clock.md`, used with exactly those meanings: tick, count, pulse
   (MIDI clock pulse), score position, score length, instant, duration,
   tempo, anchor. "Tick" never means a MIDI clock pulse.
+- **Exact technical names**, never shorthand: "ALSA tick queue" and
+  "ALSA realtime queue" (alsa-lib's terms), "Timing Clock (F8)", not
+  "the queue" or "the clock".
 - **Units** in every name and every calculation comment
   (`length_ticks`, `instant_ns`, `TICKS_PER_QUARTER_NOTE`); a comment
   showing arithmetic shows the units and how they cancel.
@@ -99,6 +121,7 @@ messages and documents alike:
   operator.
 - **Products** of an expression and a unit are written with × or in
   words, never a bare space: "(1/d) × w", not "1/d w".
+  
 
 ## Messages to the musician
 

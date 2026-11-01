@@ -19,7 +19,7 @@ use vocabulary::instant::Instant;
 
 const CLICKS: u64 = 8;
 const CLICK_INTERVAL: Duration = Duration::from_ms(500);
-const CLICK_LENGTH: Duration = Duration::from_ms(50);
+const CLICK_LENGTH: Duration = Duration::from_ms(400);
 const FIRST_CLICK_DELAY: Duration = Duration::from_ms(1000);
 /// The player's lead window (D-8).
 const LEAD: Duration = Duration::from_ms(50);
