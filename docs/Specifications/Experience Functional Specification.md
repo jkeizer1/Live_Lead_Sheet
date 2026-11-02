@@ -1,6 +1,6 @@
 # Live Lead Sheet — Experience Functional Specification
 
-Revision 8 — 1 Nov 2026
+Revision 9 — 1 Nov 2026
 
 Builds on the Concept Brief, Revision 9. Covers **V1: the leader** — a
 chordal song with its own slash rhythm and a bass accompaniment, on one
@@ -308,6 +308,21 @@ the next bar.`
 
 **EFS-8.3 No sound alerts.** The program never signals a failure with a
 sound.
+
+**EFS-8.4 A second clock.** A follower counts every Timing Clock that
+reaches it, so a second clock source reaching a port the program sends
+clock to disturbs the followers on that port. On an FH-2, while its
+transport ran, the tempo display and the configured clock output both
+showed the two clocks' rates added together, unevenly (MIDI Router
+project, FH-2 Observations, 1 Nov 2026). A second clock can appear
+without the musician choosing it: a device that sends its own clock is
+powered on, or another program connects a clock source to the port.
+When the program detects another clock source reaching, or connected
+to, a port it sends clock to, it keeps playing (EFS-8.1) and names the
+source and the port, *e.g.*
+`Second clock into FH-2 from NiftyKEYZ. Unplug NiftyKEYZ or stop its clock.`
+Which cases the program can detect, and how, is established by testing
+before this is built.
 
 ## 9. Remote control
 

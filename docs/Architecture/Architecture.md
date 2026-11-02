@@ -3,7 +3,7 @@
 Revision 16 — 1 Nov 2026
 
 Builds on the Concept Brief (Revision 9) and the Experience Functional
-Specification (Revision 7). Sets the principles, the main parts, how
+Specification (Revision 9). Sets the principles, the main parts, how
 they talk, and the technology for V1.
 
 **Focus.** V1 is the Live Lead Sheet itself: the leader, on one native

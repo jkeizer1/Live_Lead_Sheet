@@ -61,6 +61,15 @@ code only in adapters), but do not build them.
 - Work in small steps; say what you are about to change before changing it.
 - **Answers:** concise, each of Jim's questions answered directly and in
   order. Check the documentation before disputing a fact Jim states.
+- **Precise, in full context.** Explain in connected prose that carries
+  the reasoning, not a series of terse points. Name the thing each time
+  ("the FH-2's tempo display", "the FH-2's clock output 5", "the MIDI
+  the FH-2 forwards to the disting NT") rather than "it" or "this" when
+  more than one thing could be meant. State a finding no wider than what
+  was observed: which device, which output or view, under which
+  conditions, observed or inferred, and what was not tested. Apply the
+  3 AM rule to answers too: clear enough for Jim to follow when tired,
+  late in a session.
 - Never modify `.gitignore`; ask Jim for new ignore rules. Use
   `--vcs none` with `cargo new`/`cargo init`.
 - External crate versions live only in `[workspace.dependencies]` in the

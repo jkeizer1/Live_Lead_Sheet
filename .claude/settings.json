@@ -2,7 +2,10 @@
   "permissions": {
     "defaultMode": "default",
     "disableBypassPermissionsMode": "disable",
-    "blockReadsOutsideWorkingDirectories": false,
+    "blockReadsOutsideWorkingDirectories": true,
+    "additionalDirectories": [
+      "~/Documents/Linux_MIDI_Router"
+    ],
     "deny": [
       "Bash(sudo *)",
       "Bash(su *)",
@@ -56,7 +59,12 @@
         "~/.git-credentials",
         "~/.claude",
         "~/.claude.json",
-        "~/.bash_history"
+        "~/.bash_history",
+        "~/Documents"
+      ],
+      "allowRead": [
+        "~/Documents/Live_Lead_Sheet",
+        "~/Documents/Linux_MIDI_Router"
       ],
       "allowWrite": ["/home/jim/.cargo/registry", "/home/jim/.cargo/git"]
     },
