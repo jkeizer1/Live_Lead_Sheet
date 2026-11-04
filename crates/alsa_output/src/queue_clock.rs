@@ -26,7 +26,10 @@ impl QueueClock {
     /// When the sequencer cannot be opened.
     pub fn open(queue_id: i32) -> Result<QueueClock, AlsaOutputError> {
         let seq: Seq = Seq::open(None, Some(Direction::Playback), true).map_err(|e| {
-            AlsaOutputError::alsa(format!("opening the ALSA sequencer to read queue {queue_id}"), e)
+            AlsaOutputError::alsa(
+                format!("opening the ALSA sequencer to read queue {queue_id}"),
+                e,
+            )
         })?;
         Ok(QueueClock { seq, queue_id })
     }
@@ -43,9 +46,9 @@ impl QueueClock {
 
 /// Reads queue `queue_id`'s real time through `seq`.
 pub(crate) fn read_queue_instant(seq: &Seq, queue_id: i32) -> Result<Instant, AlsaOutputError> {
-    let status: QueueStatus = seq
-        .get_queue_status(queue_id)
-        .map_err(|e| AlsaOutputError::alsa(format!("reading the real time of queue {queue_id}"), e))?;
+    let status: QueueStatus = seq.get_queue_status(queue_id).map_err(|e| {
+        AlsaOutputError::alsa(format!("reading the real time of queue {queue_id}"), e)
+    })?;
     let real_time: StdDuration = status.get_real_time();
     // as_nanos is u128 ns; it must fit the u64 ns of an Instant.
     match u64::try_from(real_time.as_nanos()) {

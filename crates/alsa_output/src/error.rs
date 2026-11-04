@@ -19,6 +19,9 @@ pub enum AlsaOutputError {
     },
     /// An instant cannot be turned into a queue timestamp.
     InstantOutOfRange { instant_ns: u64 },
+    /// Our own output buffer is full: events were queued while the kernel's
+    /// output pool stayed full.
+    OutputBufferFull { doing: String },
 }
 
 impl AlsaOutputError {
@@ -54,6 +57,11 @@ impl fmt::Display for AlsaOutputError {
             } => write!(
                 f,
                 "MIDI {what} is {value}; the largest allowed is {largest}"
+            ),
+            AlsaOutputError::OutputBufferFull { doing } => write!(
+                f,
+                "MIDI output full while {doing}: events were queued faster than the kernel \
+                 delivers them. Lower the tempo"
             ),
             AlsaOutputError::InstantOutOfRange { instant_ns } => write!(
                 f,

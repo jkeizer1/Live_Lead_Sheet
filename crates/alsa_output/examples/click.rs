@@ -12,7 +12,7 @@ use std::thread;
 use std::time::Duration as StdDuration;
 
 use alsa_output::error::AlsaOutputError;
-use alsa_output::sequencer_output::{MidiDestination, SequencerOutput};
+use alsa_output::sequencer_output::{FlushOutcome, MidiDestination, OutputPort, SequencerOutput};
 use alsa_output::warning::OutputWarning;
 use vocabulary::duration::Duration;
 use vocabulary::instant::Instant;
@@ -40,18 +40,23 @@ fn main() -> ExitCode {
 fn run() -> Result<(), String> {
     let destination: Option<MidiDestination> = parse_destination()?;
     let (output, warnings): (SequencerOutput, Vec<OutputWarning>) =
-        SequencerOutput::open("Live Lead Sheet click").map_err(|e| e.to_string())?;
+        SequencerOutput::open("Live Lead Sheet click", &["Out"]).map_err(|e| e.to_string())?;
+    let Some(port): Option<OutputPort> = output.ports().first().cloned() else {
+        return Err("The output opened without its port \"Out\".".to_string());
+    };
     for warning in &warnings {
         eprintln!("WARNING: {warning}");
     }
     match destination {
-        Some(destination) => output.connect_to(destination).map_err(|e| e.to_string())?,
+        Some(destination) => output
+            .connect_to(&port, destination)
+            .map_err(|e| e.to_string())?,
         None => eprintln!("No destination given: the clicks go nowhere."),
     }
-    play(&output).map_err(|e| e.to_string())
+    play(&output, &port).map_err(|e| e.to_string())
 }
 
-fn play(output: &SequencerOutput) -> Result<(), AlsaOutputError> {
+fn play(output: &SequencerOutput, port: &OutputPort) -> Result<(), AlsaOutputError> {
     // Every click is computed from this anchor, never from the previous
     // click, so no error accumulates.
     let first_click: Instant = add(output.now()?, FIRST_CLICK_DELAY)?;
@@ -66,9 +71,13 @@ fn play(output: &SequencerOutput) -> Result<(), AlsaOutputError> {
         let wait: Duration = send_at.checked_sub(output.now()?).unwrap_or(Duration::ZERO);
         thread::sleep(StdDuration::from_nanos(wait.ns()));
 
-        output.queue_note_on(click_at, CHANNEL, NOTE, VELOCITY)?;
-        output.queue_note_off(add(click_at, CLICK_LENGTH)?, CHANNEL, NOTE)?;
-        output.flush()?;
+        output.queue_note_on(port, click_at, CHANNEL, NOTE, VELOCITY)?;
+        output.queue_note_off(port, add(click_at, CLICK_LENGTH)?, CHANNEL, NOTE)?;
+        if output.flush()? == FlushOutcome::PoolFull {
+            return Err(AlsaOutputError::OutputBufferFull {
+                doing: format!("handing click {click_number} to the kernel"),
+            });
+        }
         // Negative lead (stamped in the past) would show as 0 µs here.
         let lead: Duration = click_at
             .checked_sub(output.now()?)

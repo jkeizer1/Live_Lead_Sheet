@@ -17,7 +17,7 @@ use std::process::ExitCode;
 use std::thread;
 use std::time::Duration as StdDuration;
 
-use alsa_output::sequencer_output::SequencerOutput;
+use alsa_output::sequencer_output::{OutputPort, SequencerOutput};
 use measurement::{
     FIRST_PULSE_DELAY, Settings, parse_settings, pulse_instant, run_measurement, tag_for,
 };
@@ -36,7 +36,11 @@ fn main() -> ExitCode {
     }
 }
 
-fn send_pulses(output: &SequencerOutput, settings: &Settings) -> Result<Vec<Instant>, String> {
+fn send_pulses(
+    output: &SequencerOutput,
+    port: &OutputPort,
+    settings: &Settings,
+) -> Result<Vec<Instant>, String> {
     let first_pulse: Instant = output
         .now()
         .map_err(|e| e.to_string())?
@@ -49,7 +53,7 @@ fn send_pulses(output: &SequencerOutput, settings: &Settings) -> Result<Vec<Inst
             pulse_instant(first_pulse, pulse_number, settings.quarter_notes_per_minute)?;
         wait_until(output, pulse_at, settings.spin)?;
         output
-            .send_clock_pulse_now(tag_for(pulse_number)?)
+            .send_clock_pulse_now(port, tag_for(pulse_number)?)
             .map_err(|e| e.to_string())?;
         scheduled.push(pulse_at);
     }

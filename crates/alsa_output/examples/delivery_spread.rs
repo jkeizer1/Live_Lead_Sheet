@@ -16,7 +16,7 @@ use std::process::ExitCode;
 use std::thread;
 use std::time::Duration as StdDuration;
 
-use alsa_output::sequencer_output::SequencerOutput;
+use alsa_output::sequencer_output::{FlushOutcome, OutputPort, SequencerOutput};
 use measurement::{
     FIRST_PULSE_DELAY, Settings, parse_settings, pulse_instant, run_measurement, tag_for,
 };
@@ -39,7 +39,11 @@ fn main() -> ExitCode {
 }
 
 /// Sends every pulse about `LEAD` ahead of its instant, as the player will.
-fn send_pulses(output: &SequencerOutput, settings: &Settings) -> Result<Vec<Instant>, String> {
+fn send_pulses(
+    output: &SequencerOutput,
+    port: &OutputPort,
+    settings: &Settings,
+) -> Result<Vec<Instant>, String> {
     let first_pulse: Instant = output
         .now()
         .map_err(|e| e.to_string())?
@@ -61,9 +65,14 @@ fn send_pulses(output: &SequencerOutput, settings: &Settings) -> Result<Vec<Inst
             late_sends += 1;
         }
         output
-            .queue_clock_pulse(pulse_at, tag_for(pulse_number)?)
+            .queue_clock_pulse(port, pulse_at, tag_for(pulse_number)?)
             .map_err(|e| e.to_string())?;
-        output.flush().map_err(|e| e.to_string())?;
+        // A measurement that could not hand a pulse over is not valid.
+        if output.flush().map_err(|e| e.to_string())? == FlushOutcome::PoolFull {
+            return Err(format!(
+                "MIDI output full at pulse {pulse_number}: the measurement is not valid."
+            ));
+        }
         scheduled.push(pulse_at);
     }
     if late_sends > 0 {

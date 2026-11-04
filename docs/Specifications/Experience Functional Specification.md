@@ -30,8 +30,8 @@ pulses brightly on each count.
 **EFS-1.4 Tempo.** The current tempo in bpm, and the slider setting when
 it differs from the written tempo.
 
-**EFS-1.5 Voice tracks.** Each voice track has its own contained area, in the order
-set in the song. Each area has, top to bottom:
+**EFS-1.5 Voice tracks.** Each voice track has its own contained area,
+in the order set in the song. Each area has, top to bottom:
 
 - **chord symbols**, placed at the exact position of each change, even
   mid-beat, spelled by the key;
@@ -262,6 +262,12 @@ length is set as steps × step value (e.g. 8 steps of eighths), so a
 named action ("SQ-1: pattern 3, 2 runs from bar 5") can be turned into
 cues by a device profile. In V1, cues are placed by hand.
 
+**EFS-4.7 Pulse bursts — later.** A cue can start a burst of fast pulses
+— notes on a chosen port and channel, at a set rate (e.g. 64ths) for a
+set length — to clock a sequencer far above the song's tempo, as an
+oscillator, or to fire fast voices. Timing Clock stays at the song's
+tempo (EFS-2.5).
+
 ## 5. Authoring view
 
 **EFS-5.1 Songs.** Create, open and save songs.
@@ -381,9 +387,8 @@ knobs and sliders is settled before it is built.
 ## 10. Not in V1
 
 Listener and recorder roles; colour-phrase tracks; device profiles and
-external phrases (EFS-4.6);
-alternative tunings; modes and modal vamps; navigation marks (D.C.,
-D.S., Coda…); SATB voices (one line per voice, one channel per voice);
-other programs following the song (see the Concept Brief, "A building
-block"); several windows or monitors; following an external MIDI clock
-(EFS-2.9).
+external phrases (EFS-4.6); pulse bursts (EFS-4.7); alternative tunings;
+modes and modal vamps; navigation marks (D.C., D.S., Coda…); SATB voices
+(one line per voice, one channel per voice); other programs following
+the song (see the Concept Brief, "A building block"); several windows or
+monitors; following an external MIDI clock (EFS-2.9).

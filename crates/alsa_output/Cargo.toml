@@ -8,5 +8,9 @@ publish.workspace = true
 alsa = { workspace = true }
 vocabulary = { path = "../vocabulary" }
 
+[dev-dependencies]
+# The control_track example plays a schedule made by the player.
+player = { path = "../player" }
+
 [lints]
 workspace = true

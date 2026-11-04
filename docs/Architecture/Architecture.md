@@ -13,10 +13,10 @@ networks is there so V1 does not block it — not to be built now.
 ## Principles
 
 **A-1 The vocabulary is the core.** At the centre is a symbolic musical
-language: key, meter, tempo, chord, voicing, rhythm pattern,
-voice track, control track, phrase cue, section, song, position. Everything else is built around it. It
-represents music as a musician thinks of it, not as any device or file
-encodes it.
+language: key, meter, tempo, chord, voicing, rhythm pattern, voice
+track, control track, phrase cue, section, song, position. Everything
+else is built around it. It represents music as a musician thinks of
+it, not as any device or file encodes it.
 
 **A-2 Meaning, abstracted; types, concrete.** The vocabulary is an
 abstraction of *music* — that is where abstraction earns its keep. Each
@@ -53,8 +53,9 @@ vocabulary is incomplete.
 
 **A-6 Two kinds of information.** The **song** — the whole of it, as a
 document, given to a follower when it joins or when the song changes.
-The **events** — started, stopped, section, repeat, bar, count, tempo, phrase cue — as they happen. A follower knows what is coming by combining
-the two; the future is never streamed.
+The **events** — started, stopped, section, repeat, bar, count, tempo,
+phrase cue — as they happen. A follower knows what is coming by
+combining the two; the future is never streamed.
 
 **A-7 Musical time first.** Inside, time is musical: bar, count, and
 exact fractions of a note. Triplets and dotted values are exact, with no
@@ -447,9 +448,12 @@ from what is published (A-5).
   devices is the studio's job — the MIDI router, `aconnect`, or anything
   else; the program does not depend on the router. **Exactly one port
   sends Timing Clock**, so the program is one clock source; each device
-  that follows clock is connected to it once. A transport cue can go to
-  any port: a Start on `SQ-1` reaches only what that port is connected
-  to, a Start on `Clock` reaches everything that follows the clock.
+  that follows clock is connected to it once. A transport cue goes on
+  one of two kinds of port. On `Clock`: a MIDI router that takes clock
+  and transport only from one clock master (as Jim's does) then decides
+  route by route which devices receive it. On a port of its own (e.g.
+  `To SQ-1`), for direct connections (`aconnect`): a Start there reaches
+  only what that port is connected to.
   Devices that share a port downstream (the disting NT behind the FH-2,
   a DIN thru chain) receive the same transport; control them one by one
   with channel messages (reset or gate notes on separate channels).
@@ -473,6 +477,18 @@ from what is published (A-5).
   phrase boundaries; Song Position Pointer is not assumed, because many
   devices ignore it. A section start that falls inside an external
   phrase is shown as a warning in the authoring view.
+
+- **Pulse bursts (later).** A cue may start a burst of fast pulses for a
+  set length: to clock a sequencer far above the song's tempo, so it
+  becomes an oscillator (its gate a waveform), or to fire fast voices.
+  The program sends Timing Clock on one port only, at the song's tempo,
+  so a device cannot be given a faster MIDI clock of its own: a second
+  clock reaching it adds to the first (EFS-8.4). A burst is therefore a
+  stream of notes, like the beat pulse, at its own rate (e.g. 64ths),
+  made into a clock by a gate (an FH-2 output) into the device's clock
+  or SYNC input. Observed 4 Nov 2026 (`control_track_test`): the SQ-1 and
+  a VPME.QD drum voice kept up with Timing Clock at about 22000 q/min,
+  about 9500 events/s, once the output pool was large enough.
 
 *Set aside:* the count-in and beat clock as player functions, with the
 states, control and open decisions they needed; Song Position Pointer
@@ -530,7 +546,7 @@ at once (Musical Time and Clock, sections 8 and 9).
 
 **2. First tracks and cues.** The vocabulary's first types for voice
 tracks, control tracks and phrase cues (D-10), and an `alsa_output`
-example, `control_track`, that plays a hard-coded song at a fixed tempo:
+example, `control_track_test`, that plays a hard-coded song at a fixed tempo:
 a one-bar count-in section, a beat pulse on one port, Timing Clock on the
 clock port, and a Start cue on the music's first bar on a port of its
 own. Jim runs it:
@@ -544,7 +560,15 @@ own. Jim runs it:
 What to watch: whether the divider is steady through the count-in and
 on the beat at the music's first bar; whether the SQ-1 starts exactly on
 that downbeat and nothing else starts; whether anything plays during
-the count-in. Results go in `crates/alsa_output/examples/results.md`.
+the count-in. Results go in the test's `explainer.md`
+(`crates/alsa_output/examples/control_track_test/`).
+
+*Status, 4 Nov 2026.* Done: the SQ-1 started, stopped and restarted on
+cues through the MIDI router (`--transport-on-clock`), and the output was
+stress-tested to 30000 q/min (output pool raised to 2000 events). Open,
+for next session: Jim sets up the FH-2 outputs for the beat pulse and the
+reset trigger (not as simple as a gate output); then the divider and
+downbeat checks above, and the direct `aconnect` path.
 
 **3. Spike step 5: timing and drawing together.** A sending thread in
 `app` sending Timing Clock (24 pulses/q) and the control track, stamped

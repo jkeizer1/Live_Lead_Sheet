@@ -1,7 +1,7 @@
 //! Score length (ΔP): a distance along the song, counted in ticks.
 //!
 //! A note value is a length, so note values are made here. Lengths are
-//! forward-only: never negative. See section 10 of
+//! forward-only: never negative. See section 14 of
 //! docs/Architecture/Musical Time and Clock.md for the allowed operations.
 
 use std::fmt;

@@ -99,6 +99,12 @@ code only in adapters), but do not build them.
   all code lives in purpose-named module files.
 - Measurement and test programs go in the crate's `examples/` folder;
   throwaway experiments go in `/scratch`.
+- **Tests are named `<what>_test`**, so it is clear they are not part of
+  the product. Each test has its own folder, `examples/<what>_test/`,
+  holding `main.rs` (Cargo builds it as the example `<what>_test`) and
+  `explainer.md`: what the test proves, its findings with dates, how to
+  run it, and the date of each revision. (The ALSA measurement examples
+  from 29 Oct 2026 predate this rule.)
 - Measurement programs (frame time, timing spread) run with `--release`;
   tests run in debug.
 - **No math without units.** Every quantity's type or name states its

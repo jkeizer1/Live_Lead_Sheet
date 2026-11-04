@@ -16,7 +16,7 @@ use std::time::{Duration as StdDuration, Instant as StdInstant};
 
 use alsa::Direction;
 use alsa::seq::{EventType, PortCap, PortInfo, PortType, Seq};
-use alsa_output::sequencer_output::{MidiDestination, SequencerOutput};
+use alsa_output::sequencer_output::{MidiDestination, OutputPort, SequencerOutput};
 use alsa_output::warning::OutputWarning;
 use vocabulary::duration::Duration;
 use vocabulary::instant::Instant;
@@ -47,13 +47,22 @@ struct Arrival {
 
 /// Opens the output and a receiving client, connects them, starts the load,
 /// lets `send` send every pulse, and reports. `send` returns the instant
-/// each pulse was meant to be delivered, in order.
+/// each pulse was meant to be delivered, in order. The pulses go out on
+/// one output port, `PULSE_PORT_NAME`.
+/// The one output port the measurement sends its pulses on.
+pub const PULSE_PORT_NAME: &str = "Out";
+
 pub fn run_measurement<F>(client_name: &str, settings: &Settings, send: F) -> Result<(), String>
 where
-    F: FnOnce(&SequencerOutput, &Settings) -> Result<Vec<Instant>, String>,
+    F: FnOnce(&SequencerOutput, &OutputPort, &Settings) -> Result<Vec<Instant>, String>,
 {
     let (output, warnings): (SequencerOutput, Vec<OutputWarning>) =
-        SequencerOutput::open(client_name).map_err(|e| e.to_string())?;
+        SequencerOutput::open(client_name, &[PULSE_PORT_NAME]).map_err(|e| e.to_string())?;
+    let Some(pulse_port): Option<OutputPort> = output.ports().first().cloned() else {
+        return Err(format!(
+            "The output opened without its port {PULSE_PORT_NAME:?}."
+        ));
+    };
     for warning in &warnings {
         eprintln!("WARNING: {warning}");
     }
@@ -66,12 +75,14 @@ where
     let destination: MidiDestination = ready_receiver
         .recv()
         .map_err(|_| "The receiving client stopped before it was ready.".to_string())??;
-    output.connect_to(destination).map_err(|e| e.to_string())?;
+    output
+        .connect_to(&pulse_port, destination)
+        .map_err(|e| e.to_string())?;
 
     let stop_load: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
     let load: Vec<thread::JoinHandle<()>> = start_load(settings.load_threads, &stop_load);
 
-    let send_result: Result<Vec<Instant>, String> = send(&output, settings);
+    let send_result: Result<Vec<Instant>, String> = send(&output, &pulse_port, settings);
 
     // Stop the load before reporting, whatever happened.
     stop_load.store(true, Ordering::Relaxed);

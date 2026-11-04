@@ -12,6 +12,11 @@ pub enum OutputWarning {
     QueueTimerNotListed { queue_id: i32 },
     /// The timer file could not be read.
     QueueTimerFileUnreadable { file: String, reason: String },
+    /// The kernel would not enlarge our output pool.
+    OutputPoolNotEnlarged {
+        requested_events: u32,
+        reason: String,
+    },
 }
 
 impl fmt::Display for OutputWarning {
@@ -29,6 +34,14 @@ impl fmt::Display for OutputWarning {
                 f,
                 "Cannot confirm MIDI timing: queue {queue_id} is not in the kernel's timer list. \
                  Restart; if it stays, tell Jim."
+            ),
+            OutputWarning::OutputPoolNotEnlarged {
+                requested_events,
+                reason,
+            } => write!(
+                f,
+                "MIDI output pool not enlarged to {requested_events} events ({reason}). \
+                 Songs play; very fast bursts may run late."
             ),
             OutputWarning::QueueTimerFileUnreadable { file, reason } => write!(
                 f,

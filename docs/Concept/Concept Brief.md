@@ -64,7 +64,10 @@ A control track holds:
   channel. Cues may be sparse and irregular;
 - the **beat pulse** — one note per count, the first count of each bar
   accented, for clock dividers and devices that follow notes better than
-  MIDI clock.
+  MIDI clock;
+- later, **pulse bursts** — a fast stream of pulses for a set length, to
+  clock a sequencer far above the song's tempo so it becomes an
+  oscillator, or to fire fast voices: a sound blast from a cue.
 
 A voice track can carry cues too, for its own instrument (*e.g.* a
 patch change at section B), drawn above its staff.
