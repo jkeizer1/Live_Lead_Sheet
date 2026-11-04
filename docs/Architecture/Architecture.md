@@ -1,9 +1,9 @@
 # Live Lead Sheet — Architecture
 
-Revision 16 — 1 Nov 2026
+Revision 17 — 4 Nov 2026
 
 Builds on the Concept Brief (Revision 9) and the Experience Functional
-Specification (Revision 9). Sets the principles, the main parts, how
+Specification (Revision 10). Sets the principles, the main parts, how
 they talk, and the technology for V1.
 
 **Focus.** V1 is the Live Lead Sheet itself: the leader, on one native
@@ -13,8 +13,8 @@ networks is there so V1 does not block it — not to be built now.
 ## Principles
 
 **A-1 The vocabulary is the core.** At the centre is a symbolic musical
-language: key, meter, tempo, chord, voicing, rhythm pattern, part,
-section, song, position, trigger. Everything else is built around it. It
+language: key, meter, tempo, chord, voicing, rhythm pattern,
+voice track, control track, phrase cue, section, song, position. Everything else is built around it. It
 represents music as a musician thinks of it, not as any device or file
 encodes it.
 
@@ -53,8 +53,7 @@ vocabulary is incomplete.
 
 **A-6 Two kinds of information.** The **song** — the whole of it, as a
 document, given to a follower when it joins or when the song changes.
-The **events** — started, stopped, section, repeat, bar, count, tempo,
-trigger — as they happen. A follower knows what is coming by combining
+The **events** — started, stopped, section, repeat, bar, count, tempo, phrase cue — as they happen. A follower knows what is coming by combining
 the two; the future is never streamed.
 
 **A-7 Musical time first.** Inside, time is musical: bar, count, and
@@ -146,9 +145,9 @@ The chain — vocabulary flows left to right until an output leaves it:
 
 ```
 Song player ─▶ Transform ─▶ Transform ─▶ … ─▶ MIDI output ─▶ ALSA ─▶ MIDI router ─▶ devices
-               (e.g. melody   (e.g. other        notes, clock,
-                generator,     generative,       beat notes,
-                own view)      own view)         triggers
+               (e.g. melody   (e.g. other        notes, clock,          (or direct
+                generator,     generative,       beat pulse,             connections,
+                own view)      own view)         phrase cues             D-10)
 ```
 
 Each link's window shows what goes into it and, for a transform, what
@@ -257,8 +256,7 @@ survives without the conversations behind it.
 MIDI carries notes but no chord names, key, sections, or knowledge of
 what is coming. MusicXML has an excellent chord model but is a document
 format: no notion of "now", no streaming, and no place for our concepts
-(rhythm patterns assigned to bars, lead part, *no root*, triggers as
-actions, the tempo slider). MIDI 2.0's Flex Data messages (chord name,
+(rhythm patterns assigned to bars, lead track, *no root*, phrase cues, the tempo slider). MIDI 2.0's Flex Data messages (chord name,
 key, time signature, tempo) are real-time but cover only "now", with no
 structure or look-ahead, and few receivers support them — kept as a
 possible later output. Hence: our own vocabulary, MusicXML's harmony
@@ -410,6 +408,78 @@ count (CLAUDE.md). Against it:
   `x11-dl`, `xkbcommon-dl`, `gpu-allocator`) are inherited, not chosen;
   `Cargo.lock` pins them.
 
+**D-10 Voice tracks and control tracks; the count-in is part of the
+score.** Decided by Jim, 4 Nov 2026.
+
+*Why.* The count-in and the beat clock were player behaviour outside the
+score: a count-in lay before 0 ticks with no score positions. Each fix
+added a player state, a control or an open decision (O-2, O-3, O-13).
+Written into the score instead, they need no special handling: the
+player plays exactly what is written (A-9), and the screen draws them
+from what is published (A-5).
+
+- **Two kinds of track.** *Voice tracks* are standard notation that
+  becomes MIDI notes: harmony and bass in V1; drums and colour phrases
+  later. *Control tracks* carry what this song needs from the studio's
+  other devices.
+- **Phrase cue.** A marker at a score position that sends plain MIDI: a
+  note (on and off; a short note is a trigger, a held one a gate), a CC,
+  a program change, or — on a control track only — transport (Start,
+  Stop, Continue). A cue on a control track names its output port and
+  channel. A cue on a voice track goes to that track's own port and
+  channel, carries channel messages only, and is drawn above the staff
+  as a marking. Transport has no channel: a transport cue names a port
+  only.
+- **Beat pulse.** A control track playing a rhythm pattern on one fixed
+  note, with an accent on count 1 sent at an accent velocity. It replaces
+  the separate beat-note stream (EFS-2.6).
+- **Count-in.** Authored bars at the start of the song, in a first
+  section marked *count-in*: voices rest, the beat pulse plays. Play
+  starts at P = 0 ticks, the first bar of the score, count-in included.
+  A transport cue on the music's first bar starts the followers, so they
+  never play the count-in. The player has no count-in state; its only
+  count-in control is the practice one below.
+- **Navigation.** A return that should skip the count-in is a D.S. to a
+  segno on the music's first bar, as in standard notation. A cue can be
+  limited to a pass ("1st time only"), as a marking can.
+- **Output ports.** The program has several ALSA output ports, named for
+  their purpose (e.g. `Clock`, `Harmony`, `SQ-1`). Connecting them to
+  devices is the studio's job — the MIDI router, `aconnect`, or anything
+  else; the program does not depend on the router. **Exactly one port
+  sends Timing Clock**, so the program is one clock source; each device
+  that follows clock is connected to it once. A transport cue can go to
+  any port: a Start on `SQ-1` reaches only what that port is connected
+  to, a Start on `Clock` reaches everything that follows the clock.
+  Devices that share a port downstream (the disting NT behind the FH-2,
+  a DIN thru chain) receive the same transport; control them one by one
+  with channel messages (reset or gate notes on separate channels).
+- **External phrases.** A sequencer's phrase length is stated as
+  steps × step value (8 steps × an eighth = 20160 ticks), not in beats,
+  so a cue's end ("2 runs from bar 5") is worked out once when the song
+  is loaded. The player counts no beats while playing. Turning a named
+  action ("SQ-1: pattern 3, 2 runs") into cues is a device profile's job,
+  later; in V1, cues are written as plain messages.
+- **Play from a section, and practice.** Playing from a section starts
+  at the section's first bar, with no count-in. For practice, a play
+  screen control, *count-in first* (on or off, kept until changed),
+  plays the song's count-in section once before the first pass, then
+  jumps to the section (a new anchor, as for the practice loop); the
+  section then loops without a count-in until stopped. Every Play honours
+  the control's setting. If the song has no count-in section, the
+  control is unavailable and says so. At the start position the player
+  sends the state in effect there — the last program change and CC
+  values of each cue target, and any note held as a gate — then the cues
+  from the section on. Devices are put in step by resets at
+  phrase boundaries; Song Position Pointer is not assumed, because many
+  devices ignore it. A section start that falls inside an external
+  phrase is shown as a warning in the authoring view.
+
+*Set aside:* the count-in and beat clock as player functions, with the
+states, control and open decisions they needed; Song Position Pointer
+and DAW-style chasing of transport for external devices; one output
+port for everything (every Start would reach the whole studio); Timing
+Clock on several ports (a device reached by two adds them, EFS-8.4).
+
 ## Development environment
 
 The development machine: Linux Mint 22 (Ubuntu 24.04 base), Cinnamon on
@@ -443,63 +513,61 @@ first and set aside (D-9).
 
 ## Next
 
-From the last session notes: "Resume point: spike step 5, the ALSA work
-- crates/alsa_output/src/queue_clock.rs is still untracked and not declared in lib.rs. It's the screen's read-only handle on the queue clock (D-8). It gets declared, and SequencerOutput::now reuses its read_queue_instant; that edit was stopped before it ran.
-- Still to do:
-  - a sending thread in app (24 clock pulses per quarter note, a beat note per quarter, stamped up to 50 ms ahead, instants computed from an anchor);
-  - the playhead and wheel driven by the queue clock instead of std::time::Instant;
-  - frame-time statistics printed on exit;
-  - after that, a receiver that measures clock evenness while the window draws."
+**Done so far (spike steps 1–4b).** The workspace and its strict lints;
+musical time (D-7: `ScorePosition`, `ScoreLength`, `Instant`,
+`Duration`); the ALSA output with the clock measurements (D-8); the
+window, the three shaders and the glyph atlas; one voice track's strip with
+chord symbols, slash rhythm line, hideable pitch staff, and a wheel that
+follows the chords. The playhead still runs on the computer's own clock,
+not the queue's.
 
-**First, high priority (Jim, 1 Nov 2026): the start-sequence test.**
-Before the sending thread of spike step 5, settle how followers are
-started in step (O-2, O-3; proposal and table in section 9 of
-[Musical Time and Clock](Musical%20Time%20and%20Clock.md)). The three
-variants:
+**1. ALSA output for D-10.** Declare `queue_clock.rs` (the screen's
+read-only handle on the queue's real time, D-8) and let
+`SequencerOutput::now` use its `read_queue_instant` instead of its own
+copy. Several named output ports on one queue. Add Start, Stop,
+Continue, CC, program change, removing queued events, and Note Off sent
+at once (Musical Time and Clock, sections 8 and 9).
 
-- **A:** Timing Clock runs while stopped; Start at the start position.
-- **B (proposed):** Timing Clock starts with the count-in; Start, or
-  Song Position Pointer then Continue, at the start position.
-- **C:** Start at the count-in's position 0, then Stop and a second
-  start at the start position.
+**2. First tracks and cues.** The vocabulary's first types for voice
+tracks, control tracks and phrase cues (D-10), and an `alsa_output`
+example, `control_track`, that plays a hard-coded song at a fixed tempo:
+a one-bar count-in section, a beat pulse on one port, Timing Clock on the
+clock port, and a Start cue on the music's first bar on a port of its
+own. Jim runs it:
 
-An `alsa_output` example, `start_sequence`, sends one variant at a fixed
-tempo, stamped in real time on the queue as in D-8, with options for the
-variant, tempo, count-in bars (0, 1 or 2), start from the beginning or
-from a position, and the destination port. Jim runs it:
+1. The beat pulse to an FH-2 gate into the Quad Clock Divider, with a
+   reset note to an FH-2 trigger output into its reset.
+2. The Start cue on a port connected only to the SQ-1's `CTRL` port,
+   through the MIDI router and through `aconnect`.
+3. Directly to the disting NT and its own sequencers, with no FH-2.
 
-1. Through the FH-2 to a Quad Clock Divider and a drum sequence — the
-   expected case.
-2. Directly to the disting NT and its own sequencers, with no FH-2 — the
-   case for setups without one.
+What to watch: whether the divider is steady through the count-in and
+on the beat at the music's first bar; whether the SQ-1 starts exactly on
+that downbeat and nothing else starts; whether anything plays during
+the count-in. Results go in `crates/alsa_output/examples/results.md`.
 
-What to watch: whether the divider is steady by the downbeat; whether
-sequences start exactly on the downbeat; whether anything plays during
-the count-in; with the count-in off, how many counts are unsteady; and
-whether the FH-2 passes clock to its gate outputs while stopped. Results
-go in `crates/alsa_output/examples/results.md`, and decide O-2 and O-3.
+**3. Spike step 5: timing and drawing together.** A sending thread in
+`app` sending Timing Clock (24 pulses/q) and the control track, stamped
+up to 50 ms ahead, instants computed from an anchor (section 6);
+the playhead and wheel driven by the queue's real time instead of the
+computer's clock; frame-time statistics printed on exit; then the
+`delivery_spread` measurement repeated while the window draws.
 
-1. **Spike:** at 2560 × 1440, draw an 8-bar strip (chord symbols, rhythm
-   line, staff) and the wheel with the three shaders, with a moving
-   playhead; alongside, an ALSA thread sending MIDI clock and beat
-   notes. Measure frame time and clock evenness.
-2. **Song notation:** first draft, worked through on a 12-bar blues.
-3. **Exact musical time:** settled — D-7.
-4. **Key signatures and key changes** (a later spike, deferred): a song in
-   a key other than C, with its key signature after each clef and chord
-   names and voicings spelled by the key; and a key change within the
-   strip, drawn as in standard notation (EFS-1.9).
-5. **Layout options** (deferred until the functions are complete): the
-   spike's sizes are the legible minimum, so a crowded screen gains room
-   by other means —
-   - a third row of chord symbols for the densest bars;
-   - n bars across in place of a fixed 8, or two lines of 4 bars stacked
-     at a larger size;
-   - the wheel drawn smaller in a corner, or left out when it cannot
-     fit;
-   - a **Big** view for a screen shared by several musicians (e.g. a
-     family jam on a large screen): one setting that enlarges symbols
-     and voicings for simpler songs, with the same fit check showing
-     where a dense song no longer fits.
+**4. Song notation.** First draft, worked through on a 12-bar blues.
 
-   Views showing parts beyond the lead bring their own layout problems.
+**Deferred.**
+
+- *Key signatures and key changes* (a later spike): a song in a key other
+  than C, with its key signature after each clef and chord names and
+  voicings spelled by the key; a key change within the strip, drawn as
+  in standard notation (EFS-1.9).
+- *Layout options* (until the functions are complete). The spike's
+  sizes are the legible minimum, so a crowded screen gains room by other
+  means: a third row of chord symbols for the densest bars; n bars
+  across in place of a fixed 8, or two lines of 4 bars stacked at a
+  larger size; the wheel smaller in a corner, or left out when it cannot
+  fit; a **Big** view for a screen shared by several musicians (e.g. a
+  family jam on a large screen) that enlarges symbols and voicings for
+  simpler songs, with the same fit check showing where a dense song no
+  longer fits. Views showing tracks beyond the lead bring their own
+  layout problems.

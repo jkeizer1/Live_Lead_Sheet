@@ -1,6 +1,6 @@
 # Live Lead Sheet — Musical Time and Clock
 
-Revision 15 — 1 Nov 2026
+Revision 16 — 4 Nov 2026
 
 How the program represents *where* things are in a song, *how long* they
 last, and *when* they happen. Every term is defined before it is used;
@@ -122,10 +122,10 @@ a rate; a tick is a unit of measure, like a millimetre on a ruler.
 decided by Jim, 29 Oct 2026. Nothing moves it: "play from" a section
 starts playing at that section's own position (not at 0 ticks), the
 practice loop replays the same positions, and stop and restart change
-nothing. Every bar, chord and trigger therefore has one position for the
-life of the song. A position is never negative. (A count-in, EFS-2.7,
-lies before 0 ticks and is handled by the player as its own lead-in; it
-has no score positions.)
+nothing. Every bar, chord and phrase cue therefore has one position for the
+life of the song. A position is never negative. A count-in is a section
+of the score (D-10, EFS-2.7), so P = 0 ticks is the first downbeat of the
+count-in when the song has one; its bars have positions like any other.
 
 **Performance order.** Positions count along the song *as it is played*,
 with repeats written out: a repeat is shorthand in the written song, not
@@ -480,6 +480,10 @@ A new anchor is made at:
   effect within 50 ms.
 - **Play from a section** — as for Play, with the start position being
   that section's first position.
+- **Practice with *count-in first*** (EFS-2.8) — as for Play at
+  P = 0 ticks; at the end of the count-in section, a jump as for the
+  practice loop: (the section's first position, the instant of the jump,
+  current tempo).
 - **Practice loop** — each time the loop goes back to the start of its
   section: (that section's first position, the instant of the jump,
   current tempo). Playing goes back; the positions themselves are
@@ -548,7 +552,34 @@ No message carries a tempo: tempo is the rate of Timing Clock.
 - *Change tempo:* change the interval between pulses from the pulse where
   the change is written. Nothing else is sent.
 - *While stopped:* many owners keep sending Timing Clock, so followers
-  know the tempo before Start (O-2).
+  know the tempo before Start. The player does not (D-10): Timing Clock
+  runs from Play to Stop, and the count-in section gives followers their
+  pulses before the music's first bar.
+
+**What a clock follower canonically does while stopped.** MIDI 1.0: after
+Stop, a device synced to external clock ignores further Timing Clock;
+Start or Continue takes effect at the next Timing Clock. So pulses sent
+while stopped can set a tempo display but advance nothing.
+
+**What the studio's devices were observed to do** (Linux MIDI Router
+project, `docs/MIDI Connections/`: FH-2 Observations rev 3, Disting NT
+Observations rev 1, NK Observations rev 3, SQ-1 Observations; tests of
+1–2 Nov 2026):
+
+| Device | Timing Clock while its transport is stopped | Start |
+|---|---|---|
+| FH-2 | tempo display measures the pulses; its **Clock** outputs give no pulses; the pulses are still forwarded to the disting NT | a **Start** (or Start/Cont) trigger output type gives a reset trigger |
+| FH-2 gates driven by notes | — (notes, not clock) | stayed in step whatever the transport did |
+| disting NT | MIDI monitor shows the pulses; Clock and Step Sequencer algorithms do not advance | Clock algorithm honours Start and Stop |
+| NiftyKEYZ in external clock mode | its **clock jack keeps pulsing** in tempo, at a musical rate set by its division keys (rates not yet recorded) | its arp starts on Start |
+| SQ-1, clock and transport on its `CTRL` port | not recorded | Stop then Start resets it to step 1 |
+
+Consequences, written into D-10: Timing Clock alone cannot keep a
+Eurorack divider running across a stop, through the FH-2 or the disting
+NT; the **beat pulse** (EFS-2.6), a control track turned into a gate by
+an FH-2 output, can, because notes do not depend on transport. Resetting
+followers is done by phrase cues — Start on a follower's own output
+port, or a reset note to an FH-2 trigger output.
 
 **How the player does it.** Every message is stamped in real time from
 the current anchor and handed to the ALSA sequencer queue up to 50 ms
@@ -556,82 +587,41 @@ ahead (section 5), like every other event:
 
 - **Timing Clock** at every multiple of 210 ticks, its instant computed
   from the anchor (example 5), never by adding intervals.
-- **Play from the start** (EFS-2.1): Start, then the first Timing Clock,
-  both at the instant of P = 0 ticks. Start must be delivered first
-  (section 15, facts to verify).
-- **Play from a section:** Song Position Pointer =
-  P ÷ 1260 ticks/MIDI beat, then Continue, then the first Timing Clock at
-  the section's instant. A Song Position Pointer reaches at most
-  16383 MIDI beats × 1260 ticks/MIDI beat = 20642580 ticks, about
-  1023 bars of 4/4.
+- **Play** (EFS-2.1): the first Timing Clock at the instant of the start
+  position, on the clock output only (EFS-2.5). Start, Stop and Continue
+  are sent only by phrase cues (D-10, EFS-4.3) and by Stop (section 8).
+  A Start cue at the same instant as a Timing Clock must be delivered
+  first (section 15, facts to verify).
+- **Play from a section:** as Play, at the section's first position.
+  Song Position Pointer is not sent: many followers ignore it (D-10).
+  The state in effect there is sent first (EFS-4.5).
 - **Tempo changes** (written or slider): nothing extra is sent. The new
   anchor (section 8) changes the instants of the pulses not yet queued.
-- **Count-in** (EFS-2.7): Timing Clock and beat notes run during the
-  count-in; Start is sent at its end (proposed, below).
+
 - **Stop:** the steps of section 8.
 
-**Starting followers in step (proposed, to be tested — O-2, O-3).**
-Discussed with Jim, 1 Nov 2026. A follower measures the interval between
-Timing Clock pulses, so it needs a few pulses before its tempo is right;
-a clock divider such as the 4MS Quad Clock Divider is reported to need
-2 or 3. Start is a separate thing: it resets a follower to its start
-(an FH-2 can turn it into a reset gate). So *locking* needs pulses
-before the downbeat, and *lining up* needs one clean Start. The count-in
-serves both the musician (time to prepare) and the followers (time to
-lock).
-
-Three ways to start:
-
-| | During the count-in | At the start position | Lock time for followers |
-|---|---|---|---|
-| **A. Clock runs while stopped** | pulses (already running) | Start, or Song Position Pointer then Continue | always; locked before Play |
-| **B. Clock starts with the count-in** | pulses only, no Start | Start, or Song Position Pointer then Continue | the whole count-in: 96 pulses per bar of 4/4 |
-| **C. Two starts** (Jim's first idea) | Start at count-in position 0 | Stop, then Start, or Song Position Pointer then Continue | the whole count-in |
-
-**Proposed: B, with A as well.**
-
-- *B (O-3: Start just before the start position).* One bar of 4/4 is
-  4 counts × 24 pulses/count = 96 pulses, far more than the 2 or 3 a
-  divider needs. Followers stay stopped during the count-in, so drum
-  sequencers do not play the count-in bars, and they start on the
-  downbeat on a single Start (one reset gate). For play from a section,
-  Song Position Pointer is sent at the start of the count-in, while
-  followers are stopped, as MIDI requires; the whole count-in is then
-  the gap followers need to locate.
-- *A (O-2: send Timing Clock while stopped).* It covers what B cannot:
-  with the count-in off, B gives no pulses before the downbeat, and the
-  first counts could be unsteady. Followers re-lock during the first
-  pulses if the song's first tempo differs from the tempo the clock ran
-  at while stopped.
-- *C is set aside unless testing needs it.* A second Start while
-  followers run is not handled alike (some restart, some ignore it), and
-  the Stop between gives two resets and lets sequencers play the
-  count-in. C helps only if a device ignores pulses until it has
-  received Start.
-
-**Not every setup has an FH-2.** B and A use only standard MIDI
-messages, so they work the same when followers receive MIDI directly:
-for example a disting NT running its own sequencers, a drum machine, or
-a computer program. Nothing may depend on an FH-2 feature such as its
-reset gates.
-
-**Testing** (Architecture.md, Next): with the FH-2 and a Quad Clock
-Divider, the expected case, and with the disting NT receiving MIDI
-directly. Open fact: whether the FH-2 passes MIDI clock to its gate
-outputs while the transport is stopped, which A depends on through an
-FH-2.
+**Starting followers in step (D-10, 4 Nov 2026).** Clock and reset are
+separate, as in Eurorack practice. A clock *divider* counts pulses, so
+it follows from its next pulse; only its phase is unknown. A clock
+*multiplier* measures the time between pulses, so it lags every tempo
+change by about one input period: send the fastest rate anything needs
+and divide down. (To check in the 4ms Quad Clock Divider's manual: that
+its ÷N settings count and its ×N settings measure.) The count-in section
+gives the dividers their pulses; a reset cue on the music's first bar
+fixes their phase and starts the sequencers together. Everything uses
+standard MIDI messages and notes, so setups without an FH-2 work the
+same; the FH-2's Start trigger and note-driven gates are one way to carry
+it into Eurorack.
 
 ## 10. Player states
 
 | State | Meaning |
 |---|---|
 | Stopped | not playing; nothing queued (before the first Play, and after Stop) |
-| Counting in | clock and beat notes run, parts are silent, the counter counts down (EFS-2.7) |
-| Playing | clock, beat notes and all parts sound |
+| Playing | Timing Clock and every track play as written |
 
-Play moves Stopped to Counting in (with a count-in) or to Playing; the
-end of the count-in moves Counting in to Playing; Stop moves either to
-Stopped. Each Play, play from a section, and loop jump makes an anchor
+Play moves Stopped to Playing; Stop moves Playing to Stopped. A count-in
+is a section of the score, not a state (D-10). Each Play, play from a section, and loop jump makes an anchor
 (section 8).
 
 ## 11. The screen keeps out of the MIDI path
@@ -675,9 +665,10 @@ V1 does not block it.
 
 While following, the screen's transport controls are disabled and the
 player follows the clock owner's Start, Stop and Continue (EFS-2.9).
-Where playing starts, and whether a count-in is played, is still the
-player's own choice, set on the play screen (EFS-2.1, EFS-2.7), for
-Start and Continue alike.
+Where playing starts is still the player's own choice, set on the play
+screen (EFS-2.1), for Start and Continue alike. The clock owner's
+position 0 is the music's first bar, so the count-in section is not
+played (EFS-2.9).
 
 **How it could be done.** An ALSA sequencer queue cannot itself follow
 an external MIDI clock, so the player counts pulses:
@@ -705,13 +696,12 @@ an external MIDI clock, so the player counts pulses:
   `B = 60000000000 ns/min × 1000 mq/q ÷ (24 pulses/q × I)`.
   Unit check: `ns/min × mq/q ÷ (pulses/q × ns/pulse)` → mq/min.
 - **Song Position Pointer** while stopped: the play position becomes
-  (MIDI beats received) × 1260 ticks/MIDI beat.
-- **Start or Continue:** the start position S is the song's beginning
-  (0 ticks) or the play position, as the start control says. Without a
-  count-in the pulse anchor is (0 pulses, S). With a count-in of C
-  pulses, the first C pulses count in and the pulse anchor is
-  (C, S); C = bars × L_bar ÷ 210 ticks/pulse, with L_bar the bar length
-  at S. Unit check: `ticks ÷ ticks/pulse` → pulses.
+  P_music + (MIDI beats received) × 1260 ticks/MIDI beat, where P_music
+  is the position of the music's first bar (the length of the count-in
+  section; 0 ticks without one).
+- **Start or Continue:** the start position S is the music's first bar
+  (P_music) or the play position, as the start control says. The pulse
+  anchor is (0 pulses, S).
 - **Clock lost:** if no Timing Clock arrives for 1 s while playing
   (EFS-2.9; a starting value, to be tested), the player stops, sends
   Note Off for every sounding note, and shows the message of EFS-2.9.
@@ -802,11 +792,10 @@ The tick size (section 4) and the clock (section 5, D-8) are decided.
 
 **Open, sending MIDI clock (V1):**
 
-- **O-2** Send Timing Clock while stopped? *Proposed: yes (section 9,
-  A), to be tested.*
-- **O-3** Count-in: send Start at the start of the count-in, or just
-  before the start position? *Proposed: just before the start position
-  (section 9, B), to be tested.*
+- **O-2, O-3, O-13** (Timing Clock while stopped, when to send Start
+  around a count-in, when the heartbeat runs) — closed by D-10: the
+  count-in is a section of the score, Timing Clock runs from Play to
+  Stop, and Start is a phrase cue.
 - **O-11** How the screen gets the anchor in effect when a new anchor has
   been made for a position not yet reached (section 11).
 
@@ -816,15 +805,21 @@ O-5 (Song Position Pointer is honoured), O-6 (1 s, to be tested), O-7
 (the screen's transport is disabled and the screen follows), O-8
 (following comes before drawing), O-9 (the clock is not passed on) and
 O-10 (the clock source changes only while stopped), and O-12 (where to
-start and the count-in are set on the play screen for both clock
-sources; EFS-2.1, EFS-2.7). None is still open.
+start is set on the play screen for both clock sources, EFS-2.1). None
+is still open.
 
 **Facts to verify before relying on them:**
 
 - **Order at equal instants.** Events stamped with the same instant
-  (Start and the first Timing Clock) are delivered in the order sent.
-- **Gap after Song Position Pointer.** How long followers (the FH-2 and
-  the other devices in use) need before Continue. With a count-in, the
-  count-in is the gap (section 9); without one, it must be measured.
-- **FH-2 clock while stopped.** Whether the FH-2 passes MIDI clock to
-  its gate outputs while the transport is stopped (section 9, A).
+  (a Start cue on one output port and a Timing Clock on the clock
+  output) are delivered in the order sent.
+- **FH-2 clock while stopped — settled 2 Nov 2026.** The FH-2's Clock
+  outputs give no pulses while its transport is stopped; its tempo
+  display still measures them, and it forwards them to the disting NT
+  (section 9).
+- **Beat pulse into a divider.** An FH-2 gate driven by the beat pulse,
+  into the Quad Clock Divider, with a reset cue into its reset: steady
+  through stops, and on the beat at the music's first bar.
+- **Start on one port.** A Start cue on an output port connected only to
+  the SQ-1 starts the SQ-1 and nothing else, through the MIDI router and
+  through a direct `aconnect` connection.

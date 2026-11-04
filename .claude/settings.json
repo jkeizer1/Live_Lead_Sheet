@@ -2,7 +2,7 @@
   "permissions": {
     "defaultMode": "default",
     "disableBypassPermissionsMode": "disable",
-    "blockReadsOutsideWorkingDirectories": true,
+    "blockReadsOutsideWorkingDirectories": false,
     "additionalDirectories": [
       "~/Documents/Linux_MIDI_Router"
     ],
@@ -36,6 +36,21 @@
       "Read(~/.claude/**)",
       "Read(~/.claude.json)",
       "Read(~/.bash_history)"
+    ],
+   "allow": [
+     "Bash(ls *)",
+     "Bash(wc *)",
+     "Bash(head *)",
+     "Bash(grep *)",
+     "Bash(git status *)",
+     "Bash(git diff *)",
+     "Bash(git log *)",
+     "Bash(git show *)",
+     "Bash(cargo build *)",
+     "Bash(cargo test *)",
+     "Bash(cargo clippy *)",
+     "Bash(cargo fmt -p *)",
+     "Bash(cargo tree *)"
     ],
     "ask": [
       "Bash(rm *)",

@@ -1,6 +1,6 @@
 # Live Lead Sheet — Concept Brief
 
-Revision 9 — 30 Oct 2026
+Revision 10 — 4 Nov 2026
 
 ## Purpose
 
@@ -24,7 +24,7 @@ note values (quarter, eighth, triplet group, dotted half…). Assigned to
 more bars than its length, it repeats; assigned to fewer, it is cut.
 
 **Section.** A progression in a key and meter, with rhythm patterns laid
-over its bars, part by part. Key and tempo are set per section, or carry
+over its bars, track by track. Key and tempo are set per section, or carry
 on from the previous section; a key change happens at a section
 boundary. *Example:* in the blues, half notes for bars
 1–2, two groups of quarter-note triplets for bars 3–4; in the
@@ -32,35 +32,52 @@ turnaround, quarter pulses in bar 11 and sixteenths in bar 12.
 
 **Song.** One or more sections in order. Each section can repeat a set
 number of times. A song may loop — *e.g.* a single section, the 12-bar
-blues, looping.
+blues, looping. A song may begin with a **count-in section**: a bar or
+two in which the voices rest and the beat pulse plays, so the musician
+and the studio's clock dividers are ready before the music starts.
 
-**Parts.** What each instrument plays:
+**Voice tracks.** What each instrument plays, in standard notation:
 
-- *Chord part* — the chord notes, to a polyphonic instrument, or to a
-  device that splits them over several mono voices. A chord part can be
-  marked *no root*: the chord is sent without its root, so the root is
+- *Harmony track* — the chord notes, to a polyphonic instrument, or to a
+  device that splits them over several mono voices. A harmony track can
+  be marked *no root*: the chord is sent without its root, so the root is
   not doubled against the bass in the same or another octave.
-- *Bass part* — the roots of the chords, usually on a simple, strong
+- *Bass track* — the roots of the chords, usually on a simple, strong
   rhythm, to a mono voice.
 - *Colour phrases* — short phrases (*e.g.* four bars) on their own staff,
   sent to another instrument at chosen points.
 
-One part is marked **lead**: its chords drive the key wheel.
+One voice track is marked **lead**: its chords drive the key wheel.
 
 The usual small-studio case: the root clear on one mono voice, the
 harmony mostly from one poly voice, everything else adding colour.
 
-**Triggers.** Markers placed at points in the song that make something
-in the studio happen — launch a one-shot sequencer, fire a sample, start
-a phrase on another device. They may be sparse and irregular. Each
-trigger names *what* should happen; a **device profile** says *how* a
-given device is made to do it (*e.g.* how to one-shot the Disting NT's
-sample player). V1 provides the markers; device profiles and their
-details come later.
+**Control tracks.** What the song needs from the studio's other devices —
+what sets the Live Lead Sheet apart in a studio of synths and modular.
+A control track holds:
+
+- **phrase cues** — markers at points in the song that make something
+  happen: start, stop or reset another sequencer, select its pattern,
+  fire a sample, set a control. Each cue is a plain MIDI message — a
+  note (a short one is a trigger, a held one a gate), a CC, a program
+  change, or Start, Stop and Continue — sent to a chosen output and
+  channel. Cues may be sparse and irregular;
+- the **beat pulse** — one note per count, the first count of each bar
+  accented, for clock dividers and devices that follow notes better than
+  MIDI clock.
+
+A voice track can carry cues too, for its own instrument (*e.g.* a
+patch change at section B), drawn above its staff.
+
+An external sequencer's phrase has a known length (*e.g.* 8 steps of
+eighth notes), so the song can say "play the SQ-1's pattern 3 twice from
+bar 5". A **device profile** later turns such a named action into the
+right cues for a given device (*e.g.* how to one-shot the Disting NT's
+sample player); in V1 the cues are written as plain messages.
 
 **When a chord changes between pulses.** The old chord ends exactly at
 the change; the rhythm resumes at its next scheduled pulse, with the new
-chord. Parts that pulse on the change and parts that don't never sound
+chord. Tracks that pulse on the change and tracks that don't never sound
 two different chords at once.
 
 **Nothing is generated.** Voicings and phrases are chosen by the
@@ -74,11 +91,11 @@ and repeats, with the current position.
 **Counter.** Large and plain, in the musician's terms:
 `Repeat: 3   Bar: 2   Count: 1`, the count advancing on each beat.
 
-**Parts.** Each part has its own contained area:
+**Voice tracks.** Each voice track has its own contained area:
 
 - **chord symbols** (**Am7**, **C/E**) at the exact point of each change,
   even mid-beat;
-- a **rhythm line** — a one-line staff, drum-style — showing the part's
+- a **rhythm line** — a one-line staff, drum-style — showing the track's
   rhythm in regular note values with slash noteheads (stems, beams,
   dots, rests, triplet brackets), beamed by the meter's beat grouping.
   Where a change cuts a pulse, the shortened note and the following rest
@@ -104,14 +121,14 @@ tried and compared:
 
 **Key changes** are shown as in standard notation: a double barline with
 the new key signature at the bar where the change takes effect, and the
-cautionary key signature at the end of the bar before. The triggers panel
+cautionary key signature at the end of the bar before. The cues panel
 lists the change as well.
 
-**Triggers panel.** A side panel listing triggers as they approach,
+**Cues panel.** A side panel listing phrase cues as they approach,
 fire, and pass.
 
 **Key wheel.** One large, readable wheel for the song, showing the
-current section's key and following the lead part's chords:
+current section's key and following the lead track's chords:
 
 - Roman numerals inside the wedges, chord names just outside;
 - wedges ordered by the diatonic cycle of fifths (I – IV – vii° – iii –
@@ -128,20 +145,20 @@ current section's key and following the lead part's chords:
 - a chord outside the key is shown in the centre, by name, rather than
   forced onto a wedge.
 
-**Scaling.** How many bars fit across, and how many parts fit down,
+**Scaling.** How many bars fit across, and how many tracks fit down,
 depend on display size and resolution, not on a fixed limit. A simple song (chords and bass) is
 drawn large and well spaced; a dense one is drawn smaller, down to a
 legible minimum. *Example:* a 27" 1440p monitor today, a larger,
-higher-resolution one later. Spreading parts over several windows or
+higher-resolution one later. Spreading tracks over several windows or
 monitors is a later step.
 
 ## Authoring view
 
 Part of the program rather than a separate tool. The musician builds a
 song: picks a progression for each section, sets key (from a list),
-meter, tempo and repeats, lays rhythm patterns over bars for each part, chooses voicings,
-adds phrases and triggers, marks the lead part, and assigns each part to
-an instrument.
+meter, tempo and repeats, lays rhythm patterns over bars for each track,
+chooses voicings, adds phrases and phrase cues, marks the lead track, and
+assigns each track to an output and channel.
 
 **Song file.** The song is saved as plain text in a notation of our own —
 simple, clear to the musician reading or editing it by hand, and
@@ -161,7 +178,7 @@ Later links could be:
 - a transform, *e.g.* a transposition that keeps to the key;
 - Strudel or another generative or feedback-based processor;
 - a recorder that captures a melody played over the song and merges it
-  into the song as a new part;
+  into the song as a new voice track;
 - other musicians over the internet, playing the same song together.
 
 None of these is built in V1, but the design must allow them. MIDI
@@ -172,16 +189,17 @@ level; the chain runs at this musical level.
 ## Roles
 
 **Leader (first).** Plays a song. It is the defining source of tempo,
-beat and bar, sends Start/Stop and MIDI clock to external sequencers,
-and sends each part's notes to its instrument. It also sends a **beat
-clock as a note stream** for devices that follow note pulses better than
-MIDI clock.
+beat and bar, and the studio's one source of MIDI clock. It sends each
+voice track's notes to its instrument, and each control track's cues and
+beat pulse to theirs; external sequencers are started, stopped and reset
+by cues written in the song.
 
 A **tempo slider** lets the musician slow down or speed up the written
-tempo while practising.
+tempo while practising, and a section can be looped for practice, with
+or without the count-in before its first pass.
 
 **Listener (later).** Reads incoming MIDI from sequencers, recognises
-chords, learns loops, and shows the bars it expects next. Each part shows
+chords, learns loops, and shows the bars it expects next. Each track shows
 whether it is *learning*, *locked* onto a loop, or *drifting* from it.
 The musician can mark the downbeat (tap "this is 1") and declare loop
 length when detection is wrong.
@@ -210,20 +228,23 @@ control — a later problem.
 
 ## Versions
 
-**V1** targets a chordal song: a chord part with its own slash rhythm
-and a bass accompaniment, in diatonic harmony, on one screen.
+**V1** targets a chordal song: a harmony track with its own slash rhythm
+and a bass accompaniment, in diatonic harmony, on one screen, with a
+control track for the beat pulse and phrase cues.
 
-Later versions bring denser songs, more parts, richer harmony, and more
+Later versions bring denser songs, more tracks, richer harmony, and more
 display space. Choices made for V1 — especially in the renderer — must
 leave room for that growth rather than build in V1's limits.
 
 ## Example setup
 
 The musician improvises on a keyboard (NiftyKEYZ, KeyStep Pro). The Live
-Lead Sheet leads a looping 12-bar blues in A. The chord part, marked
-no root, goes to Disting NT poly players. The bass part sends the roots
-through the FH-2 to a mono modular voice. MIDI clock and Start go through
-the MIDI router to a Korg SQ-1.
+Lead Sheet leads a 12-bar blues in A, after a one-bar count-in. The
+harmony track, marked no root, goes to Disting NT poly players. The bass
+track sends the roots through the FH-2 to a mono modular voice. A
+control track sends the beat pulse to an FH-2 gate that clocks a clock
+divider, and a cue on the blues' first bar starts a Korg SQ-1, which
+follows the MIDI clock through the MIDI router.
 
 Later, in listener mode, it reads a Minilogue's sequenced 4-voice chord
 progression and names the chords that were forgotten.
