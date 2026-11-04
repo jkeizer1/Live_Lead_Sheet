@@ -53,6 +53,8 @@ sequencer, the SQ-1 steps in eighths (2 sixteenths a step), so
 N = 2 × the number of steps to loop: 10 loops steps 1 to 5, 12 loops
 steps 1 to 6.
 
+NOTE: See SYSX for FH2 FH2.syx to configure the FH2 on channels 15/16.
+
 ## Findings
 
 ### 4 Nov 2026 — SQ-1 through the router
