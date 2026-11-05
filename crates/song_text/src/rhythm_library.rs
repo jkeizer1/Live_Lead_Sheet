@@ -10,7 +10,8 @@ use vocabulary::time_signature::TimeSignature;
 
 use crate::length_words::describe_place;
 use crate::parse_error::ParseError;
-use crate::rhythm_bar::{BarElement, parse_bar};
+use crate::rhythm_bar::{BarElement, parse_bars};
+use crate::text_line::{keyword_rest, parse_meter, quoted, without_comment};
 
 /// A rhythm pattern with the group it is listed under.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -143,7 +144,12 @@ fn read_block_line(block: &mut OpenBlock, line: &str) -> Result<(), String> {
                 "the bars come before the meter. Write the meter first, e.g. meter 4/4",
             ));
         };
-        let bars: Vec<Vec<BarElement>> = parse_bar_line(line, block.bars.len(), time_signature)?;
+        let bars: Vec<Vec<BarElement>> = parse_bars(
+            line,
+            block.bars.len(),
+            time_signature.bar_length().ticks(),
+            false,
+        )?;
         block.bars.extend(bars);
     } else {
         return Err(format!(
@@ -233,78 +239,6 @@ fn finish_block(
         )),
         Err(error) => fail(error.to_string()),
     }
-}
-
-/// `| q q q q | q q q q |` → the bars between the barlines.
-fn parse_bar_line(
-    line: &str,
-    bars_so_far: usize,
-    time_signature: TimeSignature,
-) -> Result<Vec<Vec<BarElement>>, String> {
-    if !line.ends_with('|') || line.len() < 2 {
-        return Err(String::from(
-            "a line of bars starts and ends with |, e.g. | q q q q |",
-        ));
-    }
-    let inside: &str = &line[1..line.len() - 1];
-    let mut bars: Vec<Vec<BarElement>> = Vec::new();
-    for (offset, bar_text) in inside.split('|').enumerate() {
-        let bar_number: usize = bars_so_far + offset + 1;
-        bars.push(parse_bar(
-            bar_text,
-            bar_number,
-            time_signature.bar_length().ticks(),
-        )?);
-    }
-    Ok(bars)
-}
-
-/// `4/4` → a time signature.
-fn parse_meter(text: &str) -> Result<TimeSignature, String> {
-    let wrong = || String::from("write the meter as two numbers, e.g. meter 4/4 or meter 6/8");
-    let Some((counts_text, note_text)) = text.trim().split_once('/') else {
-        return Err(wrong());
-    };
-    let Ok(counts_per_bar) = counts_text.trim().parse::<u8>() else {
-        return Err(wrong());
-    };
-    let Ok(counts_per_whole_note) = note_text.trim().parse::<u8>() else {
-        return Err(wrong());
-    };
-    TimeSignature::new(counts_per_bar, counts_per_whole_note).map_err(|error| error.to_string())
-}
-
-/// The text after `keyword` and a space, when the line starts with it.
-fn keyword_rest<'a>(line: &'a str, keyword: &str) -> Option<&'a str> {
-    let rest: &str = line.strip_prefix(keyword)?;
-    if rest.is_empty() || rest.starts_with(char::is_whitespace) {
-        Some(rest.trim())
-    } else {
-        None
-    }
-}
-
-/// `"Swing"` → `Swing`; nothing when it is not exactly one quoted name.
-fn quoted(text: &str) -> Option<&str> {
-    let inner: &str = text.trim().strip_prefix('"')?.strip_suffix('"')?;
-    if inner.is_empty() || inner.contains('"') {
-        None
-    } else {
-        Some(inner)
-    }
-}
-
-/// Drops a `#` comment, unless the `#` is inside a quoted name ("F#").
-fn without_comment(line: &str) -> &str {
-    let mut inside_quotes: bool = false;
-    for (position, character) in line.char_indices() {
-        match character {
-            '"' => inside_quotes = !inside_quotes,
-            '#' if !inside_quotes => return &line[..position],
-            _ => {}
-        }
-    }
-    line
 }
 
 #[cfg(test)]

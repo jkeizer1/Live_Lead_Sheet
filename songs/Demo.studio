@@ -1,0 +1,30 @@
+# Demo studio: where the tracks of Demo.song go. Port names are the names
+# of the program's MIDI output ports; connecting them to devices is done
+# outside (the MIDI router, aconnect).
+studio "Demo studio"
+
+port "Clock"
+port "Harmony"
+port "Bass"
+port "Beat pulse"
+port "To SQ-1"
+
+track "Clock"
+  port "Clock"
+
+track "Beat"
+  port "Beat pulse"  channel 15
+  velocity normal 64  accent 127
+
+track "Keys"
+  port "Harmony"  channel 1
+  velocity normal 90  accent 105  strong 120
+
+track "Bass"
+  port "Bass"  channel 2
+  octave_offset -1 octaves
+  velocity normal 100  accent 115
+  retrigger_gap 2 ms
+
+destination "SQ-1"
+  port "To SQ-1"  channel 1

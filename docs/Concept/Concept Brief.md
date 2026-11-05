@@ -1,6 +1,6 @@
 # Live Lead Sheet — Concept Brief
 
-Revision 12 — 5 Nov 2026 (the song and the studio configuration are separate; marks; no track-wide no-root)
+Revision 13 — 5 Nov 2026 (the beat pulse is a mono voice)
 
 ## Purpose
 
@@ -66,9 +66,9 @@ A control track holds:
   note (a short one is a trigger, a held one a gate), a CC, a program
   change, or Start, Stop and Continue — sent to a chosen output and
   channel. Cues may be sparse and irregular;
-- the **beat pulse** — one note per count, the first count of each bar
-  accented, for clock dividers and devices that follow notes better than
-  MIDI clock;
+- the **beat pulse** — an ordinary voice playing one fixed note, with
+  the accent written where it is wanted, for clock dividers and devices
+  that follow notes better than MIDI clock;
 - later, **pulse bursts** — a fast stream of pulses for a set length, to
   clock a sequencer far above the song's tempo so it becomes an
   oscillator, or to fire fast voices: a sound blast from a cue.
@@ -257,7 +257,7 @@ control — a later problem.
 
 **V1** targets a chordal song: a harmony track with its own slash rhythm
 and a bass accompaniment, in diatonic harmony, on one screen, with a
-control track for the beat pulse and phrase cues.
+beat pulse voice and a control track for phrase cues.
 
 Later versions bring denser songs, more tracks, richer harmony, and more
 display space. Choices made for V1 — especially in the renderer — must
@@ -269,7 +269,7 @@ The musician improvises on a keyboard (NiftyKEYZ, KeyStep Pro). The Live
 Lead Sheet leads a 12-bar blues in A, after a one-bar count-in. The
 harmony track, voiced without the root, goes to Disting NT poly players. The bass
 track sends the roots through the FH-2 to a mono modular voice. A
-control track sends the beat pulse to an FH-2 gate that clocks a clock
+beat pulse voice sends its note to an FH-2 gate that clocks a clock
 divider, and a cue on the blues' first bar starts a Korg SQ-1, which
 follows the MIDI clock through the MIDI router.
 

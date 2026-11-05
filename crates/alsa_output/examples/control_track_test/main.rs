@@ -49,8 +49,9 @@ use alsa_output::sequencer_output::{FlushOutcome, OutputPort, SequencerOutput};
 use alsa_output::warning::OutputWarning;
 use player::anchor::Anchor;
 use player::counter::{Counter, CounterSection};
+use player::note_track::{NoteTrack, TimedNote};
 use player::schedule::{EventSource, OutputAction, ScheduledEvent, schedule};
-use vocabulary::control_track::{BeatPulse, ControlTrack};
+use vocabulary::control_track::ControlTrack;
 use vocabulary::duration::Duration;
 use vocabulary::instant::Instant;
 use vocabulary::midi_values::{MidiChannel, NoteNumber, Velocity};
@@ -133,10 +134,10 @@ fn run() -> Result<(), String> {
         .map_err(|e| e.to_string())?;
 
     let track: ControlTrack = studio_track(&settings, music_start, stretch_length)?;
+    let beat: NoteTrack = beat_track(&settings, time_signature, stretch_length)?;
     let clock_port: OutputPortName = port_name(CLOCK_PORT)?;
     let events: Vec<ScheduledEvent> =
-        schedule(&clock_port, &[track], time_signature, stretch_length)
-            .map_err(|e| e.to_string())?;
+        schedule(&clock_port, &[beat], &[track], stretch_length).map_err(|e| e.to_string())?;
 
     let (output, warnings): (SequencerOutput, Vec<OutputWarning>) =
         SequencerOutput::open("Lead Sheet", &[CLOCK_PORT, PULSE_PORT, SQ1_PORT])
@@ -187,23 +188,48 @@ fn run() -> Result<(), String> {
     Ok(())
 }
 
-/// The control track: beat pulse throughout, a reset trigger and Start
-/// on the music's first bar, Stop at the end.
+/// The beat: a mono voice playing one fixed note on every count, count 1 of
+/// each bar accented, each note held for `BEAT_PULSE_LENGTH`.
+fn beat_track(
+    settings: &Settings,
+    time_signature: TimeSignature,
+    stretch_length: ScoreLength,
+) -> Result<NoteTrack, String> {
+    let velocity = |value: u8| Velocity::new(value).map_err(|e| e.to_string());
+    let count_length_ticks: u64 = time_signature.count_length().ticks();
+    let bar_length_ticks: u64 = time_signature.bar_length().ticks();
+    let mut notes: Vec<TimedNote> = Vec::new();
+    let mut start_ticks: u64 = 0;
+    while start_ticks < stretch_length.ticks() {
+        notes.push(TimedNote {
+            start_ticks,
+            length_ticks: BEAT_PULSE_LENGTH.ticks(),
+            note: settings.pulse_note,
+            velocity: if start_ticks.is_multiple_of(bar_length_ticks) {
+                velocity(ACCENT_VELOCITY)?
+            } else {
+                velocity(NORMAL_VELOCITY)?
+            },
+        });
+        start_ticks += count_length_ticks;
+    }
+    NoteTrack::new(
+        "Beat",
+        port_name(PULSE_PORT)?,
+        settings.pulse_channel,
+        notes,
+    )
+    .map_err(|e| e.to_string())
+}
+
+/// The control track: a reset trigger and Start on the music's first bar,
+/// Stop at the end.
 fn studio_track(
     settings: &Settings,
     music_start: ScorePosition,
     stretch_length: ScoreLength,
 ) -> Result<ControlTrack, String> {
     let velocity = |value: u8| Velocity::new(value).map_err(|e| e.to_string());
-    let beat_pulse: BeatPulse = BeatPulse::new(
-        port_name(PULSE_PORT)?,
-        settings.pulse_channel,
-        settings.pulse_note,
-        velocity(ACCENT_VELOCITY)?,
-        velocity(NORMAL_VELOCITY)?,
-        BEAT_PULSE_LENGTH,
-    )
-    .map_err(|e| e.to_string())?;
     let reset: PhraseCue = PhraseCue::new(
         "Reset",
         music_start,
@@ -245,7 +271,7 @@ fn studio_track(
         cues.extend(restart_cues(&transport_port, music_start, end, sixteenths)?);
     }
     cues.push(stop);
-    ControlTrack::new("Studio", Some(beat_pulse), cues).map_err(|e| e.to_string())
+    ControlTrack::new("Studio", cues).map_err(|e| e.to_string())
 }
 
 /// Stop then Start at every `sixteenths` sixteenths after `music_start`,
@@ -448,7 +474,7 @@ fn describe(
                 action_text(action)
             );
         }
-        (EventSource::BeatPulse { .. }, OutputAction::NoteOn { .. })
+        (EventSource::Notes { .. }, OutputAction::NoteOn { .. })
             if counter.section == CounterSection::CountIn || counter.count == 1 =>
         {
             println!("{place}");

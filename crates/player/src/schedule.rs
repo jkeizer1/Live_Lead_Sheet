@@ -2,26 +2,27 @@
 //! position and on its output port, in the order it must be sent.
 //!
 //! Made once when playing starts, from the song as written: Timing Clock
-//! on the clock output (EFS-2.5) and each control track's beat pulse and
-//! cues (D-10). The player then converts positions to instants from the
+//! on the clock output (EFS-2.5), each note track's notes and each control
+//! track's cues (D-10). The player then converts positions to instants from the
 //! anchor and hands events to the ALSA output up to 50 ms ahead (D-8).
 //!
-//! This first version takes one time signature for the whole stretch;
-//! sections, repeats and voice tracks come with the song.
+//! This first version takes one stretch with a clock and note tracks that
+//! are already settled; sections, repeats and the voices' chords come with
+//! the song.
 
 use std::fmt;
 
-use vocabulary::control_track::{BeatPulse, ControlTrack};
+use vocabulary::control_track::ControlTrack;
 use vocabulary::midi_values::{
     ControllerNumber, ControllerValue, MidiChannel, NoteNumber, ProgramNumber, Velocity,
 };
 use vocabulary::phrase_cue::{
     ChannelMessage, ControlCueMessage, OutputPortName, PhraseCue, TransportMessage,
 };
-use vocabulary::rhythm_pattern::{ElementKind, RhythmPattern};
 use vocabulary::score_length::ScoreLength;
 use vocabulary::score_position::ScorePosition;
-use vocabulary::time_signature::TimeSignature;
+
+use crate::note_track::NoteTrack;
 
 /// 5040 ticks/q ÷ 24 pulses/q.
 pub const TICKS_PER_CLOCK_PULSE: u64 = 210;
@@ -75,7 +76,7 @@ impl OutputAction {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EventSource {
     TimingClock,
-    BeatPulse {
+    Notes {
         track_name: String,
     },
     Cue {
@@ -98,24 +99,19 @@ pub struct ScheduledEvent {
 ///
 /// # Errors
 ///
-/// When a beat pulse is longer than a count, a cue lies past the end of
-/// the stretch, or a position cannot be counted.
+/// When a cue lies past the end of the stretch, or a position cannot be
+/// counted.
 pub fn schedule(
     clock_port: &OutputPortName,
+    note_tracks: &[NoteTrack],
     control_tracks: &[ControlTrack],
-    time_signature: TimeSignature,
     stretch_length: ScoreLength,
 ) -> Result<Vec<ScheduledEvent>, ScheduleError> {
     let mut events: Vec<ScheduledEvent> = timing_clock(clock_port, stretch_length)?;
+    for track in note_tracks {
+        events.extend(note_events(track, stretch_length)?);
+    }
     for track in control_tracks {
-        if let Some(beat_pulse) = track.beat_pulse() {
-            events.extend(beat_pulse_events(
-                track.name(),
-                beat_pulse,
-                time_signature,
-                stretch_length,
-            )?);
-        }
         for cue in track.cues() {
             events.extend(cue_events(track.name(), cue, stretch_length)?);
         }
@@ -148,153 +144,47 @@ fn timing_clock(
     Ok(events)
 }
 
-/// A note on each count, count 1 of each bar accented, each held for the
-/// pulse's length (EFS-2.6).
-fn beat_pulse_events(
-    track_name: &str,
-    beat_pulse: &BeatPulse,
-    time_signature: TimeSignature,
+/// A note-on at each note's start and a note-off at its end. A note that
+/// starts at or after the end of the stretch is left out, and one that
+/// reaches past it is cut there.
+fn note_events(
+    track: &NoteTrack,
     stretch_length: ScoreLength,
 ) -> Result<Vec<ScheduledEvent>, ScheduleError> {
-    if let Some(rhythm) = beat_pulse.rhythm() {
-        return rhythm_pulse_events(
-            track_name,
-            beat_pulse,
-            rhythm,
-            time_signature,
-            stretch_length,
-        );
-    }
-    let count_length_ticks: u64 = time_signature.count_length().ticks();
-    let bar_length_ticks: u64 = time_signature.bar_length().ticks();
-    if beat_pulse.length().ticks() > count_length_ticks {
-        return Err(ScheduleError::BeatPulseLongerThanCount {
-            track_name: track_name.to_string(),
-            pulse_length_ticks: beat_pulse.length().ticks(),
-            count_length_ticks,
-        });
-    }
-    let source: EventSource = EventSource::BeatPulse {
-        track_name: track_name.to_string(),
+    let source: EventSource = EventSource::Notes {
+        track_name: track.track_name().to_string(),
     };
     let mut events: Vec<ScheduledEvent> = Vec::new();
-    let mut count_start_ticks: u64 = 0;
-    while count_start_ticks < stretch_length.ticks() {
-        // Count 1 starts each bar: its offset into the bar is 0 ticks.
-        let offset_into_bar_ticks: u64 = count_start_ticks % bar_length_ticks;
-        let velocity: Velocity = if offset_into_bar_ticks == 0 {
-            beat_pulse.accent_velocity()
-        } else {
-            beat_pulse.normal_velocity()
-        };
-        // Within a count, so no overflow: count start + at most one count
-        // length, and count start is below the stretch length.
-        let note_off_ticks: u64 = count_start_ticks + beat_pulse.length().ticks();
-        events.push(ScheduledEvent {
-            position: ScorePosition::from_ticks(count_start_ticks),
-            port: beat_pulse.port().clone(),
-            action: OutputAction::NoteOn {
-                channel: beat_pulse.channel(),
-                note: beat_pulse.note(),
-                velocity,
-            },
-            source: source.clone(),
-        });
-        events.push(ScheduledEvent {
-            position: ScorePosition::from_ticks(note_off_ticks),
-            port: beat_pulse.port().clone(),
-            action: OutputAction::NoteOff {
-                channel: beat_pulse.channel(),
-                note: beat_pulse.note(),
-            },
-            source: source.clone(),
-        });
-        count_start_ticks += count_length_ticks;
-    }
-    Ok(events)
-}
-
-/// A note on each note of the rhythm, which repeats from its first bar to
-/// fill the stretch and is cut where the stretch ends (EFS-5.4). A note
-/// begins at a sounding element that no tie leads into, and lasts the
-/// pulse's length, or the note's own length if that is shorter. The accent
-/// velocity goes to a note that begins a bar, the normal velocity to the
-/// others; the rhythm's own marks are not used by the beat pulse.
-fn rhythm_pulse_events(
-    track_name: &str,
-    beat_pulse: &BeatPulse,
-    rhythm: &RhythmPattern,
-    time_signature: TimeSignature,
-    stretch_length: ScoreLength,
-) -> Result<Vec<ScheduledEvent>, ScheduleError> {
-    if rhythm.time_signature() != time_signature {
-        return Err(ScheduleError::RhythmInOtherMeter {
-            track_name: track_name.to_string(),
-            rhythm_name: rhythm.name().to_string(),
-        });
-    }
-    let bar_length_ticks: u64 = time_signature.bar_length().ticks();
-    // bars × ticks/bar → ticks. At most 8 bars.
-    let pattern_length_ticks: u64 = u64::from(rhythm.bar_count()) * bar_length_ticks;
-    let source: EventSource = EventSource::BeatPulse {
-        track_name: track_name.to_string(),
-    };
-    let elements = rhythm.elements();
-    let mut events: Vec<ScheduledEvent> = Vec::new();
-    let mut pattern_start_ticks: u64 = 0;
-    while pattern_start_ticks < stretch_length.ticks() {
-        for (index, element) in elements.iter().enumerate() {
-            let continues_a_tie: bool = index > 0 && elements[index - 1].tied_to_next();
-            if element.kind() != ElementKind::Sounding || continues_a_tie {
-                continue;
-            }
-            // Within the stretch plus one pattern, so no overflow.
-            let start_ticks: u64 = pattern_start_ticks + element.start().ticks();
-            if start_ticks >= stretch_length.ticks() {
-                break;
-            }
-            // The note's whole length: this element and those tied after it.
-            let mut note_length_ticks: u64 = element.length().ticks();
-            let mut last: usize = index;
-            while elements[last].tied_to_next() {
-                let Some(next) = elements.get(last + 1) else {
-                    break;
-                };
-                note_length_ticks += next.length().ticks();
-                last += 1;
-            }
-            let sounding_ticks: u64 = note_length_ticks.min(beat_pulse.length().ticks());
-            let note_off_ticks: u64 = (start_ticks + sounding_ticks).min(stretch_length.ticks());
-            let velocity: Velocity = if start_ticks.is_multiple_of(bar_length_ticks) {
-                beat_pulse.accent_velocity()
-            } else {
-                beat_pulse.normal_velocity()
-            };
-            events.push(ScheduledEvent {
-                position: ScorePosition::from_ticks(start_ticks),
-                port: beat_pulse.port().clone(),
-                action: OutputAction::NoteOn {
-                    channel: beat_pulse.channel(),
-                    note: beat_pulse.note(),
-                    velocity,
-                },
-                source: source.clone(),
-            });
-            events.push(ScheduledEvent {
-                position: ScorePosition::from_ticks(note_off_ticks),
-                port: beat_pulse.port().clone(),
-                action: OutputAction::NoteOff {
-                    channel: beat_pulse.channel(),
-                    note: beat_pulse.note(),
-                },
-                source: source.clone(),
-            });
+    for timed in track.notes() {
+        if timed.start_ticks >= stretch_length.ticks() {
+            continue;
         }
-        pattern_start_ticks = pattern_start_ticks
-            .checked_add(pattern_length_ticks)
+        let end_ticks: u64 = timed
+            .start_ticks
+            .checked_add(timed.length_ticks)
             .ok_or(ScheduleError::PositionTooLate {
-                position_ticks: pattern_start_ticks,
-            })?;
+                position_ticks: timed.start_ticks,
+            })?
+            .min(stretch_length.ticks());
+        events.push(ScheduledEvent {
+            position: ScorePosition::from_ticks(timed.start_ticks),
+            port: track.port().clone(),
+            action: OutputAction::NoteOn {
+                channel: track.channel(),
+                note: timed.note,
+                velocity: timed.velocity,
+            },
+            source: source.clone(),
+        });
+        events.push(ScheduledEvent {
+            position: ScorePosition::from_ticks(end_ticks),
+            port: track.port().clone(),
+            action: OutputAction::NoteOff {
+                channel: track.channel(),
+                note: timed.note,
+            },
+            source: source.clone(),
+        });
     }
     Ok(events)
 }
@@ -374,11 +264,6 @@ fn cue_events(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScheduleError {
-    BeatPulseLongerThanCount {
-        track_name: String,
-        pulse_length_ticks: u64,
-        count_length_ticks: u64,
-    },
     CuePastEnd {
         track_name: String,
         cue_name: String,
@@ -388,24 +273,11 @@ pub enum ScheduleError {
     PositionTooLate {
         position_ticks: u64,
     },
-    RhythmInOtherMeter {
-        track_name: String,
-        rhythm_name: String,
-    },
 }
 
 impl fmt::Display for ScheduleError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ScheduleError::BeatPulseLongerThanCount {
-                track_name,
-                pulse_length_ticks,
-                count_length_ticks,
-            } => write!(
-                f,
-                "track {track_name:?}: the beat pulse lasts {pulse_length_ticks} ticks, longer \
-                 than a count ({count_length_ticks} ticks). Shorten it, e.g. to a 16th"
-            ),
             ScheduleError::CuePastEnd {
                 track_name,
                 cue_name,
@@ -416,14 +288,6 @@ impl fmt::Display for ScheduleError {
                 "track {track_name:?}, cue {cue_name:?}: it reaches past the end of the song \
                  ({cue_position_ticks} ticks; the song ends at {stretch_length_ticks} ticks). \
                  Move it earlier"
-            ),
-            ScheduleError::RhythmInOtherMeter {
-                track_name,
-                rhythm_name,
-            } => write!(
-                f,
-                "track {track_name:?}: the rhythm {rhythm_name:?} is written for a different \
-                 meter than the song's. Choose a rhythm in the song's meter"
             ),
             ScheduleError::PositionTooLate { position_ticks } => write!(
                 f,
@@ -439,8 +303,8 @@ impl std::error::Error for ScheduleError {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vocabulary::control_track::BeatPulse;
-    use vocabulary::rhythm_pattern::{ElementMarks, RhythmElement};
+    use crate::note_track::TimedNote;
+    use vocabulary::time_signature::TimeSignature;
 
     fn port(name: &str) -> OutputPortName {
         OutputPortName::new(name).unwrap()
@@ -450,25 +314,31 @@ mod tests {
         TimeSignature::new(4, 4).unwrap()
     }
 
-    fn beat_pulse_track(cues: Vec<PhraseCue>) -> ControlTrack {
-        let pulse: BeatPulse = BeatPulse::new(
+    /// A note on each count of a 4/4 bar, count 1 at velocity 127.
+    fn four_notes() -> NoteTrack {
+        let notes: Vec<TimedNote> = (0..4)
+            .map(|count: u64| TimedNote {
+                start_ticks: count * four_four().count_length().ticks(),
+                length_ticks: 1260,
+                note: NoteNumber::new(60).unwrap(),
+                velocity: Velocity::new(if count == 0 { 127 } else { 64 }).unwrap(),
+            })
+            .collect();
+        NoteTrack::new(
+            "Beat",
             port("Beat pulse"),
             MidiChannel::new(15).unwrap(),
-            NoteNumber::new(60).unwrap(),
-            Velocity::new(127).unwrap(),
-            Velocity::new(64).unwrap(),
-            ScoreLength::from_ticks(1260),
+            notes,
         )
-        .unwrap();
-        ControlTrack::new("Studio", Some(pulse), cues).unwrap()
+        .unwrap()
     }
 
     #[test]
-    fn one_bar_has_96_clock_pulses_and_4_beat_pulses() {
+    fn one_bar_has_96_clock_pulses_and_4_notes() {
         let events: Vec<ScheduledEvent> = schedule(
             &port("Clock"),
-            &[beat_pulse_track(Vec::new())],
-            four_four(),
+            &[four_notes()],
+            &[],
             ScoreLength::from_ticks(20_160),
         )
         .unwrap();
@@ -497,10 +367,23 @@ mod tests {
             ControlCueMessage::Transport(TransportMessage::Start),
         )
         .unwrap();
+        let cues: ControlTrack = ControlTrack::new("Studio", vec![start]).unwrap();
+        let next_bar: NoteTrack = NoteTrack::new(
+            "Beat",
+            port("Beat pulse"),
+            MidiChannel::new(15).unwrap(),
+            vec![TimedNote {
+                start_ticks: 20_160,
+                length_ticks: 1260,
+                note: NoteNumber::new(60).unwrap(),
+                velocity: Velocity::new(127).unwrap(),
+            }],
+        )
+        .unwrap();
         let events: Vec<ScheduledEvent> = schedule(
             &port("Clock"),
-            &[beat_pulse_track(vec![start])],
-            four_four(),
+            &[next_bar],
+            &[cues],
             ScoreLength::from_ticks(40_320),
         )
         .unwrap();
@@ -523,133 +406,67 @@ mod tests {
         );
     }
 
-    fn rhythm_track(rhythm: RhythmPattern) -> ControlTrack {
-        let pulse: BeatPulse = BeatPulse::new(
+    #[test]
+    fn a_note_reaching_past_the_end_is_cut_and_one_after_it_is_left_out() {
+        let note = |start_ticks: u64| TimedNote {
+            start_ticks,
+            length_ticks: 10_000,
+            note: NoteNumber::new(60).unwrap(),
+            velocity: Velocity::new(64).unwrap(),
+        };
+        let track: NoteTrack = NoteTrack::new(
+            "Beat",
             port("Beat pulse"),
             MidiChannel::new(15).unwrap(),
-            NoteNumber::new(60).unwrap(),
-            Velocity::new(127).unwrap(),
-            Velocity::new(64).unwrap(),
-            ScoreLength::from_ticks(1260),
-        )
-        .unwrap()
-        .with_rhythm(rhythm);
-        ControlTrack::new("Studio", Some(pulse), Vec::new()).unwrap()
-    }
-
-    fn pattern(name: &str, bars: u8, elements: &[(u64, u64, ElementKind, bool)]) -> RhythmPattern {
-        let list: Vec<RhythmElement> = elements
-            .iter()
-            .map(|&(start, length, kind, tied)| {
-                RhythmElement::new(
-                    ScoreLength::from_ticks(start),
-                    ScoreLength::from_ticks(length),
-                    kind,
-                    ElementMarks::NONE,
-                    tied,
-                )
-                .unwrap()
-            })
-            .collect();
-        RhythmPattern::new(name, four_four(), bars, list).unwrap()
-    }
-
-    fn note_ons(events: &[ScheduledEvent]) -> Vec<(u64, u8)> {
-        events
-            .iter()
-            .filter_map(|event: &ScheduledEvent| match event.action {
-                OutputAction::NoteOn { velocity, .. } => {
-                    Some((event.position.ticks(), velocity.value()))
-                }
-                _ => None,
-            })
-            .collect()
-    }
-
-    #[test]
-    fn a_rhythm_repeats_to_fill_the_stretch_and_accents_the_bar() {
-        // Charleston: dotted quarter, eighth, half rest.
-        let charleston: RhythmPattern = pattern(
-            "Charleston",
-            1,
-            &[
-                (0, 7560, ElementKind::Sounding, false),
-                (7560, 2520, ElementKind::Sounding, false),
-                (10_080, 10_080, ElementKind::Rest, false),
-            ],
-        );
-        let events: Vec<ScheduledEvent> = schedule(
-            &port("Clock"),
-            &[rhythm_track(charleston)],
-            four_four(),
-            ScoreLength::from_ticks(40_320),
+            vec![note(15_000), note(20_160)],
         )
         .unwrap();
-        assert_eq!(
-            note_ons(&events),
-            vec![(0, 127), (7560, 64), (20_160, 127), (27_720, 64)]
-        );
-    }
-
-    #[test]
-    fn tied_elements_make_one_note_and_a_short_note_is_not_stretched() {
-        // Anticipation: an eighth tied across the barline into a quarter.
-        let anticipation: RhythmPattern = pattern(
-            "Anticipation",
-            2,
-            &[
-                (0, 17_640, ElementKind::Rest, false),
-                (17_640, 2520, ElementKind::Sounding, true),
-                (20_160, 5040, ElementKind::Sounding, false),
-                (25_200, 15_120, ElementKind::Rest, false),
-            ],
-        );
         let events: Vec<ScheduledEvent> = schedule(
             &port("Clock"),
-            &[rhythm_track(anticipation)],
-            four_four(),
-            ScoreLength::from_ticks(40_320),
+            &[track],
+            &[],
+            ScoreLength::from_ticks(20_160),
         )
         .unwrap();
-        // One note, not two: it starts at the eighth, off the bar, so normal.
-        assert_eq!(note_ons(&events), vec![(17_640, 64)]);
         let offs: Vec<u64> = events
             .iter()
             .filter(|event: &&ScheduledEvent| matches!(event.action, OutputAction::NoteOff { .. }))
             .map(|event: &ScheduledEvent| event.position.ticks())
             .collect();
-        // The pulse lasts a 16th (1260 ticks), shorter than the note.
-        assert_eq!(offs, vec![17_640 + 1260]);
+        assert_eq!(offs, vec![20_160]);
     }
 
     #[test]
-    fn a_rhythm_for_another_meter_is_refused() {
-        let waltz: TimeSignature = TimeSignature::new(3, 4).unwrap();
-        let three_four_rhythm: RhythmPattern = RhythmPattern::new(
-            "Waltz",
-            waltz,
-            1,
-            vec![
-                RhythmElement::new(
-                    ScoreLength::ZERO,
-                    waltz.bar_length(),
-                    ElementKind::Sounding,
-                    ElementMarks::NONE,
-                    false,
-                )
-                .unwrap(),
-            ],
+    fn a_note_off_comes_before_the_same_note_on_at_one_position() {
+        let note = |start_ticks: u64| TimedNote {
+            start_ticks,
+            length_ticks: 5040,
+            note: NoteNumber::new(60).unwrap(),
+            velocity: Velocity::new(64).unwrap(),
+        };
+        let track: NoteTrack = NoteTrack::new(
+            "Bass",
+            port("Bass"),
+            MidiChannel::new(2).unwrap(),
+            vec![note(0), note(5040)],
         )
         .unwrap();
-        assert!(matches!(
-            schedule(
-                &port("Clock"),
-                &[rhythm_track(three_four_rhythm)],
-                four_four(),
-                ScoreLength::from_ticks(20_160)
-            ),
-            Err(ScheduleError::RhythmInOtherMeter { .. })
-        ));
+        let events: Vec<ScheduledEvent> = schedule(
+            &port("Clock"),
+            &[track],
+            &[],
+            ScoreLength::from_ticks(10_080),
+        )
+        .unwrap();
+        let at_5040: Vec<&OutputAction> = events
+            .iter()
+            .filter(|event: &&ScheduledEvent| {
+                event.position.ticks() == 5040 && event.action != OutputAction::ClockPulse
+            })
+            .map(|event: &ScheduledEvent| &event.action)
+            .collect();
+        assert!(matches!(at_5040[0], OutputAction::NoteOff { .. }));
+        assert!(matches!(at_5040[1], OutputAction::NoteOn { .. }));
     }
 
     #[test]
@@ -661,36 +478,13 @@ mod tests {
             ControlCueMessage::Transport(TransportMessage::Stop),
         )
         .unwrap();
-        let track: ControlTrack = ControlTrack::new("Studio", None, vec![late]).unwrap();
+        let track: ControlTrack = ControlTrack::new("Studio", vec![late]).unwrap();
         assert!(
             schedule(
                 &port("Clock"),
+                &[],
                 &[track],
-                four_four(),
                 ScoreLength::from_ticks(40_320)
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn beat_pulse_longer_than_a_count_is_refused() {
-        let pulse: BeatPulse = BeatPulse::new(
-            port("Beat pulse"),
-            MidiChannel::new(15).unwrap(),
-            NoteNumber::new(60).unwrap(),
-            Velocity::new(127).unwrap(),
-            Velocity::new(64).unwrap(),
-            ScoreLength::from_ticks(5041),
-        )
-        .unwrap();
-        let track: ControlTrack = ControlTrack::new("Studio", Some(pulse), Vec::new()).unwrap();
-        assert!(
-            schedule(
-                &port("Clock"),
-                &[track],
-                four_four(),
-                ScoreLength::from_ticks(20_160)
             )
             .is_err()
         );

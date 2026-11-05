@@ -1,5 +1,6 @@
-//! The play half of the test: a chosen rhythm on the beat-pulse port, with
-//! Timing Clock on its own port, for listening on the FH-2.
+//! The play half of the test: a chosen rhythm as a mono voice playing one
+//! fixed note on the "Beat pulse" port, with Timing Clock on its own port,
+//! for listening on the FH-2.
 //!
 //! This is the test's own copy of the sending loop of
 //! `alsa_output/examples/control_track_test`, trimmed. Its proper home is
@@ -13,10 +14,12 @@ use alsa_output::error::AlsaOutputError;
 use alsa_output::sequencer_output::{FlushOutcome, OutputPort, SequencerOutput};
 use alsa_output::warning::OutputWarning;
 use player::anchor::Anchor;
+use player::note_track::NoteTrack;
 use player::schedule::{EventSource, OutputAction, ScheduledEvent, schedule};
+use player::studio_configuration::VelocityLevels;
 use song_text::length_words::describe_place;
 use song_text::rhythm_library::RhythmLibraryEntry;
-use vocabulary::control_track::{BeatPulse, ControlTrack};
+use vocabulary::control_track::ControlTrack;
 use vocabulary::duration::Duration;
 use vocabulary::instant::Instant;
 use vocabulary::midi_values::{MidiChannel, NoteNumber, Velocity};
@@ -38,10 +41,8 @@ const START_DELAY: Duration = Duration::from_ms(200);
 /// the 50 ms lead.
 const SEND_LOOP_SLEEP: StdDuration = StdDuration::from_millis(5);
 
-/// A 16th: 5040 ticks/q ÷ 4. Each pulse is held this long, or for the
-/// note's own length if that is shorter.
-const PULSE_LENGTH: ScoreLength = ScoreLength::from_ticks(1260);
-
+/// The velocities this test gives the levels of the rhythm's marks: `>` and
+/// `>>` both send 127. (A studio configuration would give them per track.)
 const ACCENT_VELOCITY: u8 = 127;
 const NORMAL_VELOCITY: u8 = 64;
 
@@ -161,30 +162,31 @@ pub fn play_rhythm(entries: &[RhythmLibraryEntry], request: &PlayRequest) -> Res
         .map_err(|e| e.to_string())?;
 
     let velocity = |value: u8| Velocity::new(value).map_err(|e| e.to_string());
-    let pulse: BeatPulse = BeatPulse::new(
+    let levels: VelocityLevels = VelocityLevels::new(
+        velocity(NORMAL_VELOCITY)?,
+        Some(velocity(ACCENT_VELOCITY)?),
+        Some(velocity(ACCENT_VELOCITY)?),
+    );
+    let beat: NoteTrack = NoteTrack::from_rhythm(
+        "Beat",
         port_name(PULSE_PORT)?,
         request.channel,
         request.note,
-        velocity(ACCENT_VELOCITY)?,
-        velocity(NORMAL_VELOCITY)?,
-        PULSE_LENGTH,
+        levels,
+        pattern,
+        stretch_length,
     )
-    .map_err(|e| e.to_string())?
-    .with_rhythm(pattern.clone());
+    .map_err(|e| e.to_string())?;
     let cues: Vec<PhraseCue> = if request.transport {
         transport_cues(stretch_length)?
     } else {
         Vec::new()
     };
-    let track: ControlTrack =
-        ControlTrack::new("Rhythm test", Some(pulse), cues).map_err(|e| e.to_string())?;
-    let events: Vec<ScheduledEvent> = schedule(
-        &port_name(CLOCK_PORT)?,
-        &[track],
-        time_signature,
-        stretch_length,
-    )
-    .map_err(|e| e.to_string())?;
+    let control: ControlTrack =
+        ControlTrack::new("Rhythm test", cues).map_err(|e| e.to_string())?;
+    let events: Vec<ScheduledEvent> =
+        schedule(&port_name(CLOCK_PORT)?, &[beat], &[control], stretch_length)
+            .map_err(|e| e.to_string())?;
 
     let (output, warnings): (SequencerOutput, Vec<OutputWarning>) =
         SequencerOutput::open("Lead Sheet", &[CLOCK_PORT, PULSE_PORT])
@@ -314,7 +316,7 @@ fn send_all(
                 late_events += 1;
             }
             send(output, event, at)?;
-            if let (EventSource::BeatPulse { .. }, OutputAction::NoteOn { velocity, .. }) =
+            if let (EventSource::Notes { .. }, OutputAction::NoteOn { velocity, .. }) =
                 (&event.source, event.action)
             {
                 let accent: &str = if velocity.value() == ACCENT_VELOCITY {

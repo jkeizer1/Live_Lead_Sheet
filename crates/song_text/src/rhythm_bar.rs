@@ -17,7 +17,7 @@ use crate::length_words::{MAX_DOTS, describe_length, dotted_length_subticks};
 const SUBTICKS_PER_TICK: u64 = 8;
 
 /// An element placed in its bar.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BarElement {
     /// Ticks from the start of the bar.
     pub start_ticks: u64,
@@ -25,15 +25,19 @@ pub struct BarElement {
     pub kind: ElementKind,
     pub marks: ElementMarks,
     pub tied_to_next: bool,
+    /// The text after the colon, if any, exactly as written; the song parser
+    /// reads it as a chord, notes or a cue name.
+    pub contents_text: Option<String>,
 }
 
 /// An element as written, before it is placed.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct WrittenElement {
     length_subticks: u64,
     kind: ElementKind,
     marks: ElementMarks,
     tied_to_next: bool,
+    contents_text: Option<String>,
 }
 
 /// What a group does to the natural length of what is inside it.
@@ -51,11 +55,13 @@ enum GroupLength {
 ///
 /// A message saying what is wrong and what to type instead; the caller adds
 /// the file and line. Also when the elements do not add up exactly to
-/// `bar_length_ticks`.
+/// `bar_length_ticks`, or when an element carries contents (`q:C2`) and
+/// `allow_contents` is false (a rhythm library holds rhythm only).
 pub fn parse_bar(
     bar_text: &str,
     bar_number: usize,
     bar_length_ticks: u64,
+    allow_contents: bool,
 ) -> Result<Vec<BarElement>, String> {
     let mut cursor: Cursor = Cursor::new(bar_text);
     let mut placed: Vec<BarElement> = Vec::new();
@@ -68,7 +74,7 @@ pub fn parse_bar(
         }
         if cursor.starts_with("trp") || cursor.starts_with("fit") {
             let (group_length, inner): (GroupLength, Vec<WrittenElement>) =
-                parse_group(&mut cursor, bar_length_ticks)?;
+                parse_group(&mut cursor, bar_length_ticks, allow_contents)?;
             let natural_subticks: u64 = inner.iter().map(|element| element.length_subticks).sum();
             let group_subticks: u64 = match group_length {
                 GroupLength::TwoThirds => {
@@ -90,14 +96,15 @@ pub fn parse_bar(
             )?);
             position_subticks += group_subticks;
         } else {
-            let element: WrittenElement = parse_element(&mut cursor)?;
+            let element: WrittenElement = parse_element(&mut cursor, allow_contents)?;
+            let element_subticks: u64 = element.length_subticks;
             placed.extend(place(
                 position_subticks,
-                element.length_subticks,
+                element_subticks,
                 &[element],
                 bar_number,
             )?);
-            position_subticks += element.length_subticks;
+            position_subticks += element_subticks;
         }
     }
 
@@ -127,6 +134,57 @@ pub fn parse_bar(
         ));
     }
     Ok(placed)
+}
+
+/// `| q q q q | q q q q |` → the bars between the barlines. `bars_so_far`
+/// is how many bars came before, so a mistake names its bar in the whole line.
+///
+/// # Errors
+///
+/// A message saying what is wrong and what to type instead.
+pub fn parse_bars(
+    line: &str,
+    bars_so_far: usize,
+    bar_length_ticks: u64,
+    allow_contents: bool,
+) -> Result<Vec<Vec<BarElement>>, String> {
+    let line: &str = line.trim();
+    if !line.starts_with('|') || !line.ends_with('|') || line.len() < 2 {
+        return Err(String::from(
+            "a line of bars starts and ends with |, e.g. | q q q q |",
+        ));
+    }
+    let inside: &str = &line[1..line.len() - 1];
+    let mut bars: Vec<Vec<BarElement>> = Vec::new();
+    for (offset, bar_text) in split_at_barlines(inside).into_iter().enumerate() {
+        let bar_number: usize = bars_so_far + offset + 1;
+        bars.push(parse_bar(
+            bar_text,
+            bar_number,
+            bar_length_ticks,
+            allow_contents,
+        )?);
+    }
+    Ok(bars)
+}
+
+/// Splits at `|`, except inside a quoted cue name.
+fn split_at_barlines(text: &str) -> Vec<&str> {
+    let mut parts: Vec<&str> = Vec::new();
+    let mut inside_quotes: bool = false;
+    let mut part_start: usize = 0;
+    for (position, character) in text.char_indices() {
+        match character {
+            '"' => inside_quotes = !inside_quotes,
+            '|' if !inside_quotes => {
+                parts.push(&text[part_start..position]);
+                part_start = position + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(&text[part_start..]);
+    parts
 }
 
 /// Places the written elements of a group (or one plain element) between
@@ -171,6 +229,7 @@ fn place(
             kind: element.kind,
             marks: element.marks,
             tied_to_next: element.tied_to_next,
+            contents_text: element.contents_text.clone(),
         });
     }
     Ok(result)
@@ -180,6 +239,7 @@ fn place(
 fn parse_group(
     cursor: &mut Cursor,
     bar_length_ticks: u64,
+    allow_contents: bool,
 ) -> Result<(GroupLength, Vec<WrittenElement>), String> {
     let name: String = cursor.take_while(char::is_ascii_alphabetic);
     let group_length: GroupLength = match name.as_str() {
@@ -230,7 +290,7 @@ fn parse_group(
                          inner group as separate elements"
                     ));
                 }
-                inner.push(parse_element(cursor)?);
+                inner.push(parse_element(cursor, allow_contents)?);
             }
         }
     }
@@ -252,8 +312,9 @@ fn parse_group(
 }
 
 /// One element: value, then `r` and dots in either order (`hr.` and `h.r`
-/// are the same dotted half rest), then marks, then a tie.
-fn parse_element(cursor: &mut Cursor) -> Result<WrittenElement, String> {
+/// are the same dotted half rest), then marks, then a tie, then `:` and
+/// the contents (a chord, notes or a cue name) when the file allows them.
+fn parse_element(cursor: &mut Cursor, allow_contents: bool) -> Result<WrittenElement, String> {
     let base_ticks: u64 = parse_note_value(cursor)?;
 
     let mut is_rest: bool = false;
@@ -284,14 +345,19 @@ fn parse_element(cursor: &mut Cursor) -> Result<WrittenElement, String> {
         cursor.next();
     }
 
+    let mut contents_text: Option<String> = None;
     match cursor.peek() {
         None | Some(')') => {}
         Some(character) if character.is_whitespace() => {}
-        Some(':') => {
+        Some(':') if !allow_contents => {
             return Err(String::from(
                 "':' in a rhythm pattern. A rhythm carries no notes or chords; \
                  they are written in a song's lines",
             ));
+        }
+        Some(':') => {
+            cursor.next();
+            contents_text = Some(parse_contents_text(cursor)?);
         }
         Some(character) => {
             return Err(format!(
@@ -323,7 +389,61 @@ fn parse_element(cursor: &mut Cursor) -> Result<WrittenElement, String> {
         kind,
         marks,
         tied_to_next,
+        contents_text,
     })
+}
+
+/// The text after a colon: a quoted name (`"Start SQ-1"`), or characters up
+/// to the next space outside square brackets (`ii7`, `C2`, `[D3 F3 A3]`,
+/// `ii7[F3 A3 C4]`). What it means is for the song parser to say.
+fn parse_contents_text(cursor: &mut Cursor) -> Result<String, String> {
+    let mut text: String = String::new();
+    if cursor.peek() == Some('"') {
+        text.push('"');
+        cursor.next();
+        loop {
+            match cursor.next() {
+                None => {
+                    return Err(String::from(
+                        "a quoted name after ':' is missing its closing \"",
+                    ));
+                }
+                Some('"') => {
+                    text.push('"');
+                    return Ok(text);
+                }
+                Some(character) => text.push(character),
+            }
+        }
+    }
+    let mut inside_brackets: bool = false;
+    while let Some(character) = cursor.peek() {
+        if !inside_brackets && (character.is_whitespace() || character == ')') {
+            break;
+        }
+        match character {
+            '[' if inside_brackets => {
+                return Err(String::from(
+                    "'[' inside square brackets. Close the first with ]",
+                ));
+            }
+            '[' => inside_brackets = true,
+            ']' => inside_brackets = false,
+            _ => {}
+        }
+        text.push(character);
+        cursor.next();
+    }
+    if inside_brackets {
+        return Err(String::from("a '[' after ':' is missing its closing ]"));
+    }
+    if text.is_empty() {
+        return Err(String::from(
+            "nothing after ':'. Write a chord such as ii7, a note such as C2, \
+             notes such as [C3 E3 G3], or a quoted cue name",
+        ));
+    }
+    Ok(text)
 }
 
 /// `w h q e sx tx` → the plain length in ticks.
@@ -447,7 +567,7 @@ mod tests {
     const FOUR_FOUR_BAR_TICKS: u64 = 20_160;
 
     fn starts_and_lengths(bar_text: &str) -> Vec<(u64, u64)> {
-        parse_bar(bar_text, 1, FOUR_FOUR_BAR_TICKS)
+        parse_bar(bar_text, 1, FOUR_FOUR_BAR_TICKS, false)
             .unwrap()
             .iter()
             .map(|element| (element.start_ticks, element.length_ticks))
@@ -455,7 +575,7 @@ mod tests {
     }
 
     fn error_of(bar_text: &str) -> String {
-        parse_bar(bar_text, 1, FOUR_FOUR_BAR_TICKS).unwrap_err()
+        parse_bar(bar_text, 1, FOUR_FOUR_BAR_TICKS, false).unwrap_err()
     }
 
     #[test]
@@ -515,7 +635,7 @@ mod tests {
     #[test]
     fn marks_and_ties_are_read() {
         let elements: Vec<BarElement> =
-            parse_bar("q> q>>' e_ e^~ q", 1, FOUR_FOUR_BAR_TICKS).unwrap();
+            parse_bar("q> q>>' e_ e^~ q", 1, FOUR_FOUR_BAR_TICKS, false).unwrap();
         assert_eq!(elements[0].marks.accent(), AccentLevel::Accent);
         assert_eq!(elements[1].marks.accent(), AccentLevel::Strong);
         assert!(elements[1].marks.staccato());
@@ -551,5 +671,54 @@ mod tests {
         assert!(error_of("fitBar(trp (q q q) q)").contains("group inside a group"));
         assert!(error_of("q q q q....").contains("more than 3 dots"));
         assert!(error_of("").contains("is empty"));
+    }
+
+    fn contents_of(bar_text: &str) -> Vec<Option<String>> {
+        parse_bar(bar_text, 1, FOUR_FOUR_BAR_TICKS, true)
+            .unwrap()
+            .into_iter()
+            .map(|element: BarElement| element.contents_text)
+            .collect()
+    }
+
+    #[test]
+    fn contents_follow_a_colon_and_may_hold_spaces_in_brackets_or_quotes() {
+        assert_eq!(
+            contents_of("q:ii7 q:C2 q:[D3 F3 A3] q:ii7[F3 A3 C4]"),
+            vec![
+                Some("ii7".to_string()),
+                Some("C2".to_string()),
+                Some("[D3 F3 A3]".to_string()),
+                Some("ii7[F3 A3 C4]".to_string()),
+            ]
+        );
+        assert_eq!(
+            contents_of("w:\"Start SQ-1\""),
+            vec![Some("\"Start SQ-1\"".to_string())]
+        );
+        assert_eq!(
+            contents_of("q:I q q q"),
+            vec![Some("I".to_string()), None, None, None]
+        );
+    }
+
+    #[test]
+    fn contents_work_inside_a_group() {
+        let contents: Vec<Option<String>> = contents_of("trp (q:C2 q:E2 q:G2) h");
+        assert_eq!(contents.len(), 4);
+        assert_eq!(contents[2], Some("G2".to_string()));
+    }
+
+    #[test]
+    fn contents_are_refused_where_only_rhythm_is_allowed() {
+        assert!(error_of("q:C2 q q q").contains("carries no notes"));
+    }
+
+    #[test]
+    fn broken_contents_say_what_to_type() {
+        let error_for = |text: &str| parse_bar(text, 1, FOUR_FOUR_BAR_TICKS, true).unwrap_err();
+        assert!(error_for("q: q q q").contains("nothing after ':'"));
+        assert!(error_for("q:[C3 E3 q q q").contains("missing its closing ]"));
+        assert!(error_for("w:\"Start").contains("missing its closing"));
     }
 }

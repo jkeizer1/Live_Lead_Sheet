@@ -1,6 +1,6 @@
 # rhythm_notation_test
 
-Revision 2 — 5 Nov 2026 (plays a rhythm on the beat-pulse port)
+Revision 3 — 5 Nov 2026 (the beat pulse is an ordinary mono voice: accents and gate length come from the rhythm)
 
 ## What it proves
 
@@ -17,12 +17,15 @@ That the rhythm notation of `docs/Architecture/Song Notation.md`
 
 With `--play`, it then plays the chosen rhythm on the beat-pulse port at a
 chosen tempo, repeated to fill the bars asked for, with Timing Clock on its
-own port, for listening on the FH-2. The player's schedule makes the
-events: a note begins at each sounding element that no tie leads into, a
-tied note is one note, the first beat of a bar is sent at the accent
-velocity (127) and the others at the normal velocity (64), and each pulse
-is a sixteenth note long or the note's own length if that is shorter. The
-rhythm's own accent marks are not used by the beat pulse.
+own port, for listening on the FH-2. The rhythm is played as a mono voice
+that plays one fixed note (the "beat pulse"), like any voice: a note begins
+at each sounding element that no tie leads into, a tied note is one note
+as long as the elements joined, and the note's written length is its gate
+length. The rhythm's own marks set the velocity: `>` and `>>` send 127,
+a note with no mark sends 64. (Revision 2 gave count 1 of each bar the
+accent whatever the rhythm said, and cut every pulse to a sixteenth; both
+special cases are gone. The starter library now writes the count 1 accent
+with `>` in the pulses, Charleston and the bossa comp.)
 
 ## Setup on Jim's studio
 
@@ -66,15 +69,19 @@ see the FH-2's clock output (e.g. jack 5).
 
 What to listen and watch for, on the FH-2 gate (or a voice it drives):
 
-- *Charleston*: a pulse on count 1 (the louder, accented one) and one on
-  the "and" of count 2, then silence for the half-note rest, every bar.
+- *Charleston*: a gate on count 1 (the louder, accented one) held for a
+  dotted quarter, and one on the "and" of count 2 held for an eighth, then
+  silence for the half-note rest, every bar.
 - *Anticipation*: one pulse every two bars, on the "and" of count 4. The
   tied quarter after the barline must not retrigger.
 - *Quarter-note triplets*: six evenly spaced pulses in the bar, none on
   count 2 or 4.
-- *Backbeat*: the beat pulse ignores the `>` marks, so only count 1 is
-  louder.
-- Each pulse should be short (a sixteenth), whatever the note value.
+- *Backbeat*: counts 2 and 4 are louder (its `>` marks); count 1 is
+  normal.
+- Each gate lasts the written note value: a quarter note is held for a
+  quarter note, an eighth for an eighth. On a short gate, such as an
+  eighth-note pulse, an FH-2 output set to CV and gate should still drop
+  between notes.
 
 Run from the project folder. The exit status is 0 when the library loads
 and every built-in mistake is reported as expected. Debug is right: this is
@@ -146,3 +153,4 @@ exists.
 
 - Revision 1, 5 Nov 2026: print the library, check six mistakes.
 - Revision 2, 5 Nov 2026: `--play` plays a rhythm on the beat-pulse port; `--transport` adds Start and Stop; setup notes; 6/8 rhythm corrected; name trimmed.
+- Revision 3, 5 Nov 2026: the beat pulse is a mono voice; velocity comes from the rhythm's marks, gate length from the written length; library accents written with `>`.

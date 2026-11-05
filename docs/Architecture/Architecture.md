@@ -1,9 +1,9 @@
 # Live Lead Sheet — Architecture
 
-Revision 19 — 5 Nov 2026 (D-11: the song and the studio configuration are separate; catalogs; song_text crate)
+Revision 20 — 5 Nov 2026 (the beat pulse is a mono voice, not a control-track feature)
 
-Builds on the Concept Brief (Revision 12), the Experience Functional
-Specification (Revision 12) and Song Notation (Revision 7). Sets the
+Builds on the Concept Brief (Revision 13), the Experience Functional
+Specification (Revision 13) and Song Notation (Revision 9). Sets the
 principles, the main parts, how they talk, and the technology for V1.
 
 **Focus.** V1 is the Live Lead Sheet itself: the leader, on one native
@@ -438,9 +438,13 @@ from what is published (A-5).
   as a marking. Transport has no channel: a transport cue's destination
   is a port only. Cues are placed by writing a rhythm line (Song
   Notation), not by bar number.
-- **Beat pulse.** A control track playing a rhythm pattern on one fixed
-  note, with an accent on count 1 sent at an accent velocity. It replaces
-  the separate beat-note stream (EFS-2.6).
+- **Beat pulse.** An ordinary mono voice playing one fixed note on the
+  elements of its rhythm, the accent written with `>` where it is wanted.
+  It has no special case in the vocabulary or the schedule: every voice is
+  a note-on with a velocity and a note-off at the end of the written
+  length, which is the gate length at a CV and gate output (EFS-2.6). How
+  the receiver makes signals of the note (FH-2 output mode, or the
+  Disting NT directly) is the receiver's setting.
 - **Count-in.** Authored bars at the start of the song, in a first
   section marked *count-in*: voices rest, the beat pulse plays. Play
   starts at P = 0 ticks, the first bar of the score, count-in included.
@@ -523,8 +527,8 @@ the song tied it to one studio.
   vocabulary, so the configuration's type lives outside it; the parser
   for all the files is one adapter crate, `song_text` (A-3).
 - **Track types** say what a track can do and so what the receiver must
-  be able to do: poly voice, mono voice, beat pulse, clock and transport,
-  cue control in V1; tempo control, musician voice and automation control
+  be able to do: poly voice, mono voice, clock and transport, cue
+  control in V1 (a beat pulse is a mono voice); tempo control, musician voice and automation control
   later (Song Notation, section 5). Clock and transport has a port and no
   channel.
 - **Pitch** is stored as the staff pitch in the track's clef; the
@@ -629,7 +633,7 @@ the playhead and wheel driven by the queue's real time instead of the
 computer's clock; frame-time statistics printed on exit; then the
 `delivery_spread` measurement repeated while the window draws.
 
-**4. Song notation and the trial player.** Song Notation, Revision 7, is
+**4. Song notation and the trial player.** Song Notation, Revision 8, is
 the specification: song, studio configuration and libraries. Build order:
 `rhythm_notation_test`; `song_play_test` (the player's schedule extended to
 voice tracks, playing `Demo.song` through `Demo.studio`); `apply_test`;

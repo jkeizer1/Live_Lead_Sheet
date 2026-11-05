@@ -196,46 +196,7 @@ impl RhythmPattern {
                 bar_count,
             });
         }
-        let bar_length_ticks: u64 = time_signature.bar_length().ticks();
-        let pattern_length_ticks: u64 = u64::from(bar_count) * bar_length_ticks;
-
-        let mut expected_start_ticks: u64 = 0;
-        for (index, element) in elements.iter().enumerate() {
-            if element.start().ticks() != expected_start_ticks {
-                return Err(RhythmPatternError::ElementsNotContiguous {
-                    name: name.to_string(),
-                    expected_start_ticks,
-                    found_start_ticks: element.start().ticks(),
-                });
-            }
-            let end_ticks: u64 = element.end_ticks();
-            // The last tick of the element lies in the same bar as its start.
-            if element.start().ticks() / bar_length_ticks != (end_ticks - 1) / bar_length_ticks {
-                return Err(RhythmPatternError::ElementCrossesBarline {
-                    name: name.to_string(),
-                    start_ticks: element.start().ticks(),
-                });
-            }
-            if element.tied_to_next() {
-                let next_is_sounding: bool = elements
-                    .get(index + 1)
-                    .is_some_and(|next| next.kind() == ElementKind::Sounding);
-                if !next_is_sounding {
-                    return Err(RhythmPatternError::TieWithoutNote {
-                        name: name.to_string(),
-                        start_ticks: element.start().ticks(),
-                    });
-                }
-            }
-            expected_start_ticks = end_ticks;
-        }
-        if expected_start_ticks != pattern_length_ticks {
-            return Err(RhythmPatternError::LengthNotWholeBars {
-                name: name.to_string(),
-                found_ticks: expected_start_ticks,
-                expected_ticks: pattern_length_ticks,
-            });
-        }
+        check_elements_fill_bars(name, time_signature, u32::from(bar_count), &elements)?;
         Ok(RhythmPattern {
             name: name.to_string(),
             time_signature,
@@ -263,6 +224,63 @@ impl RhythmPattern {
     pub fn elements(&self) -> &[RhythmElement] {
         &self.elements
     }
+}
+
+/// Checks that `elements` follow one another from the start to the end of
+/// `bar_count` whole bars, that none crosses a barline (only a tie does
+/// that), and that every tie has a sounding element after it. Shared by
+/// rhythm patterns and the lines of a song. `name` is only for messages.
+///
+/// # Errors
+///
+/// The first of those rules that is broken.
+pub fn check_elements_fill_bars(
+    name: &str,
+    time_signature: TimeSignature,
+    bar_count: u32,
+    elements: &[RhythmElement],
+) -> Result<(), RhythmPatternError> {
+    let bar_length_ticks: u64 = time_signature.bar_length().ticks();
+    let total_length_ticks: u64 = u64::from(bar_count) * bar_length_ticks;
+
+    let mut expected_start_ticks: u64 = 0;
+    for (index, element) in elements.iter().enumerate() {
+        if element.start().ticks() != expected_start_ticks {
+            return Err(RhythmPatternError::ElementsNotContiguous {
+                name: name.to_string(),
+                expected_start_ticks,
+                found_start_ticks: element.start().ticks(),
+            });
+        }
+        let end_ticks: u64 = element.end_ticks();
+        // The last tick of the element lies in the same bar as its start.
+        if element.start().ticks() / bar_length_ticks != (end_ticks - 1) / bar_length_ticks {
+            return Err(RhythmPatternError::ElementCrossesBarline {
+                name: name.to_string(),
+                start_ticks: element.start().ticks(),
+            });
+        }
+        if element.tied_to_next() {
+            let next_is_sounding: bool = elements
+                .get(index + 1)
+                .is_some_and(|next| next.kind() == ElementKind::Sounding);
+            if !next_is_sounding {
+                return Err(RhythmPatternError::TieWithoutNote {
+                    name: name.to_string(),
+                    start_ticks: element.start().ticks(),
+                });
+            }
+        }
+        expected_start_ticks = end_ticks;
+    }
+    if expected_start_ticks != total_length_ticks {
+        return Err(RhythmPatternError::LengthNotWholeBars {
+            name: name.to_string(),
+            found_ticks: expected_start_ticks,
+            expected_ticks: total_length_ticks,
+        });
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

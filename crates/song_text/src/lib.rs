@@ -5,7 +5,12 @@
 //!
 //! So far: rhythm patterns and the rhythm library file.
 
+pub mod contents_text;
 pub mod length_words;
 pub mod parse_error;
 pub mod rhythm_bar;
 pub mod rhythm_library;
+pub mod song_file;
+pub mod song_line;
+pub mod studio_file;
+pub mod text_line;

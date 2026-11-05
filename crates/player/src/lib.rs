@@ -2,4 +2,6 @@
 
 pub mod anchor;
 pub mod counter;
+pub mod note_track;
 pub mod schedule;
+pub mod studio_configuration;

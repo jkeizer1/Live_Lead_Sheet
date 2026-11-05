@@ -1,11 +1,11 @@
 # Live Lead Sheet — Experience Functional Specification
 
-Revision 12 — 5 Nov 2026 (song and studio configuration are separate files; track types; marks; cues in rhythm notation; errors shown, not fatal)
+Revision 13 — 5 Nov 2026 (the beat pulse is a mono voice, not a track type)
 
-Builds on the Concept Brief, Revision 12, Architecture D-10 and D-11, and
-Song Notation, Revision 7. Covers
+Builds on the Concept Brief, Revision 13, Architecture D-10 and D-11, and
+Song Notation, Revision 9. Covers
 **V1: the leader** — a chordal song with its own slash rhythm and a bass
-accompaniment, with a control track for the beat pulse and phrase cues,
+accompaniment, with a beat pulse voice and a control track for phrase cues,
 on one screen. Requirements are in the musician's terms; nothing here chooses a
 language, library or internal design.
 
@@ -166,22 +166,25 @@ that follows clock is the studio's setup (a MIDI router, `aconnect`, or
 other), not the program's. External sequencers are started, stopped and
 reset by phrase cues (EFS-4).
 
-**EFS-2.6 Beat pulse.** A control track that sends one note per count,
-for clock dividers and devices that follow notes better than MIDI clock.
-Port, channel, note number and velocities are set by the musician in the
-studio configuration (EFS-6.6). The first beat of each bar is sent at
-an accent velocity, every other beat at a normal velocity — 127 and 64
-in the usual setup — in any meter, so 4/4 and 6/8 are treated alike. A
-MIDI-to-CV converter can trigger a percussive voice and set its VCA
-level from the same stream, and the bar's first beat is always
-distinguishable. The beat pulse does not depend on MIDI transport, so a
-gate made from it (e.g. on an FH-2 output) keeps clock dividers running
-while sequencers are stopped. It is not a drum part; a second use is a
-metronome voiced in the modular.
+**EFS-2.6 Beat pulse.** A beat pulse is an ordinary mono voice (EFS-3.3)
+that plays one fixed note on the elements of its rhythm, for clock
+dividers and devices that follow notes better than MIDI clock. The song
+writes the pitch and the accents like any voice (`| q>:C4 q q q |`);
+port, channel and velocities are set by the musician in the studio
+configuration (EFS-6.6), where an accent mark has its own velocity — 127
+and 64 in the usual setup. Where the accent falls is written in the
+rhythm, so 4/4 and 6/8 need no rule of their own. A note's written length
+is its gate length at a CV and gate output, so a short element is a
+trigger and a long one a held gate; whether the receiving output is a
+velocity gate, a CV and gate, or a CV, gate and velocity is the receiver's
+setting (an FH-2 output, or the Disting NT reading the MIDI directly), not
+the song's. A beat pulse does not depend on MIDI transport, so a gate made
+from it keeps clock dividers running while sequencers are stopped. It is
+not a drum part; a second use is a metronome voiced in the modular.
 
 **EFS-2.7 Count-in section.** A song may begin with a count-in section of
 one or two bars (two help at fast tempos): the voice tracks rest, the
-beat pulse plays, and the counter shows the count-in. A phrase cue on
+beat pulse voice plays, and the counter shows the count-in. A phrase cue on
 the music's first bar starts the external sequencers, so they do not
 play the count-in and all start together on that downbeat.
 
@@ -277,8 +280,8 @@ bend and other controllers are later (EFS-3.8).
 chords drive the key wheel and the chord symbols.
 
 **EFS-3.8 Track types.** Each track has a type. In V1: poly voice and mono
-voice (EFS-3.2, 3.3), beat pulse (EFS-2.6), clock and transport, and cue
-control (EFS-4). The clock and transport track has a port and no channel,
+voice (EFS-3.2, 3.3; a beat pulse, EFS-2.6, is a mono voice), clock and
+transport, and cue control (EFS-4). The clock and transport track has a port and no channel,
 because Timing Clock, Start, Continue and Stop carry none; each song has
 exactly one. Later: a tempo control track (EFS-2.2), a musician voice
 (a part composed for a person to read, in the clef of that instrument,

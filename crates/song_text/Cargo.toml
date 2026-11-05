@@ -6,11 +6,12 @@ publish.workspace = true
 
 [dependencies]
 vocabulary = { path = "../vocabulary" }
+# The .studio file reads into the player's StudioConfiguration (D-11).
+player = { path = "../player" }
 
 [dev-dependencies]
-# rhythm_notation_test plays a rhythm: the schedule is the player's, the
-# MIDI output the ALSA adapter's.
-player = { path = "../player" }
+# rhythm_notation_test plays a rhythm: the MIDI output is the ALSA
+# adapter's.
 alsa_output = { path = "../alsa_output" }
 
 [lints]

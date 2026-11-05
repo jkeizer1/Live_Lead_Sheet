@@ -1,6 +1,6 @@
 # Live Lead Sheet — Song Notation
 
-Revision 6 — 5 Nov 2026 (composition and studio configuration are separate files; track types; marks; cues and tempo marks written in rhythm notation; Jim's review of revision 5 folded in)
+Revision 9 — 5 Nov 2026 (the beat pulse is an ordinary mono voice, not a track type; the note's length is its gate length)
 
 **Status: draft for trial.** *Decided* marks what Jim has decided;
 everything else is a proposal to try with a working player. The questions
@@ -192,9 +192,9 @@ repeats from its first bar; fewer, it is cut after the last bar that
 fits. A rhythm is refused for a section of a different meter, with a
 message naming both.
 
-**Not in a rhythm:** pitches and velocities. (The beat pulse's accent on
-count 1 comes from the bar position, D-10, so it is the same in 4/4 and
-6/8.)
+**Not in a rhythm:** pitches and velocities. A rhythm's accent marks are
+part of it: where the accent falls (count 1 in 4/4; counts 1 and 4 in 6/8)
+is written with `>`, so no meter has a rule of its own.
 
 Example message: `charleston.rhythm line 3: bar 1 is short by an eighth
 note. Add e or er.`
@@ -222,11 +222,19 @@ What a sounding element carries follows a colon:
   changed voicing is proposed (Q15).
 - **Mono voice** (a track that can play one note at a time): one note with
   its octave (`C2`, `F#2`, `Bb1`). Two sounding elements may not overlap.
-- **Beat pulse, cue and tempo tracks:** see section 5.
+- **Cue and tempo tracks:** see section 5. A beat pulse needs no section
+  of its own: it is a mono voice that writes the same note on each
+  element, e.g. `| q>:C4 q q q |`.
 - **An element with nothing after it carries the previous element's
   contents** within the line, across barlines (a strum is several elements
   of one chord). The first sounding element of a line in a section must
-  carry its own (Q5).
+  carry its own (Q5). Only voice tracks carry forward; every cue on a cue
+  control track names its cue.
+
+**Order inside an element** (fixed by the parser): the note value, then
+`r` and the dots, then the marks, then `~`, then the colon and the contents
+(`q>>:C2`, `e'~:ii7`). Contents end at the next space, except inside `[...]`
+or a quoted cue name. A rest carries nothing.
 
 ## 5. The song (`.song`)
 
@@ -242,7 +250,8 @@ track "Clock"
   type clock_and_transport
 
 track "Beat"
-  type beat_pulse
+  type mono_voice
+  clef treble
 
 track "Keys"
   type poly_voice
@@ -259,11 +268,11 @@ track "Cues"
 
 section "Count-in"  count-in
   meter 4/4  tempo 120 q/min
-  line "Beat"  | q q q q |
+  line "Beat"  | q>:C4 q q q |
 
 section "Verse"  repeat 2
   key C major  meter 4/4  tempo 120 q/min
-  line "Beat"  | q q q q | q q q q |
+  line "Beat"  | q>:C4 q q q | q> q q q |
   line "Keys"  | q:I q q q | qr h:ii7 q:V7 |
   line "Bass"  | q:C2 q q q | qr h:D2 q:G2 |
   line "Cues"  | w:"Start SQ-1" | wr |    # fires on each pass: passes are not designed (EFS-4.4)
@@ -281,12 +290,29 @@ and so what a receiving device must be able to do.
 |---|---|---|
 | `poly_voice` | Notes and chords to a device that can play several notes at once. | Yes |
 | `mono_voice` | One note at a time, to a mono device (an analogue oscillator, a bass synth). The loader refuses overlapping notes, in hand-written files as well as the editor's. | Yes |
-| `beat_pulse` | One fixed note per sounding element, for clock dividers or a metronome voiced in the modular. An element that starts a bar sends the accent velocity, in any meter (the same treatment in 4/4 and 6/8); every other element sends the normal velocity (EFS-2.6, D-10). | Yes |
 | `clock_and_transport` | Timing Clock from Play to Stop, and Stop. Exactly one per song. Its output has a port but no channel, because Timing Clock, Start, Continue, Stop and Song Position Pointer carry no channel. | Yes |
 | `cue_control` | Phrase cues, placed in rhythm notation (below). | Yes |
 | `tempo_control` | Stepped and ramped tempo changes inside a section, in rhythm notation (below). | Later |
 | `musician_voice` | A part composed for a person to read and play, in the clef of that instrument. Sends no MIDI; drawn on its own staff, with marks as interpretation. | Later (the display is beyond V1's one staff) |
 | `automation_control` | Continuous curves sent as controllers (a filter sweep, a crescendo on a VCA). | Later |
+
+**Every voice is the same on the wire:** a note-on with a velocity at the
+start of an element and a note-off at its end. The written length is the
+note's length, which at a CV and gate output is the gate length (staccato
+halves it), so a short element is a trigger and a long one a held gate. How
+the receiver turns the note into signals is the receiver's setting, and
+neither file records it. An FH-2 output can be a velocity gate, a CV and
+gate, or a CV, gate and velocity; the Disting NT can take the same MIDI
+directly, from the FH-2's forwarding or from its own port; in a velocity
+gate the velocity is the gate's level, so the accent levels in the studio
+file matter most there. The `retrigger_gap` of the studio file drops the
+gate between two notes.
+
+**A beat pulse is a mono voice** that writes one fixed pitch on each
+element, with `>` where the accent falls: `| q>:C4 q q q |`. Its pitch is a
+pitch like any other (with `octave_offset` to suit the device, and the
+pitch CV it makes at a CV and gate output), and it needs no transport. It
+can clock a divider, or voice a metronome in the modular.
 
 Attributes of a voice track:
 
@@ -321,7 +347,17 @@ short section. The initial tempo is the first section's.
   (D-10). *Polymeter* (a line that is a shorter cycle repeated to fill
   the section) is deferred; if it is added, such a line must be marked as a
   cycle, so a line left short by mistake stays an error.
-- **Repeats** are written out in play order by the loader (EFS-1.6).
+- **Repeats** are written out in play order by the loader (EFS-1.6). A
+  section with no `repeat` plays once.
+- **Carrying on.** A section that omits `key`, `meter` or `tempo` carries
+  on the one before. The first section must give `meter` and `tempo`
+  (nothing is assumed). A section with chords needs a key, written or
+  carried; a count-in section needs none. `count-in` is for the first
+  section only, one or two bars.
+- **Order in the file.** All `track` blocks come before the first
+  `section`; a `line` names a track already declared. Settings (`key`,
+  `meter`, `tempo`, `repeat`, `count-in`) may stand on the section line or
+  on lines after it, in any order.
 
 ### Cues, in rhythm notation
 
@@ -401,7 +437,7 @@ track "Clock"
   port "Clock"
 
 track "Beat"
-  port "Beat pulse"  channel 15  note 60
+  port "Beat pulse"  channel 15
   velocity normal 64  accent 127
 
 track "Keys"
@@ -418,14 +454,20 @@ destination "SQ-1"
   port "To SQ-1"  channel 1
 ```
 
-- **Ports** are the program's named MIDI output ports (EFS-3.1). Exactly
+- **Ports** are declared first, one `port "Name"` line each, before the
+  first `track` or `destination` block; inside a block `port` chooses
+  which declared port the block uses. Ports are the program's named MIDI
+  output ports (EFS-3.1). Exactly
   one is the clock output (EFS-2.5): the port of the `clock_and_transport`
   track. Connecting ports to devices is not here: that is the studio's job
   (a MIDI router, `aconnect`).
 - **A track block** is matched to the song's track of the same name. It
   gives the port and, except for the clock track, the channel (1 to 16).
   Every track of the song that sends MIDI must have one, or the song does
-  not load, with a message naming the track and the file. A block for a
+  not load, with a message naming the track and the file. A cue control
+  track has no block of its own: its cues go to destinations. A voice
+  track's block needs `velocity normal` and a velocity for each accent
+  mark its lines use. A block for a
   track the song lacks is ignored, so one configuration serves many songs.
 - **`octave_offset`** shifts every note sent, in octaves, to where this
   device places the pitch (the manufacturers disagree where C0 is, and an
@@ -536,25 +578,31 @@ Each test has an example under `examples/<what>_test/` and its
    in the musician's terms (for example "count 2, half note"), checks the
    error messages, then plays a chosen rhythm through the beat-pulse port
    at a chosen tempo, for Jim to hear on the FH-2.
-2. `song_play_test`: loads `Demo.song` and `Demo.studio` and plays them:
+2. `song_notation_test` (built): loads `songs/Demo.song` and
+   `songs/Demo.studio`, prints the song in the musician's terms, checks
+   that the studio covers every track and cue destination the song uses,
+   and checks the messages for eight kinds of mistake.
+3. `song_play_test`: loads `Demo.song` and `Demo.studio` and plays them:
    count-in, beat pulse, harmony, bass and the SQ-1 Start cue. This needs
-   the player's schedule extended from control tracks to voice tracks, and
-   it is the first time Jim hears a composed song. Accents, staccato and
+   the voices' chords added to the player's schedule (which already takes
+   note tracks), and it is the first time Jim hears a composed song. Accents, staccato and
    legato are tried here.
-3. `apply_test`: from the terminal, choose progressions and rhythms and
+4. `apply_test`: from the terminal, choose progressions and rhythms and
    bar ranges and repeats, apply them to a song structure, write the
    song, and hand it to `song_play_test`'s player. This is the test Jim
    described: select, apply, hear.
-4. `retrigger_gap_test`, the spike of Q11, can run at any time.
-5. The editor, with its text pane, once these work from text.
+5. `retrigger_gap_test`, the spike of Q11, can run at any time.
+6. The editor, with its text pane, once these work from text.
 
 **Where the code lives.** The vocabulary crate holds the musical types
 (`RhythmPattern`, `VoiceLine`, `Song` and their parts). The studio
 configuration is not music, and A-1 keeps devices out of the vocabulary,
-so its type (`StudioConfiguration`) lives elsewhere; where is settled when
-it is built (Q18). A new workspace crate, working name `song_text`, holds
-the parser and the writer for all four kinds of file, by hand, with no new
-external crate (A-3). Apply is authoring logic, not the player's, and
+so its type (`StudioConfiguration`) lives in the `player` crate, which
+configures ports for a song (*decided*, Q18), together with the check of
+what a song needs against what a studio gives. The workspace crate
+`song_text` holds the parser (and, later, the writer) for all four kinds of
+file, by hand, with no new external crate (A-3); it depends on `player`
+only to build a `StudioConfiguration` from a `.studio` file. Apply is authoring logic, not the player's, and
 where it lives is settled when it is built.
 
 ## 9. Open questions
@@ -594,7 +642,6 @@ the recommendation that will be used unless Jim says otherwise:
 - **Q17.** The spellings of the marks (`>`, `>>`, `'`, `_`, `^`), and of
   cues and tempo marks. What each does is decided; the spelling is to be
   tried.
-- **Q18.** Where `StudioConfiguration` lives (section 8).
 
 ## Appendix A — Q14, a chord's intended place inside a library bar
 

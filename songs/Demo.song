@@ -1,0 +1,35 @@
+# Demo song for the Live Lead Sheet: a two-bar count-in, then a two-bar
+# verse that plays twice. It names no port, channel or device; Demo.studio
+# says where each track goes.
+song "Demo"
+
+track "Clock"
+  type clock_and_transport
+
+track "Beat"
+  type mono_voice
+  clef treble
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+track "Bass"
+  type mono_voice
+  clef bass
+
+track "Cues"
+  type cue_control
+  cue "Start SQ-1"  destination "SQ-1"  start
+
+section "Count-in"  count-in
+  meter 4/4  tempo 120 q/min
+  line "Beat"  | q>:C4 q q q |
+
+section "Verse"  repeat 2
+  key C major  meter 4/4  tempo 120 q/min
+  line "Beat"  | q>:C4 q q q | q> q q q |
+  line "Keys"  | q:I q q q | qr h:ii7 q:V7 |
+  line "Bass"  | q:C2 q q q | qr h:D2 q:G2 |
+  line "Cues"  | w:"Start SQ-1" | wr |

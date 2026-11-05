@@ -576,7 +576,7 @@ Observations rev 1, NK Observations rev 3, SQ-1 Observations; tests of
 
 Consequences, written into D-10: Timing Clock alone cannot keep a
 Eurorack divider running across a stop, through the FH-2 or the disting
-NT; the **beat pulse** (EFS-2.6), a control track turned into a gate by
+NT; the **beat pulse** (EFS-2.6), a voice turned into a gate by
 an FH-2 output, can, because notes do not depend on transport. Resetting
 followers is done by phrase cues — Start on a follower's own output
 port, or a reset note to an FH-2 trigger output.
