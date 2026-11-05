@@ -3,7 +3,7 @@
 Revision 12 — 5 Nov 2026 (song and studio configuration are separate files; track types; marks; cues in rhythm notation; errors shown, not fatal)
 
 Builds on the Concept Brief, Revision 12, Architecture D-10 and D-11, and
-Song Notation, Revision 6. Covers
+Song Notation, Revision 7. Covers
 **V1: the leader** — a chordal song with its own slash rhythm and a bass
 accompaniment, with a control track for the beat pulse and phrase cues,
 on one screen. Requirements are in the musician's terms; nothing here chooses a

@@ -1,0 +1,57 @@
+# Starter rhythm library (EFS-7.2). Rhythms are listed by meter, then group.
+# The bossa comp is a starting sketch: adjust it by ear.
+
+rhythm "Whole-note pulse"
+  group "Pulses"
+  meter 4/4
+  | w |
+
+rhythm "Half-note pulses"
+  group "Pulses"
+  meter 4/4
+  | h h |
+
+rhythm "Quarter-note pulses"
+  group "Pulses"
+  meter 4/4
+  | q q q q |
+
+rhythm "Eighth-note pulses"
+  group "Pulses"
+  meter 4/4
+  | e e e e e e e e |
+
+rhythm "Quarter-note triplets"
+  group "Pulses"
+  meter 4/4
+  | trp (q q q) trp (q q q) |
+
+rhythm "Basic 6/8 pulse"
+  group "Pulses"
+  meter 6/8
+  | e e e e e e |
+
+rhythm "6/8 two-beat"
+  group "Pulses"
+  meter 6/8
+  | q. q. |
+
+rhythm "Charleston"
+  group "Swing"
+  meter 4/4
+  | q. e hr |
+
+rhythm "Anticipation"
+  group "Swing"
+  meter 4/4
+  | hr qr er e~ | q hr. |
+
+rhythm "Backbeat"
+  group "Rock"
+  meter 4/4
+  | q q> q q> |
+
+rhythm "Bossa comp"
+  group "Latin"
+  meter 4/4
+  | q. q. q | q. q. q |

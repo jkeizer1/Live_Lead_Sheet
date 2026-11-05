@@ -1,0 +1,17 @@
+[package]
+name = "song_text"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+vocabulary = { path = "../vocabulary" }
+
+[dev-dependencies]
+# rhythm_notation_test plays a rhythm: the schedule is the player's, the
+# MIDI output the ALSA adapter's.
+player = { path = "../player" }
+alsa_output = { path = "../alsa_output" }
+
+[lints]
+workspace = true

@@ -108,7 +108,8 @@ note values and rests.
 A dot after the letter lengthens the note by half (`q.` is a dotted
 quarter). A second dot adds half of what the first dot added, and a third
 half of the second (`q..` is 1¾ quarters, `q...` 1⅞ quarters), as in
-standard notation. An `r` after the dots makes a rest (`qr`, `hr.`).
+standard notation. An `r` makes a rest (`qr`); the `r` and the dots follow
+the letter in either order, so `hr.` and `h.r` are the same dotted half rest.
 
 ```
 rhythm "Quarter pulses"

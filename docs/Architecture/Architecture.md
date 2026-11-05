@@ -3,7 +3,7 @@
 Revision 19 — 5 Nov 2026 (D-11: the song and the studio configuration are separate; catalogs; song_text crate)
 
 Builds on the Concept Brief (Revision 12), the Experience Functional
-Specification (Revision 12) and Song Notation (Revision 6). Sets the
+Specification (Revision 12) and Song Notation (Revision 7). Sets the
 principles, the main parts, how they talk, and the technology for V1.
 
 **Focus.** V1 is the Live Lead Sheet itself: the leader, on one native
@@ -629,7 +629,7 @@ the playhead and wheel driven by the queue's real time instead of the
 computer's clock; frame-time statistics printed on exit; then the
 `delivery_spread` measurement repeated while the window draws.
 
-**4. Song notation and the trial player.** Song Notation, Revision 6, is
+**4. Song notation and the trial player.** Song Notation, Revision 7, is
 the specification: song, studio configuration and libraries. Build order:
 `rhythm_notation_test`; `song_play_test` (the player's schedule extended to
 voice tracks, playing `Demo.song` through `Demo.studio`); `apply_test`;

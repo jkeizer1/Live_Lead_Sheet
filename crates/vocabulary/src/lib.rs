@@ -6,6 +6,7 @@ pub mod duration;
 pub mod instant;
 pub mod midi_values;
 pub mod phrase_cue;
+pub mod rhythm_pattern;
 pub mod score_length;
 pub mod score_position;
 pub mod tempo;

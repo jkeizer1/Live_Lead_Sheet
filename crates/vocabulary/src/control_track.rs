@@ -5,11 +5,12 @@ use std::fmt;
 
 use crate::midi_values::{MidiChannel, NoteNumber, Velocity};
 use crate::phrase_cue::{OutputPortName, PhraseCue};
+use crate::rhythm_pattern::RhythmPattern;
 use crate::score_length::ScoreLength;
 
-/// One note per count (EFS-2.6), count 1 of each bar at the accent
-/// velocity. V1 pulses every count; a beat pulse on another rhythm pattern
-/// comes with rhythm patterns.
+/// One note per count (EFS-2.6), the first beat of each bar at the accent
+/// velocity. Without a rhythm it pulses every count; with one, it pulses on
+/// each note of the rhythm (D-10).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BeatPulse {
     port: OutputPortName,
@@ -20,6 +21,8 @@ pub struct BeatPulse {
     /// How long each pulse note is held: the gate length an FH-2 output
     /// gives it.
     length: ScoreLength,
+    /// The rhythm to pulse; `None`: every count.
+    rhythm: Option<RhythmPattern>,
 }
 
 impl BeatPulse {
@@ -44,7 +47,22 @@ impl BeatPulse {
             accent_velocity,
             normal_velocity,
             length,
+            rhythm: None,
         })
+    }
+
+    /// The same pulse, on the notes of `rhythm` instead of every count.
+    #[must_use]
+    pub fn with_rhythm(self, rhythm: RhythmPattern) -> BeatPulse {
+        BeatPulse {
+            rhythm: Some(rhythm),
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn rhythm(&self) -> Option<&RhythmPattern> {
+        self.rhythm.as_ref()
     }
 
     #[must_use]
