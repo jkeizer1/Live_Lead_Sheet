@@ -1,8 +1,9 @@
 # Live Lead Sheet — Experience Functional Specification
 
-Revision 10 — 4 Nov 2026
+Revision 12 — 5 Nov 2026 (song and studio configuration are separate files; track types; marks; cues in rhythm notation; errors shown, not fatal)
 
-Builds on the Concept Brief, Revision 10, and Architecture D-10. Covers
+Builds on the Concept Brief, Revision 12, Architecture D-10 and D-11, and
+Song Notation, Revision 6. Covers
 **V1: the leader** — a chordal song with its own slash rhythm and a bass
 accompaniment, with a control track for the beat pulse and phrase cues,
 on one screen. Requirements are in the musician's terms; nothing here chooses a
@@ -33,13 +34,13 @@ it differs from the written tempo.
 **EFS-1.5 Voice tracks.** Each voice track has its own contained area,
 in the order set in the song. Each area has, top to bottom:
 
-- **chord symbols**, placed at the exact position of each change, even
-  mid-beat, spelled by the key;
+- **chord symbols**, shown at the rhythm element where each chord starts,
+  even an element in mid-beat, spelled by the key;
 - a **rhythm line** — a one-line staff with slash noteheads in regular
   note values: stems, flags, beams grouped by the meter's beat grouping,
   dots, rests, triplet brackets, and ties where a value crosses a beat or
-  barline. A pulse cut short by a chord change is drawn shortened,
-  followed by a rest;
+  barline. The line always shows the rhythm as written; a chord change
+  never alters it (EFS-3.4);
 - a **pitch staff** with clef, key signature and time signature (C and ¢
   for common and cut time), showing each voicing as stacked noteheads,
   only at change points.
@@ -74,9 +75,15 @@ lower case for minor (ii, vi), with ° ø + as above (vii°).
 changes while playing: treble for a harmony track, bass for a bass
 track, or a grand staff (treble and bass braced) for a harmony track
 whose voicings run well
-below middle C. Notes outside the staff use ledger lines or an 8va/8vb
-line. The rhythm line uses the neutral (percussion) clef. Other clefs and
-mixed clefs within a track are not needed.
+below middle C. The composer composes in the clef, so most notes sit on
+the staff; notes outside it use ledger lines or an 8va/8vb line. The
+rhythm line uses the neutral (percussion) clef. The alto and tenor clefs
+are for parts a musician plays (later, EFS-3.8); mixed clefs within a
+track are not needed.
+
+**EFS-1.5c Marks.** Accent, strong accent, staccato, legato and fermata
+marks (EFS-3.5, EFS-3.6) are drawn as in standard notation on the
+element that carries them, in the rhythm line and on the pitch staff.
 
 **EFS-1.6 The strip.** Bars run left to right in one long strip, in the
 order they will actually be played — repeats are written out, not shown
@@ -139,7 +146,11 @@ Stop sends MIDI Stop and silences every track
 (All Notes Off) on every output port in use.
 
 **EFS-2.2 Tempo.** Each section has a written tempo, or carries on the
-previous section's tempo.
+previous section's tempo. The first section's tempo is the song's initial
+tempo; a tempo or time-signature change happens at a section boundary.
+Later: tempo marks inside a section, a step or a ramp between two
+points in the song (an accelerando, or a ritardando at the end), written in
+rhythm notation (Song Notation, section 5).
 
 **EFS-2.3 Tempo slider.** For practice, a slider scales the written
 tempo, as a percentage, so tempo changes between sections keep their
@@ -157,14 +168,16 @@ reset by phrase cues (EFS-4).
 
 **EFS-2.6 Beat pulse.** A control track that sends one note per count,
 for clock dividers and devices that follow notes better than MIDI clock.
-Port, channel and note number are set by the musician. Count 1 of each
-bar is sent at an accent velocity, every other count at a normal
-velocity — 127 and 64 unless the track sets other values — so a
+Port, channel, note number and velocities are set by the musician in the
+studio configuration (EFS-6.6). The first beat of each bar is sent at
+an accent velocity, every other beat at a normal velocity — 127 and 64
+in the usual setup — in any meter, so 4/4 and 6/8 are treated alike. A
 MIDI-to-CV converter can trigger a percussive voice and set its VCA
 level from the same stream, and the bar's first beat is always
 distinguishable. The beat pulse does not depend on MIDI transport, so a
 gate made from it (e.g. on an FH-2 output) keeps clock dividers running
-while sequencers are stopped.
+while sequencers are stopped. It is not a drum part; a second use is a
+metronome voiced in the modular.
 
 **EFS-2.7 Count-in section.** A song may begin with a count-in section of
 one or two bars (two help at fast tempos): the voice tracks rest, the
@@ -209,32 +222,83 @@ in charge of transport at a time. While following:
 ## 3. Tracks and MIDI output
 
 **EFS-3.1 Output ports.** The program offers output ports named by the
-musician for their purpose (e.g. `Clock`, `Harmony`, `SQ-1`). Each voice
-track sends on one output port and channel; each phrase cue names its
-own (EFS-4.3). Exactly one port is the clock output (EFS-2.5).
+musician for their purpose (e.g. `Clock`, `Harmony`, `SQ-1`), declared in
+the studio configuration (EFS-6.6), never in the song. Each voice track
+sends on one output port and channel, set there; each phrase cue goes to
+a named destination, set there too (EFS-4.3). Exactly one port is the
+clock output (EFS-2.5).
 
-**EFS-3.2 Harmony track.** On each pulse of its rhythm, sends the current
-chord's voicing. When marked *no root*, the root is left out.
+**EFS-3.2 Poly voice track (harmony).** A track that can play several
+notes at once. Each sounding element of its rhythm carries a chord, written
+in the song by name, or notes. A chord sends its voicing: the plain voicing
+of EFS-5.5 unless the musician changed it. A voicing without the root
+(where the bass plays the root) is such a change, written note by note;
+the editor can write it for the whole line. There is no track-wide *no
+root* setting.
 
-**EFS-3.3 Bass track.** On each pulse of its rhythm, sends the current
-chord's root, in the octave set for the track.
+**EFS-3.3 Mono voice track (bass).** A track that plays one note at a
+time. Each sounding element of its rhythm carries the note it plays,
+written in the song. A bass line is free: it may play the chord's root,
+another chord note, or any other note. The song does not accept
+overlapping notes on a mono track, in a hand-written file as well as in
+the editor. When the musician starts a bass line from a progression
+(EFS-5.4), the roots of the chords are offered as its notes, in the
+track's home octave, and any note can be changed.
 
-**EFS-3.4 Chord change between pulses.** The old chord ends exactly at
-the change; the next pulse sounds the new chord. Two chords never sound
-at once in one track.
+**EFS-3.4 Voice tracks play what is written.** Nothing is looked up when
+the song plays. A sounding element sends the notes written on it: note on
+at the element, note off when its written duration ends (EFS-3.5), rests
+included. A chord in the harmony track is simply what its elements carry;
+a chord change does not shorten or end a sounding element. Another track's
+notes need not match the harmony track's chords. A track is silent
+wherever its rhythm has a rest, and the elements of one track do not
+overlap, so two sets of notes never sound at once in one track.
 
-**EFS-3.5 Note length.** Each voice track has a gate length, as a
-percentage of each pulse's written value; 50 % unless set otherwise.
+**EFS-3.5 Note length.** A note sounds for its written duration: the note
+off falls where the written duration ends, less at most a short fixed gap
+if a driven device needs one to retrigger (a gate into an envelope). The
+gap belongs to the device, so it is set per track in the studio
+configuration (EFS-6.6); whether it is needed at all is settled by testing
+(Song Notation, Q11). There is no gate-length percentage. Two marks
+change the length of a single note, as in standard notation: *staccato*
+sounds it for half its written duration, and *legato* joins it to the
+next note, with no gap between them. (A cue's note carries its own
+length, EFS-4.3.)
 
-**EFS-3.6 Velocity.** One velocity per voice track in V1.
+**EFS-3.6 Velocity and accents.** The velocity of a note is a device
+setting, not a song setting. In the studio configuration each voice track
+has a normal velocity and, for each accent mark the song uses, an accent
+velocity (*accent* and *strong accent*). In the song, an accent mark on a
+sounding element selects the level. Rhythm patterns carry accent marks
+(a backbeat on counts 2 and 4), and apply copies them. Pressure, pitch
+bend and other controllers are later (EFS-3.8).
 
 **EFS-3.7 Lead track.** Exactly one voice track is marked lead; its
-chords drive the key wheel.
+chords drive the key wheel and the chord symbols.
+
+**EFS-3.8 Track types.** Each track has a type. In V1: poly voice and mono
+voice (EFS-3.2, 3.3), beat pulse (EFS-2.6), clock and transport, and cue
+control (EFS-4). The clock and transport track has a port and no channel,
+because Timing Clock, Start, Continue and Stop carry none; each song has
+exactly one. Later: a tempo control track (EFS-2.2), a musician voice
+(a part composed for a person to read, in the clef of that instrument,
+sending no MIDI; a fermata is drawn, never obeyed by the clock), and an
+automation control track (continuous controller curves, such as a filter
+sweep or a crescendo).
+
+**EFS-3.9 Pitch.** A song's pitches are staff pitches in the track's clef
+(C4 is middle C), not MIDI note numbers. A device that places its notes
+an octave or more away from the staff is corrected in the studio
+configuration with an octave offset (EFS-6.6). For a transposing instrument
+(later) the song holds the sounding pitch, and the staff shows the written
+pitch.
 
 ## 4. Control tracks and phrase cues
 
-**EFS-4.1** A phrase cue is a named marker at a bar and count in a
-section, on a control track or on a voice track.
+**EFS-4.1** A phrase cue is a named marker in a section, on a cue
+control track or aimed at a voice track. It is placed by writing a rhythm
+line, like any other track: the cue sits on the element where it fires, so
+the musician counts note values and not bar numbers across repeats.
 
 **EFS-4.2** A cue is shown above the strip at its position and listed in
 the cues panel (EFS-1.11).
@@ -242,9 +306,11 @@ the cues panel (EFS-1.11).
 **EFS-4.3** In V1 a cue sends one plain MIDI message: a note (number,
 velocity and length — a short note is a trigger, a held one a gate), a
 CC, a program change, or — on a control track only — Start, Stop or
-Continue. A cue on a control track names its output port and channel
-(a port only, for Start, Stop and Continue, which have no channel). A
-cue on a voice track goes to that track's own port and channel.
+Continue. A cue names a destination, which the studio configuration maps
+to an output port and channel (a port only, for Start, Stop and Continue,
+which have no channel). A cue aimed at a voice track goes to that track's
+own port and channel. For a note cue, the written duration of its element
+is the note's length.
 
 **EFS-4.4 Passes.** A cue in a repeated section can be limited to chosen
 passes, written as in standard notation ("1st time only").
@@ -284,22 +350,33 @@ named by their actual notes, and shown on the wheel as the degree's
 alternative chord. A section never has to choose a minor form.
 
 **EFS-5.3 Chords.** Start a section from a library progression, then
-change any chord, or where it falls within the bar.
+change any chord, or the rhythm element it starts on.
 
 **EFS-5.4 Rhythm.** Assign library rhythm patterns to bar ranges, track
-by track. A pattern repeats or is cut to fill its range.
+by track. A pattern repeats or is cut to fill its range. Applying a
+rhythm puts the range's chords on the rhythm's elements (with the
+rhythm's accent marks), and a bass line can be started from the chords'
+roots; the musician can move or change any of them. The song keeps the
+result, not a link to the library entry.
 
 **EFS-5.5 Voicings.** Each chord starts with a plain voicing — close
-position, root position, in the track's octave — which the musician can
-change note by note. Nothing else is chosen automatically.
+position, root position, with the root in the track's home octave — which
+the musician can change note by note, or write without the root.
+Nothing else is chosen automatically.
 
-**EFS-5.6 Tracks.** Add, name and remove voice tracks and control
-tracks. For a voice track: its kind (harmony or bass), output port and
-channel, octave, lead marker, and *no root*. For a beat pulse track: its
-output port, channel, note, and velocities.
+**EFS-5.6 Tracks.** Add, name and remove tracks. For a voice track: its
+type (poly or mono), clef, lead marker and home octave. Output port,
+channel and the other device settings are not part of the song: they are
+set in the studio configuration (EFS-6.6), in the same authoring view.
 
-**EFS-5.7 Phrase cues.** Place, name, move and remove cues, and set each
-cue's message, target and passes.
+**EFS-5.7 Phrase cues.** Define cues (message and destination) and place,
+move and remove them on the rhythm line of a cue control track; set each
+cue's passes.
+
+**EFS-5.11 Text pane.** The authoring view includes a plain text pane for
+the song file, the studio configuration and the libraries, so a file with
+errors can be fixed, saved and reloaded without leaving the program
+(EFS-6.3).
 
 **EFS-5.8 See it as it plays.** Edits show on the play strip straight
 away.
@@ -314,16 +391,24 @@ the strip still shows bars in the order they will actually be played.
 
 ## 6. Song file and library files
 
-**EFS-6.1** A song is one plain-text file in our own notation: simple,
-clear to the musician reading or editing it by hand, unambiguous to the
-program.
+**EFS-6.1** A song is one plain-text file (`.song`) in our own notation:
+simple, clear to the musician reading or editing it by hand, unambiguous
+to the program. It holds everything the song plays and refers to no
+library entry, so a song stands alone when the libraries change. It names
+no port, channel or device: it is the composition, and it can be played
+through any studio configuration that covers its tracks.
 
 **EFS-6.2** What the authoring view saves, it loads back exactly. A
 hand-edited file loads as written.
 
-**EFS-6.3** A file with a mistake does not load partly or quietly. The
-message names the file, the line, what is wrong, and what to type
-instead — *e.g.* `blues.song line 14: "IV9b" is not a chord. Try IV9 or IV7b9.`
+**EFS-6.3** A file with a mistake does not load partly or quietly, and
+nothing from it is applied or played. The program still starts and shows
+the errors in the warnings region and the text pane (EFS-5.11); it checks
+the file again each time it is saved. Each message names the file, the
+line, what is wrong, and what to type instead — *e.g.* `blues.song line
+14: "IV9b" is not a chord. Try IV9 or IV7b9.` If a song that is playing is
+edited into error, the last good version keeps playing while the errors
+are shown.
 
 **EFS-6.4 MusicXML.** A song can be saved as a MusicXML file, so it
 opens in notation software: chord symbols, key and time signatures,
@@ -331,17 +416,32 @@ sections, and each voice track's notes as actually played (voicings on their
 rhythms).
 
 **EFS-6.5** Library progressions and rhythm patterns are plain-text files
-in the same notation.
+in the same notation: one file for each library (`.library`), its entries
+in groups. Rhythms are grouped by meter, then by genre; progressions by
+idiom, then by kind.
+
+**EFS-6.6 Studio configuration.** The studio configuration is one
+plain-text file (`.studio`) in the same notation. It declares the output
+ports and, for each track of a song by its name: port, channel (none for
+the clock and transport track), octave offset, velocity levels
+(EFS-3.6), and device timing — a retrigger gap and a settle delay for a
+device that needs time (EFS-3.5) — and it maps each cue destination to a
+port and channel. Quantities are written with their units (`2 ms`, `-1
+octaves`). One configuration serves many songs; a track of the song with
+no entry stops the song loading, and the message names the track. Errors
+are handled as in EFS-6.3.
 
 ## 7. Starter library
 
 **EFS-7.1 Progressions.** 12-bar blues (basic, quick-change, jazz blues
 with ii–V turnarounds), minor blues, 8-bar blues, ii–V–I in major and
-minor, I–vi–ii–V, I–V–vi–IV.
+minor, I–vi–ii–V, I–V–vi–IV. Grouped as Blues, Jazz, and Pop and rock;
+the musician adds groups, for example from classical composers.
 
 **EFS-7.2 Rhythm patterns.** Whole, half and quarter pulses, eighths,
-quarter-note triplets, Charleston, push (an eighth before the beat), a
-basic 6/8 pulse, a bossa-style comp.
+quarter-note triplets, Charleston, anticipation (an eighth before the beat), a
+basic 6/8 pulse, a bossa-style comp, a backbeat with accents on counts 2
+and 4. Grouped by meter, then Pulses, Swing, Rock and Latin.
 
 ## 8. Messages and failures
 
@@ -386,7 +486,10 @@ knobs and sliders is settled before it is built.
 
 ## 10. Not in V1
 
-Listener and recorder roles; colour-phrase tracks; device profiles and
+Listener and recorder roles; colour-phrase tracks; musician voices and
+automation tracks (EFS-3.8); tempo marks and ramps inside a section
+(EFS-2.2); lines of different lengths in a section (polymeter); soft
+notes, pressure and pitch bend; device profiles and
 external phrases (EFS-4.6); pulse bursts (EFS-4.7); alternative tunings;
 modes and modal vamps; navigation marks (D.C., D.S., Coda…); SATB voices
 (one line per voice, one channel per voice); other programs following

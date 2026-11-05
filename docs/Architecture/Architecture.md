@@ -1,10 +1,10 @@
 # Live Lead Sheet — Architecture
 
-Revision 17 — 4 Nov 2026
+Revision 19 — 5 Nov 2026 (D-11: the song and the studio configuration are separate; catalogs; song_text crate)
 
-Builds on the Concept Brief (Revision 9) and the Experience Functional
-Specification (Revision 10). Sets the principles, the main parts, how
-they talk, and the technology for V1.
+Builds on the Concept Brief (Revision 12), the Experience Functional
+Specification (Revision 12) and Song Notation (Revision 6). Sets the
+principles, the main parts, how they talk, and the technology for V1.
 
 **Focus.** V1 is the Live Lead Sheet itself: the leader, on one native
 screen, on Linux. Everything below about chains, other platforms and
@@ -126,11 +126,15 @@ the left, the song player's window on the right.
 ## Catalogs
 
 - **Song catalog** — the compositions.
-- **Chord progression catalog** — progressions in Roman numerals.
-- **Rhythm pattern catalog** — one- to eight-bar patterns.
+- **Chord progression catalog** — progressions in Roman numerals, in
+  groups.
+- **Rhythm pattern catalog** — one- to eight-bar patterns, in groups.
 
 All three hold the vocabulary, stored as text files through a file
-adapter (A-3).
+adapter (A-3). Beside them stands the **studio configuration**: not
+music, so not in the vocabulary, but the setup that realises a song in one
+studio — ports, channels, octave offsets, velocity levels and device
+timing (D-11). It is a text file read through the same adapter.
 
 ## Information flows
 
@@ -222,6 +226,7 @@ the same dark, soft-contrast style.
 | Crate | Holds |
 |---|---|
 | vocabulary | the musical language (A-1, A-2), including musical time (D-7) |
+| song_text | the parser and writer for song, studio configuration and library files (A-3, D-11); no external crate |
 | player | reading the clock, publishing (A-5 – A-7) |
 | render | layout (vocabulary → instance records) and GPU drawing |
 | alsa output | the MIDI output (A-3), and the clock it supplies (A-7, D-8) |
@@ -257,7 +262,7 @@ survives without the conversations behind it.
 MIDI carries notes but no chord names, key, sections, or knowledge of
 what is coming. MusicXML has an excellent chord model but is a document
 format: no notion of "now", no streaming, and no place for our concepts
-(rhythm patterns assigned to bars, lead track, *no root*, phrase cues, the tempo slider). MIDI 2.0's Flex Data messages (chord name,
+(rhythm patterns assigned to bars, lead track, accent and articulation marks, phrase cues, the tempo slider). MIDI 2.0's Flex Data messages (chord name,
 key, time signature, tempo) are real-time but cover only "now", with no
 structure or look-ahead, and few receivers support them — kept as a
 possible later output. Hence: our own vocabulary, MusicXML's harmony
@@ -426,11 +431,13 @@ from what is published (A-5).
 - **Phrase cue.** A marker at a score position that sends plain MIDI: a
   note (on and off; a short note is a trigger, a held one a gate), a CC,
   a program change, or — on a control track only — transport (Start,
-  Stop, Continue). A cue on a control track names its output port and
-  channel. A cue on a voice track goes to that track's own port and
+  Stop, Continue). A cue on a control track names a destination, which
+  the studio configuration maps to an output port and channel (D-11). A
+  cue aimed at a voice track goes to that track's own port and
   channel, carries channel messages only, and is drawn above the staff
-  as a marking. Transport has no channel: a transport cue names a port
-  only.
+  as a marking. Transport has no channel: a transport cue's destination
+  is a port only. Cues are placed by writing a rhythm line (Song
+  Notation), not by bar number.
 - **Beat pulse.** A control track playing a rhythm pattern on one fixed
   note, with an accent on count 1 sent at an accent velocity. It replaces
   the separate beat-note stream (EFS-2.6).
@@ -444,7 +451,8 @@ from what is published (A-5).
   segno on the music's first bar, as in standard notation. A cue can be
   limited to a pass ("1st time only"), as a marking can.
 - **Output ports.** The program has several ALSA output ports, named for
-  their purpose (e.g. `Clock`, `Harmony`, `SQ-1`). Connecting them to
+  their purpose (e.g. `Clock`, `Harmony`, `SQ-1`) and declared in the
+  studio configuration (D-11). Connecting them to
   devices is the studio's job — the MIDI router, `aconnect`, or anything
   else; the program does not depend on the router. **Exactly one port
   sends Timing Clock**, so the program is one clock source; each device
@@ -495,6 +503,50 @@ states, control and open decisions they needed; Song Position Pointer
 and DAW-style chasing of transport for external devices; one output
 port for everything (every Start would reach the whole studio); Timing
 Clock on several ports (a device reached by two adds them, EFS-8.4).
+
+**D-11 The song is a composition; the studio configuration realises it.**
+Decided by Jim, 5 Nov 2026.
+
+*Why.* The same song should play through different studios, and a
+device's quirks (which octave it calls C0, how long its gate must drop to
+retrigger, how long a quantizer needs to settle, how hard it responds to
+an accent) belong to the device, not to the music. Ports and channels in
+the song tied it to one studio.
+
+- **Two kinds of file.** The *song* names tracks, with a type and a clef,
+  and holds sections, lines, cues and (later) tempo marks; no port,
+  channel, velocity number or device. The *studio configuration* declares
+  the ports, and for each track of a song, by name: port, channel,
+  octave offset, velocity levels and device timing; and maps each cue
+  destination to a port and channel. One configuration serves many songs.
+- **The configuration is not vocabulary.** A-1 keeps devices out of the
+  vocabulary, so the configuration's type lives outside it; the parser
+  for all the files is one adapter crate, `song_text` (A-3).
+- **Track types** say what a track can do and so what the receiver must
+  be able to do: poly voice, mono voice, beat pulse, clock and transport,
+  cue control in V1; tempo control, musician voice and automation control
+  later (Song Notation, section 5). Clock and transport has a port and no
+  channel.
+- **Pitch** is stored as the staff pitch in the track's clef; the
+  octave offset in the configuration corrects the device (musician voices,
+  later, store sounding pitch and draw transposed).
+- **Marks** (accent, strong accent, staccato, legato, fermata) are written
+  on elements; how hard an accent plays is the configuration's. A fermata
+  never changes the clock in V1.
+- **Cues and tempo marks are rhythm lines**, so authors count note values,
+  not bar numbers across repeats.
+- **A file with errors** does not load, not even partly, but the program
+  starts and shows the errors; the last good song keeps playing.
+- **Deferred:** polymeter (lines of different lengths in a section);
+  tempo ramps, which need a design in Musical Time and Clock first (its
+  anchors hold a constant tempo each).
+
+*Set aside:* ports and channels in the song (the earlier draft); a
+velocity per track in the song; a track-wide *no root* setting (a
+voicing without the root is written note by note, and the editor can do
+it for a whole line); bar numbers for cues (hard to calculate through
+repeats); an independent play position per track (one bar position is
+what the counter, cues, key wheel and strip all rely on).
 
 ## Development environment
 
@@ -577,7 +629,13 @@ the playhead and wheel driven by the queue's real time instead of the
 computer's clock; frame-time statistics printed on exit; then the
 `delivery_spread` measurement repeated while the window draws.
 
-**4. Song notation.** First draft, worked through on a 12-bar blues.
+**4. Song notation and the trial player.** Song Notation, Revision 6, is
+the specification: song, studio configuration and libraries. Build order:
+`rhythm_notation_test`; `song_play_test` (the player's schedule extended to
+voice tracks, playing `Demo.song` through `Demo.studio`); `apply_test`;
+then the editor with its text pane. The `retrigger_gap_test` spike can run
+at any time. The aim is a working player, so the notation can be tried by
+ear.
 
 **Deferred.**
 

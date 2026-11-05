@@ -1,6 +1,6 @@
 # Live Lead Sheet — Concept Brief
 
-Revision 10 — 4 Nov 2026
+Revision 12 — 5 Nov 2026 (the song and the studio configuration are separate; marks; no track-wide no-root)
 
 ## Purpose
 
@@ -14,14 +14,16 @@ its pulse clearly, from arm's length, mid-performance.
 
 ## Building blocks
 
-**Chord progression** (library). Chords and where they change, written
-in Roman numerals so one progression serves any key. Changes may fall
-mid-bar. *Example:* 12-bar blues — I7 ×4, IV7 ×2, I7 ×2, V7, IV7 (or
+**Chord progression** (library). Chords bar by bar, written in Roman
+numerals so one progression serves any key, with an intended place for a
+change inside a bar. *Example:* 12-bar blues — I7 ×4, IV7 ×2, I7 ×2, V7, IV7 (or
 V7), I7 / V7 turnaround.
 
 **Rhythm pattern** (library). One to eight bars of pulses, written as
 note values (quarter, eighth, triplet group, dotted half…). Assigned to
 more bars than its length, it repeats; assigned to fewer, it is cut.
+Applied to a progression, it puts each bar's chords on its notes; the
+composer can move any of them.
 
 **Section.** A progression in a key and meter, with rhythm patterns laid
 over its bars, track by track. Key and tempo are set per section, or carry
@@ -39,11 +41,13 @@ and the studio's clock dividers are ready before the music starts.
 **Voice tracks.** What each instrument plays, in standard notation:
 
 - *Harmony track* — the chord notes, to a polyphonic instrument, or to a
-  device that splits them over several mono voices. A harmony track can
-  be marked *no root*: the chord is sent without its root, so the root is
-  not doubled against the bass in the same or another octave.
-- *Bass track* — the roots of the chords, usually on a simple, strong
-  rhythm, to a mono voice.
+  device that splits them over several mono voices. The composer can
+  choose a voicing without the root, so the root is not doubled against
+  the bass in the same or another octave; the editor can write that for a
+  whole line.
+- *Bass track* — usually the roots of the chords, on a simple, strong
+  rhythm, to a mono voice. Any note may be written, and the root may be
+  echoed in another octave.
 - *Colour phrases* — short phrases (*e.g.* four bars) on their own staff,
   sent to another instrument at chosen points.
 
@@ -78,10 +82,27 @@ bar 5". A **device profile** later turns such a named action into the
 right cues for a given device (*e.g.* how to one-shot the Disting NT's
 sample player); in V1 the cues are written as plain messages.
 
-**When a chord changes between pulses.** The old chord ends exactly at
-the change; the rhythm resumes at its next scheduled pulse, with the new
-chord. Tracks that pulse on the change and tracks that don't never sound
-two different chords at once.
+**Voice tracks play what is written.** Each sounding element of a
+track's rhythm carries its notes, written in the song: in the harmony
+track a chord name (voiced plainly unless the composer changed it), in a
+bass track its own pitch, which may be the chord's root or any other note.
+A note starts at its element and ends where its written duration ends, rests
+included. Marks on an element change this as in standard notation: an
+accent plays harder (how much is the receiving device's setting), staccato
+shortens the note, legato joins it to the next, and a fermata is shown for
+a human player and never holds the clock. Nothing is looked up when the
+song plays. Putting a progression under a rhythm, and starting a bass line
+from the chords' roots, are conveniences of the authoring view; the
+composer can change any note.
+
+**A composition and a studio.** The song says *what* is played: tracks
+with a type and a clef, sections, notes and cues, with no port, channel or
+device in it. A separate **studio configuration** says *where*: which MIDI
+port and channel each track goes to, how a device places its octaves, how
+hard it responds to an accent, and the small timing allowances a device
+needs. The same song can be played through different studios. Cues and
+tempo changes are written in the same note-value notation as rhythm, so
+the author never counts bars across repeats.
 
 **Nothing is generated.** Voicings and phrases are chosen by the
 musician when authoring. The leader plays exactly what is written.
@@ -101,8 +122,7 @@ and repeats, with the current position.
 - a **rhythm line** — a one-line staff, drum-style — showing the track's
   rhythm in regular note values with slash noteheads (stems, beams,
   dots, rests, triplet brackets), beamed by the meter's beat grouping.
-  Where a change cuts a pulse, the shortened note and the following rest
-  are drawn as played;
+  It always shows the rhythm as written; chord changes do not alter it;
 - a **pitch staff** with clef, key signature and time signature (C and ¢
   for common and cut time), showing the voicing as stacked noteheads,
   spelled by the key, *only at change points*.
@@ -160,12 +180,16 @@ monitors is a later step.
 Part of the program rather than a separate tool. The musician builds a
 song: picks a progression for each section, sets key (from a list),
 meter, tempo and repeats, lays rhythm patterns over bars for each track,
-chooses voicings, adds phrases and phrase cues, marks the lead track, and
-assigns each track to an output and channel.
+chooses voicings, adds phrases and phrase cues, and marks the lead track.
+Assigning each track to an output and channel is done in the studio
+configuration, not in the song. A plain text pane lets the musician fix a
+file with mistakes, save it and reload it without leaving the program.
 
-**Song file.** The song is saved as plain text in a notation of our own —
-simple, clear to the musician reading or editing it by hand, and
-unambiguous to the program.
+**Song file and studio file.** The song and the studio configuration are
+saved as plain text in a notation of our own — simple, clear to the
+musician reading or editing it by hand, and unambiguous to the program.
+The libraries are text files too, one for rhythms and one for
+progressions, each in groups.
 
 ## A building block
 
@@ -243,7 +267,7 @@ leave room for that growth rather than build in V1's limits.
 
 The musician improvises on a keyboard (NiftyKEYZ, KeyStep Pro). The Live
 Lead Sheet leads a 12-bar blues in A, after a one-bar count-in. The
-harmony track, marked no root, goes to Disting NT poly players. The bass
+harmony track, voiced without the root, goes to Disting NT poly players. The bass
 track sends the roots through the FH-2 to a mono modular voice. A
 control track sends the beat pulse to an FH-2 gate that clocks a clock
 divider, and a cue on the blues' first bar starts a Korg SQ-1, which
@@ -270,5 +294,5 @@ ii–V turnarounds), minor blues, 8-bar blues, ii–V–I in major and minor,
 I–vi–ii–V, I–V–vi–IV. Modal vamps and rhythm changes come later.
 
 **Rhythm patterns:** whole, half and quarter pulses, eighths,
-quarter-note triplets, Charleston, push (an eighth before the beat), a
+quarter-note triplets, Charleston, anticipation (an eighth before the beat), a
 basic 6/8 pulse, a bossa-style comp.

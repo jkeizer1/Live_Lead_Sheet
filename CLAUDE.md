@@ -59,8 +59,17 @@ code only in adapters), but do not build them.
   windowed program or MIDI output must be tried, tell Jim the exact
   command (`cargo run ...`) and what to look for.
 - Work in small steps; say what you are about to change before changing it.
-- **Answers:** concise, each of Jim's questions answered directly and in
-  order. Check the documentation before disputing a fact Jim states.
+- **Answers:** answer each of Jim's questions directly and in order, in
+  connected prose that gives the reasoning and enough context to be
+  understood without rereading the documents. Be as long as that takes
+  and no longer. Check the documentation before disputing a fact Jim
+  states.
+- **Document codes in chat.** Never rely on a code (EFS-n.m, A-n, D-n,
+  "step 4") alone. Say in a few words what it requires or decides, and
+  add the code only as a pointer. Jim has not memorized the documents.
+- **Music in musical terms.** In chat, explain rhythm and harmony in
+  counts, bars and note values ("a half note on beat 2"), not ticks or
+  clock times. Ticks belong in the clock document and the code.
 - **Precise, in full context.** Explain in connected prose that carries
   the reasoning, not a series of terse points. Name the thing each time
   ("the FH-2's tempo display", "the FH-2's clock output 5", "the MIDI
