@@ -1,6 +1,6 @@
 # Live Lead Sheet — Experience Functional Specification
 
-Revision 13 — 5 Nov 2026 (the beat pulse is a mono voice, not a track type)
+Revision 16 — 7 Nov 2026 (EFS-1.3: the counter shows beats, as the rudiments define them; "count" replaced by beat and pulse)
 
 Builds on the Concept Brief, Revision 13, Architecture D-10 and D-11, and
 Song Notation, Revision 9. Covers
@@ -19,14 +19,17 @@ tracks.
 order, by name, with its repeat count. The current section and the
 position within it are marked.
 
-**EFS-1.3 Counter.** Large and plain: `Repeat: 3 of 4   Bar: 2   Count: 1`.
-Count follows the time signature, one count per unit of its lower number:
-4/4 counts 1–4, 3/4 counts 1–3, 6/8 counts 1–6, 5/8 counts 1–5, and
-2/2 (cut time) counts 1–2. In a count-in section the counter says so:
-`Count-in   Bar: 1   Count: 3`.
+**EFS-1.3 Counter.** Large and plain: `Repeat: 3 of 4   Bar: 2   Beat: 1`.
+Beat follows the time signature as the rudiments define it, the same beat
+the tempo counts. In simple time it is one unit of the lower number:
+4/4 counts 1–4, 3/4 counts 1–3, 3/8 counts 1–3, 5/8 counts 1–5, and
+2/2 (cut time) counts 1–2. In compound time (6, 9 or 12 on top) it is a
+dotted note, three units of the lower number: 6/8 counts 1–2, 9/8 counts
+1–3, 12/8 counts 1–4. In a count-in section the counter says so:
+`Count-in   Bar: 1   Beat: 3`. *Decided (Jim, 7 Nov 2026).*
 
 **EFS-1.3a Playhead.** The playhead glides smoothly through the bar and
-pulses brightly on each count.
+flashes brightly on each beat, as the counter counts it (7 Nov 2026).
 
 **EFS-1.4 Tempo.** The current tempo in bpm, and the slider setting when
 it differs from the written tempo.
@@ -48,7 +51,7 @@ in the order set in the song. Each area has, top to bottom:
 Chord symbols and voicings have one size throughout the song, the
 smallest that stays legible; bars never widen to make room, and nothing
 shrinks to fit. Chord symbols stand on one row, each starting on its
-pulse's stem. Where a bar's symbols would touch, that bar alternates them
+note's stem. Where a bar's symbols would touch, that bar alternates them
 between a lower and an upper row, continuing into the next bar if it is
 crowded too.
 
@@ -117,7 +120,7 @@ The cues panel lists it (EFS-1.11).
   switchable off.
 
 **EFS-1.11 Cues panel.** A side panel listing what is coming: each
-phrase cue, key change and tempo change in view, with its bar and count.
+phrase cue, key change and tempo change in view, with its bar and beat.
 Each entry is marked when it fires and leaves the list once passed.
 
 **EFS-1.12 Scaling.** Bars across and tracks down are set by screen size
@@ -258,11 +261,11 @@ wherever its rhythm has a rest, and the elements of one track do not
 overlap, so two sets of notes never sound at once in one track.
 
 **EFS-3.5 Note length.** A note sounds for its written duration: the note
-off falls where the written duration ends, less at most a short fixed gap
-if a driven device needs one to retrigger (a gate into an envelope). The
-gap belongs to the device, so it is set per track in the studio
-configuration (EFS-6.6); whether it is needed at all is settled by testing
-(Song Notation, Q11). There is no gate-length percentage. Two marks
+off falls where the written duration ends, less a short fixed gap where the
+next note on the track starts at that instant, so a driven device sees a
+note off before the next note on. The gap is 5 ms at the MIDI output, and
+the studio configuration (EFS-6.6) can raise it per track (Song Notation,
+Q11). There is no gate-length percentage. Two marks
 change the length of a single note, as in standard notation: *staccato*
 sounds it for half its written duration, and *legato* joins it to the
 next note, with no gap between them. (A cue's note carries its own
@@ -273,7 +276,7 @@ setting, not a song setting. In the studio configuration each voice track
 has a normal velocity and, for each accent mark the song uses, an accent
 velocity (*accent* and *strong accent*). In the song, an accent mark on a
 sounding element selects the level. Rhythm patterns carry accent marks
-(a backbeat on counts 2 and 4), and apply copies them. Pressure, pitch
+(a backbeat on beats 2 and 4), and apply copies them. Pressure, pitch
 bend and other controllers are later (EFS-3.8).
 
 **EFS-3.7 Lead track.** Exactly one voice track is marked lead; its
@@ -331,8 +334,8 @@ length is set as steps × step value (e.g. 8 steps of eighths), so a
 named action ("SQ-1: pattern 3, 2 runs from bar 5") can be turned into
 cues by a device profile. In V1, cues are placed by hand.
 
-**EFS-4.7 Pulse bursts — later.** A cue can start a burst of fast pulses
-— notes on a chosen port and channel, at a set rate (e.g. 64ths) for a
+**EFS-4.7 Pulse bursts — later.** A cue can start a burst of fast notes
+on a chosen port and channel, at a set rate (e.g. 64ths) for a
 set length — to clock a sequencer far above the song's tempo, as an
 oscillator, or to fire fast voices. Timing Clock stays at the song's
 tempo (EFS-2.5).
@@ -443,7 +446,7 @@ the musician adds groups, for example from classical composers.
 
 **EFS-7.2 Rhythm patterns.** Whole, half and quarter pulses, eighths,
 quarter-note triplets, Charleston, anticipation (an eighth before the beat), a
-basic 6/8 pulse, a bossa-style comp, a backbeat with accents on counts 2
+basic 6/8 pulse, a bossa-style comp, a backbeat with accents on beats 2
 and 4. Grouped by meter, then Pulses, Swing, Rock and Latin.
 
 ## 8. Messages and failures

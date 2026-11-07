@@ -1,6 +1,6 @@
 # control_track_test — explainer
 
-Revision 4 — 4 Nov 2026
+Revision 5 — 7 Nov 2026 (a MIDI clock message is a clock pulse)
 
 ## What it proves
 
@@ -71,7 +71,7 @@ From the router's `log clock 30s` (15:17):
 |---|---|---|
 | clock arriving 15:17:31.123, then Start 15:17:33.123 | 1 bar: 4 q × 0.5 s/q = 2 s | 2.000 s |
 | Stop "at beat 32.0", 15:17:49.123 | 8 bars: 32 q × 0.5 s/q = 16 s | 16.000 s, 32.0 beats |
-| clock 120.0 BPM, 48 ticks a second, 20.0–21.0 ms between ticks | 24 pulses/q × 2 q/s = 48 pulses/s, 20.833 ms each | on the ALSA queue's 1 ms grid (D-8) |
+| clock 120.0 BPM, 48 ticks a second, 20.0–21.0 ms between ticks | 24 clock pulses/q × 2 q/s = 48 clock pulses/s, 20.833 ms each | on the ALSA queue's 1 ms grid (D-8) |
 
 - No Start during the count-in: the 2 s before it carried clock only.
 - The SQ-1's own clock stopped arriving 0.5 s after ours began
@@ -106,8 +106,8 @@ Above about 22000 q/min the run sometimes stopped:
 fault: the kernel's output pool for our client was full.
 
 - Events per second at 22000 q/min: Timing Clock
-  22000 q/min × 24 pulses/q ÷ 60 s/min = 8800 pulses/s, beat pulse
-  366.7 counts/s × 2 events = 733 events/s; about 9533 events/s in all
+  22000 q/min × 24 clock pulses/q ÷ 60 s/min = 8800 clock pulses/s, beat
+  pulse 366.7 beats/s × 2 events = 733 events/s; about 9533 events/s in all
   (about 9750 at 22500 q/min).
 - Events held at once: rate × (50 ms lead + up to 5 ms send loop + up to
   1 ms delivery) ≈ 9533 events/s × 0.050 s to 0.056 s = 477 to 534 events.

@@ -26,6 +26,9 @@
 
 mod play;
 
+#[path = "../support/event_player.rs"]
+mod event_player;
+
 use std::collections::BTreeMap;
 use std::process::ExitCode;
 
@@ -71,8 +74,8 @@ const MISTAKE_CASES: [MistakeCase; 6] = [
     MistakeCase {
         what: "a tie with nothing to join",
         text: "rhythm \"X\"\n group \"G\"\n meter 4/4\n | hr qr er e~ |\n",
-        expected_message: "mistake.library line 1: rhythm \"X\": the tie at bar 1 count 4 plus an \
-                           eighth note has no note after it to join. Remove the ~ or put a note after it",
+        expected_message: "mistake.library line 1: rhythm \"X\": the tie at bar 1 beat 4 has no note \
+                           after it to join. Remove the ~ or put a note after it",
     },
     MistakeCase {
         what: "a meter that is not one",
@@ -138,8 +141,8 @@ fn print_library(library_file: &str) -> Option<Vec<RhythmLibraryEntry>> {
         let time_signature: TimeSignature = entry.pattern().time_signature();
         let meter: String = format!(
             "{}/{}",
-            time_signature.counts_per_bar(),
-            time_signature.counts_per_whole_note()
+            time_signature.pulses_per_bar(),
+            time_signature.pulses_per_whole_note()
         );
         listing
             .entry((meter, entry.group().to_string()))
@@ -172,7 +175,7 @@ fn print_pattern(entry: &RhythmLibraryEntry) {
     }
 }
 
-/// "bar 1 count 2 plus an eighth note: a dotted quarter note, accent".
+/// "bar 1 beat 2: a dotted quarter note, accent".
 fn describe_element(element: &RhythmElement, time_signature: TimeSignature) -> String {
     let place: String = describe_place(element.start().ticks(), time_signature);
     let what: String = match element.kind() {

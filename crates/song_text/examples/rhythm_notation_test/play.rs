@@ -1,27 +1,14 @@
 //! The play half of the test: a chosen rhythm as a mono voice playing one
 //! fixed note on the "Beat pulse" port, with Timing Clock on its own port,
-//! for listening on the FH-2.
-//!
-//! This is the test's own copy of the sending loop of
-//! `alsa_output/examples/control_track_test`, trimmed. Its proper home is
-//! the app's sending thread (Architecture, Next, step 3).
+//! for listening on the FH-2. The sending loop is the shared
+//! `support/event_player.rs`.
 
-use std::io::BufRead;
-use std::thread;
-use std::time::Duration as StdDuration;
-
-use alsa_output::error::AlsaOutputError;
-use alsa_output::sequencer_output::{FlushOutcome, OutputPort, SequencerOutput};
-use alsa_output::warning::OutputWarning;
-use player::anchor::Anchor;
 use player::note_track::NoteTrack;
 use player::schedule::{EventSource, OutputAction, ScheduledEvent, schedule};
 use player::studio_configuration::VelocityLevels;
 use song_text::length_words::describe_place;
 use song_text::rhythm_library::RhythmLibraryEntry;
 use vocabulary::control_track::ControlTrack;
-use vocabulary::duration::Duration;
-use vocabulary::instant::Instant;
 use vocabulary::midi_values::{MidiChannel, NoteNumber, Velocity};
 use vocabulary::phrase_cue::{ControlCueMessage, OutputPortName, PhraseCue, TransportMessage};
 use vocabulary::score_length::ScoreLength;
@@ -29,17 +16,10 @@ use vocabulary::score_position::ScorePosition;
 use vocabulary::tempo::Tempo;
 use vocabulary::time_signature::TimeSignature;
 
+use crate::event_player;
+
 const CLOCK_PORT: &str = "Clock";
 const PULSE_PORT: &str = "Beat pulse";
-
-/// The player's lead window (D-8).
-const LEAD: Duration = Duration::from_ms(50);
-/// Time between Enter and the first note, so the first events are not
-/// already late when queued.
-const START_DELAY: Duration = Duration::from_ms(200);
-/// How long the sending loop sleeps between looks at the clock: well under
-/// the 50 ms lead.
-const SEND_LOOP_SLEEP: StdDuration = StdDuration::from_millis(5);
 
 /// The velocities this test gives the levels of the rhythm's marks: `>` and
 /// `>>` both send 127. (A studio configuration would give them per track.)
@@ -188,62 +168,29 @@ pub fn play_rhythm(entries: &[RhythmLibraryEntry], request: &PlayRequest) -> Res
         schedule(&port_name(CLOCK_PORT)?, &[beat], &[control], stretch_length)
             .map_err(|e| e.to_string())?;
 
-    let (output, warnings): (SequencerOutput, Vec<OutputWarning>) =
-        SequencerOutput::open("Lead Sheet", &[CLOCK_PORT, PULSE_PORT])
-            .map_err(|e| e.to_string())?;
-    for warning in &warnings {
-        eprintln!("WARNING: {warning}");
-    }
-    print_plan(&output, request, pattern.name(), time_signature);
-    println!("Connect the ports now (MIDI router or aconnect), then press Enter to play.");
-    wait_for_enter()?;
+    let output = event_player::open_output(&[CLOCK_PORT, PULSE_PORT])?;
+    event_player::print_ports(&output);
+    print_plan(request, pattern.name(), time_signature);
+    event_player::wait_for_enter()?;
 
     let tempo: Tempo = Tempo::from_quarter_notes_per_minute(request.quarter_notes_per_minute)
         .map_err(|e| e.to_string())?;
-    let first_instant: Instant = output
-        .now()
-        .map_err(|e| e.to_string())?
-        .checked_add(START_DELAY)
-        .map_err(|e| e.to_string())?;
-    let anchor: Anchor = Anchor::new(ScorePosition::ZERO, first_instant, tempo);
-    let last_instant: Instant = send_all(&output, &events, anchor, time_signature)?;
-
-    // Let the last events be delivered before the queue closes with the
-    // program, then silence the channel as a safety net.
-    wait_until(
-        &output,
-        last_instant.checked_add(LEAD).map_err(|e| e.to_string())?,
-    )?;
-    let pulse_port: &OutputPort = find_port(&output, PULSE_PORT)?;
-    output
-        .send_all_notes_off_now(pulse_port, request.channel.wire_value())
-        .map_err(|e| e.to_string())?;
+    event_player::play(&output, &events, tempo, &mut |event: &ScheduledEvent| {
+        announce(event, time_signature);
+    })?;
+    event_player::silence(&output, PULSE_PORT, request.channel)?;
     println!("Done.");
     Ok(())
 }
 
-/// The ports to connect, and what is about to play.
-fn print_plan(
-    output: &SequencerOutput,
-    request: &PlayRequest,
-    rhythm_name: &str,
-    time_signature: TimeSignature,
-) {
-    println!("\nPorts:");
-    for port in output.ports() {
-        println!(
-            "  {:<11} {}:{}",
-            port.name(),
-            output.client_id(),
-            port.port_id()
-        );
-    }
+/// What is about to play.
+fn print_plan(request: &PlayRequest, rhythm_name: &str, time_signature: TimeSignature) {
     println!(
         "Playing {:?} ({}/{}) for {} bar{} at {} q/min on {PULSE_PORT:?}, channel {}, note {}. \
          Timing Clock{} on {CLOCK_PORT:?}.",
         rhythm_name,
-        time_signature.counts_per_bar(),
-        time_signature.counts_per_whole_note(),
+        time_signature.pulses_per_bar(),
+        time_signature.pulses_per_whole_note(),
         request.bars,
         if request.bars == 1 { "" } else { "s" },
         request.quarter_notes_per_minute,
@@ -282,129 +229,23 @@ fn transport_cues(stretch_length: ScoreLength) -> Result<Vec<PhraseCue>, String>
     Ok(cues)
 }
 
-/// Hands every event to the queue up to `LEAD` ahead of its instant, each
-/// instant computed from `anchor`. Returns the last event's instant.
-fn send_all(
-    output: &SequencerOutput,
-    events: &[ScheduledEvent],
-    anchor: Anchor,
-    time_signature: TimeSignature,
-) -> Result<Instant, String> {
-    let mut late_events: u64 = 0;
-    let mut last_instant: Instant = anchor.instant();
-    let mut next: usize = 0;
-    // True while the kernel's output pool is full: queue nothing new until
-    // a flush hands everything over.
-    let mut pool_full: bool = false;
-    loop {
-        if next >= events.len() && !pool_full {
-            break;
-        }
-        let now: Instant = output.now().map_err(|e| e.to_string())?;
-        let horizon: Instant = now.checked_add(LEAD).map_err(|e| e.to_string())?;
-        while let Some(event) = events.get(next) {
-            if pool_full {
-                break;
-            }
-            let at: Instant = anchor
-                .instant_at(event.position)
-                .map_err(|e| e.to_string())?;
-            if at > horizon {
-                break;
-            }
-            if at < now {
-                late_events += 1;
-            }
-            send(output, event, at)?;
-            if let (EventSource::Notes { .. }, OutputAction::NoteOn { velocity, .. }) =
-                (&event.source, event.action)
-            {
-                let accent: &str = if velocity.value() == ACCENT_VELOCITY {
-                    "  (accent)"
-                } else {
-                    ""
-                };
-                println!(
-                    "{}{accent}",
-                    describe_place(event.position.ticks(), time_signature)
-                );
-            }
-            last_instant = at;
-            next += 1;
-        }
-        match output.flush().map_err(|e| e.to_string())? {
-            FlushOutcome::AllHandedOver => pool_full = false,
-            FlushOutcome::PoolFull => pool_full = true,
-        }
-        thread::sleep(SEND_LOOP_SLEEP);
+/// Shows each note as it is queued: its place, and whether it is an accent.
+fn announce(event: &ScheduledEvent, time_signature: TimeSignature) {
+    if let (EventSource::Notes { .. }, OutputAction::NoteOn { velocity, .. }) =
+        (&event.source, event.action)
+    {
+        let accent: &str = if velocity.value() == ACCENT_VELOCITY {
+            "  (accent)"
+        } else {
+            ""
+        };
+        println!(
+            "{}{accent}",
+            describe_place(event.position.ticks(), time_signature)
+        );
     }
-    if late_events > 0 {
-        eprintln!("WARNING: {late_events} events were queued after their instant.");
-    }
-    Ok(last_instant)
-}
-
-fn send(output: &SequencerOutput, event: &ScheduledEvent, at: Instant) -> Result<(), String> {
-    let port: &OutputPort = find_port(output, event.port.as_str())?;
-    let result: Result<(), AlsaOutputError> = match event.action {
-        OutputAction::ClockPulse => output.queue_clock_pulse(port, at, 0),
-        OutputAction::NoteOn {
-            channel,
-            note,
-            velocity,
-        } => output.queue_note_on(
-            port,
-            at,
-            channel.wire_value(),
-            note.value(),
-            velocity.value(),
-        ),
-        OutputAction::NoteOff { channel, note } => {
-            output.queue_note_off(port, at, channel.wire_value(), note.value())
-        }
-        OutputAction::Transport(TransportMessage::Start) => output.queue_start(port, at),
-        OutputAction::Transport(TransportMessage::Stop) => output.queue_stop(port, at),
-        // This test's schedule has only Timing Clock, notes, Start and Stop.
-        other => {
-            return Err(format!(
-                "The rhythm test's schedule holds {other:?}, which it does not send."
-            ));
-        }
-    };
-    result.map_err(|e| e.to_string())
-}
-
-fn find_port<'a>(output: &'a SequencerOutput, name: &str) -> Result<&'a OutputPort, String> {
-    output
-        .ports()
-        .iter()
-        .find(|port: &&OutputPort| port.name() == name)
-        .ok_or_else(|| format!("No output port named {name:?}."))
 }
 
 fn port_name(name: &str) -> Result<OutputPortName, String> {
     OutputPortName::new(name).map_err(|e| e.to_string())
-}
-
-fn wait_for_enter() -> Result<(), String> {
-    let mut line: String = String::new();
-    std::io::stdin()
-        .lock()
-        .read_line(&mut line)
-        .map_err(|e| format!("Reading Enter from the terminal: {e}"))?;
-    Ok(())
-}
-
-fn wait_until(output: &SequencerOutput, deadline: Instant) -> Result<(), String> {
-    loop {
-        let now: Instant = output.now().map_err(|e| e.to_string())?;
-        // Reached or passed: done. Passing is harmless here.
-        let Ok(remaining): Result<Duration, _> = deadline.checked_sub(now) else {
-            return Ok(());
-        };
-        if remaining == Duration::ZERO {
-            return Ok(());
-        }
-        thread::sleep(StdDuration::from_nanos(remaining.ns()));
-    }
 }

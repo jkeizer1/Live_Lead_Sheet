@@ -1,0 +1,27 @@
+# Bass gate test for the Live Lead Sheet: only the Bass, with a rest after
+# every note, so no note starts where the previous one ended. Play it with
+# Demo.studio. If every note gets its gate here, the missing gates in
+# Demo.song come from notes that touch.
+song "jimssong1 - bass tests"
+
+track "Clock"
+  type clock_and_transport
+
+track "Harmony"
+  type poly_voice
+  clef grand
+  lead
+
+track "Beat"
+  type mono_voice
+  clef treble
+
+track "Bass"
+  type mono_voice
+  clef bass
+
+section "Gate test"  repeat 100
+  key C major  meter 3/8  tempo 30 beats/min
+  line "Harmony"  | e:I e e                | e:V  e  er            | 
+  line "Bass"     | e:C2 e e               | e:C2 e e   |
+  line "Beat"     | sx:C4 sxr  sx sxr  sx sxr    | sx>:C4 sxr  sx sxr sx sxr  |

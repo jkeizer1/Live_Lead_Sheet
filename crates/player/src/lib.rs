@@ -4,4 +4,6 @@ pub mod anchor;
 pub mod counter;
 pub mod note_track;
 pub mod schedule;
+pub mod song_plan;
 pub mod studio_configuration;
+pub mod voicing;

@@ -24,12 +24,41 @@ track "Cues"
   cue "Start SQ-1"  destination "SQ-1"  start
 
 section "Count-in"  count-in
-  meter 4/4  tempo 120 q/min
+  meter 4/4  tempo 140 beats/min
   line "Beat"  | q>:C4 q q q |
 
+# C – G – Am – F
+section "Verse"  repeat 1
+  key C major  meter 4/4  tempo 140 beats/min
+  line "Beat"  | q>:C4 q q> q           | q q q q             | q:C4 q q q     | q q q q |
+#                CM                        GM                 Am                 FM
+  line "Keys"  | h:I h                  | h:V  h              |  h:VI h        | w:IV   |
+  line "Bass"  | h:C2 qr q:G2           | q:G2 q:B2 q:D2 q:G2 | q:A2 q:C2 h:E2 | q>:F3 q:A2 q>:C3 e:E2 e:B3 |
+  line "Cues"  | w:"Start SQ-1"         | wr                  |  wr            |  wr |
+
+# G – Am
 section "Verse"  repeat 2
-  key C major  meter 4/4  tempo 120 q/min
-  line "Beat"  | q>:C4 q q q | q> q q q |
-  line "Keys"  | q:I q q q | qr h:ii7 q:V7 |
-  line "Bass"  | q:C2 q q q | qr h:D2 q:G2 |
-  line "Cues"  | w:"Start SQ-1" | wr |
+  key C major  meter 4/4  tempo 140 beats/min
+  line "Beat"  | q>:C4 q q> q           | q q q q             |
+#                GM                       Am                 
+  line "Keys"  | h:V h                  | h:VI  h             | 
+  line "Bass"  | h:G2  h:B2             | h:A2  h             |
+  line "Cues"  | w:"Start SQ-1"         | wr                  |
+#################
+# C – G – Am – F
+section "Verse"  repeat 1
+  key C major  meter 4/4  tempo 140 beats/min
+  line "Beat"  | q>:C4 q q> q           | q q q q             | q:C4 q q q     | q q q q |
+#                CM                        GM                 Am                 FM
+  line "Keys"  | h:I h                  | h:V  h              |  h:VI h        | w:IV   |
+  line "Bass"  | h:C2 qr q:G2           | q:G2 q:B2 q:D2 q:G2 | q:A2 q:C2 h:E2 | q>:F3 q:A2 q>:C3 e:E2 e:B3 |
+  line "Cues"  | w:"Start SQ-1"         | wr                  |  wr            |  wr |
+
+# B7 – Dm
+section "Verse"  repeat 2
+  key C major  meter 4/4  tempo 140 beats/min
+  line "Beat"  | q>:C4 q q> q           | q q q q             |
+#                Baug                    Dm                 
+  line "Keys"  | h:vii° h               | h:ii  h             | 
+  line "Bass"  | h:B2  h:E2             | h:D2  h:F2          |
+  line "Cues"  | w:"Start SQ-1"         | wr                  |

@@ -1,6 +1,6 @@
 # Live Lead Sheet — Architecture
 
-Revision 20 — 5 Nov 2026 (the beat pulse is a mono voice, not a control-track feature)
+Revision 21 — 7 Nov 2026 (terms: beat and pulse as in the rudiments; a MIDI clock pulse is a clock pulse)
 
 Builds on the Concept Brief (Revision 13), the Experience Functional
 Specification (Revision 13) and Song Notation (Revision 9). Sets the
@@ -53,11 +53,11 @@ vocabulary is incomplete.
 
 **A-6 Two kinds of information.** The **song** — the whole of it, as a
 document, given to a follower when it joins or when the song changes.
-The **events** — started, stopped, section, repeat, bar, count, tempo,
+The **events** — started, stopped, section, repeat, bar, beat, tempo,
 phrase cue — as they happen. A follower knows what is coming by
 combining the two; the future is never streamed.
 
-**A-7 Musical time first.** Inside, time is musical: bar, count, and
+**A-7 Musical time first.** Inside, time is musical: bar, beat, pulse, and
 exact fractions of a note. Triplets and dotted values are exact, with no
 rounding drift. Clock time (milliseconds) appears only where music meets
 hardware or screen: the MIDI sender and the display. One clock, read by
@@ -361,7 +361,7 @@ tempo (a second clock, which drifts from ours).
 *Measured, 29 Oct 2026:* the queue's delivery is bounded at 1 ms and
 unaffected by load (worst 0.997 ms, 240 q/min, 32 busy threads). The
 fallback, a thread sleeping to absolute deadlines, was tested and not
-adopted: ten times more exact for 99% of pulses, but up to 3 ms late once
+adopted: ten times more exact for 99% of clock pulses, but up to 3 ms late once
 in a thousand under heavy load, and 6.3 ms with busy-waiting. A 1 ms
 bound is below what listeners generally notice; the final check is the
 listening test with real drawing load.
@@ -490,7 +490,7 @@ from what is published (A-5).
   devices ignore it. A section start that falls inside an external
   phrase is shown as a warning in the authoring view.
 
-- **Pulse bursts (later).** A cue may start a burst of fast pulses for a
+- **Pulse bursts (later).** A cue may start a burst of fast notes for a
   set length: to clock a sequencer far above the song's tempo, so it
   becomes an oscillator (its gate a waveform), or to fire fast voices.
   The program sends Timing Clock on one port only, at the song's tempo,
@@ -627,7 +627,7 @@ reset trigger (not as simple as a gate output); then the divider and
 downbeat checks above, and the direct `aconnect` path.
 
 **3. Spike step 5: timing and drawing together.** A sending thread in
-`app` sending Timing Clock (24 pulses/q) and the control track, stamped
+`app` sending Timing Clock (24 clock pulses/q) and the control track, stamped
 up to 50 ms ahead, instants computed from an anchor (section 6);
 the playhead and wheel driven by the queue's real time instead of the
 computer's clock; frame-time statistics printed on exit; then the

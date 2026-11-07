@@ -1,6 +1,6 @@
 # song_notation_test
 
-Revision 2 — 5 Nov 2026 (the Beat track is a mono voice)
+Revision 3 — 7 Nov 2026 (places are named in beats)
 
 ## What it proves
 
@@ -9,7 +9,7 @@ That a song and a studio configuration written in the notation of
 was meant:
 
 - `songs/Demo.song` loads and is printed track by track, section by
-  section and bar by bar in the musician's terms ("bar 2 count 2: a half
+  section and bar by bar in the musician's terms ("bar 2 beat 2: a half
   note — chord ii7"). Reading the printout against the file shows that the
   shorthand where an element with nothing after it carries the previous
   chord or note works, that the key and meter are right, and that a
@@ -58,3 +58,4 @@ seventh, and where it sits on the staff) are worked out in `song_play_test`.
 
 - 5 Nov 2026, revision 1: first version.
 - Revision 2, 5 Nov 2026: the beat pulse is a mono voice; Demo files changed.
+- Revision 3, 7 Nov 2026: places named in beats (and pulses in compound meters); tempo written in beats/min.

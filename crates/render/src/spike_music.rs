@@ -114,7 +114,7 @@ enum SlashValue {
     Eighth,
 }
 
-/// One pulse or rest of the part's rhythm in a bar.
+/// One note or rest of the part's rhythm in a bar.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct RhythmEvent {
     /// Where it starts in the bar, in eighth notes from the downbeat.
@@ -268,7 +268,7 @@ const A7_VOICING: &[VoicingNote] = &[tone(3), sharp(5), tone(7), tone(9)]; // A4
 /// The chord changes, bar by bar, in C major. Several bars change more than
 /// once: one chord per beat (bar 0), two sharp-laden chords a half note
 /// apart (bar 2), a change on the off-beat (bar 3), two per bar (bar 7).
-/// Each change falls on a pulse of `SPIKE_RHYTHM`, so no pulse crosses one.
+/// Each change falls on a note of `SPIKE_RHYTHM`, so no note crosses one.
 /// F♯m7♭5, B7 and A7 lie outside the key: the wheel names them in its
 /// centre.
 const SPIKE_CHANGES: [&[ChordChange]; BARS_IN_STRIP as usize] = [
@@ -417,7 +417,7 @@ fn chord_symbol_rows(
     Ok(rows)
 }
 
-/// A chord symbol's left and right ink edges: it starts on its pulse's
+/// A chord symbol's left and right ink edges: it starts on its note's
 /// stem; its width is its advances.
 fn chord_symbol_extent_pixels(
     geometry: &StripGeometry,
@@ -435,7 +435,7 @@ fn chord_symbol_extent_pixels(
 }
 
 /// One change's chord symbol, its first letter's ink starting on the left
-/// edge of its pulse's stem (EFS-1.5).
+/// edge of its note's stem (EFS-1.5).
 fn chord_symbol(
     geometry: &StripGeometry,
     atlas: &GlyphAtlas,
@@ -469,9 +469,9 @@ fn chord_symbol(
     )
 }
 
-/// The left edge of the stem of the pulse starting `start_eighths` into bar
-/// `bar`. A pulse without a stem (a whole note), a rest, or a change
-/// between pulses takes the place a black slash's stem would have there.
+/// The left edge of the stem of the note starting `start_eighths` into bar
+/// `bar`. A note without a stem (a whole note), a rest, or a change
+/// between notes takes the place a black slash's stem would have there.
 fn stem_left_x_pixels(geometry: &StripGeometry, bar: u16, start_eighths: u8) -> f32 {
     let value: Option<SlashValue> = SPIKE_RHYTHM[usize::from(bar)]
         .iter()
@@ -825,7 +825,7 @@ struct VoicingPlace {
     head_x_pixels: f32,
 }
 
-/// A voicing's noteheads stand under their pulse's slash, sharps to the
+/// A voicing's noteheads stand under their note's slash, sharps to the
 /// left. On the downbeat, sharps that would come too close to the barline
 /// push the noteheads right.
 fn voicing_place(
@@ -1073,7 +1073,7 @@ mod tests {
     }
 
     #[test]
-    fn a_chord_symbol_starts_on_its_pulses_stem() {
+    fn a_chord_symbol_starts_on_its_notes_stem() {
         let atlas: GlyphAtlas = GlyphAtlas::embedded().unwrap();
         let geometry: StripGeometry = StripGeometry::new(2560.0, 1440.0, true);
         let em_pixels: f32 = CHORD_SYMBOL_EM_SPACES * geometry.space_pixels;

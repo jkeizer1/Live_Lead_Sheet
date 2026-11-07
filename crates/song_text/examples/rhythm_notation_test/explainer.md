@@ -1,6 +1,6 @@
 # rhythm_notation_test
 
-Revision 3 — 5 Nov 2026 (the beat pulse is an ordinary mono voice: accents and gate length come from the rhythm)
+Revision 5 — 7 Nov 2026 (places are named in beats; "count" replaced by beat)
 
 ## What it proves
 
@@ -8,8 +8,8 @@ That the rhythm notation of `docs/Architecture/Song Notation.md`
 (section 3) is read exactly:
 
 - the starter library `library/Rhythms.library` loads, and every rhythm is
-  printed in the musician's terms ("bar 1 count 2 plus an eighth note: an
-  eighth note, accent"), grouped by meter, then group, so the notation can
+  printed in the musician's terms ("bar 1 beat 2: an eighth note,
+  accent"), grouped by meter, then group, so the notation can
   be checked by eye against what was meant;
 - six kinds of mistake each produce the one message EFS-6.3 asks for (the
   file, the line, what is wrong and what to type instead), and a file with
@@ -22,9 +22,9 @@ that plays one fixed note (the "beat pulse"), like any voice: a note begins
 at each sounding element that no tie leads into, a tied note is one note
 as long as the elements joined, and the note's written length is its gate
 length. The rhythm's own marks set the velocity: `>` and `>>` send 127,
-a note with no mark sends 64. (Revision 2 gave count 1 of each bar the
+a note with no mark sends 64. (Revision 2 gave beat 1 of each bar the
 accent whatever the rhythm said, and cut every pulse to a sixteenth; both
-special cases are gone. The starter library now writes the count 1 accent
+special cases are gone. The starter library now writes the beat 1 accent
 with `>` in the pulses, Charleston and the bossa comp.)
 
 ## Setup on Jim's studio
@@ -69,18 +69,18 @@ see the FH-2's clock output (e.g. jack 5).
 
 What to listen and watch for, on the FH-2 gate (or a voice it drives):
 
-- *Charleston*: a gate on count 1 (the louder, accented one) held for a
-  dotted quarter, and one on the "and" of count 2 held for an eighth, then
+- *Charleston*: a gate on beat 1 (the louder, accented one) held for a
+  dotted quarter, and one on the "and" of beat 2 held for an eighth, then
   silence for the half-note rest, every bar.
-- *Anticipation*: one pulse every two bars, on the "and" of count 4. The
+- *Anticipation*: one gate every two bars, on the "and" of beat 4. The
   tied quarter after the barline must not retrigger.
-- *Quarter-note triplets*: six evenly spaced pulses in the bar, none on
-  count 2 or 4.
-- *Backbeat*: counts 2 and 4 are louder (its `>` marks); count 1 is
+- *Quarter-note triplets*: six evenly spaced gates in the bar, none on
+  beat 2 or 4.
+- *Backbeat*: beats 2 and 4 are louder (its `>` marks); beat 1 is
   normal.
 - Each gate lasts the written note value: a quarter note is held for a
   quarter note, an eighth for an eighth. On a short gate, such as an
-  eighth-note pulse, an FH-2 output set to CV and gate should still drop
+  eighth note, an FH-2 output set to CV and gate should still drop
   between notes.
 
 Run from the project folder. The exit status is 0 when the library loads
@@ -98,6 +98,10 @@ three faults, now fixed, each now covered by a unit test:
   eighth note".
 - A triplet quarter note read "2/3 of a quarter note". It now reads "a
   triplet quarter note".
+
+*7 Nov 2026.* Places are now named in beats, as the counter shows them,
+with the pulse added in compound meters: the tie error says "bar 1 beat
+4". A place between pulses is named by the pulse it falls in.
 
 Decided in passing: `r` and the dots may stand in either order after the
 note letter, so `hr.` and `h.r` are the same dotted half rest (Song Notation
@@ -144,13 +148,24 @@ first beat, refusing a rhythm in another meter), but it could not be run
 where it was written: the sandbox has no ALSA sequencer
 (`/dev/snd/seq`). The first listening result goes here.
 
-The play half carries its own trimmed copy of the sending loop of
+*5 Nov 2026, listening after the beat pulse became a mono voice (Jim, FH-2
+and Disting NT, the NT set to velocity gates).* Charleston, the
+quarter-note pulses (touching notes) and the eighth-note pulses all sounded
+correct and the timing was very accurate. Touching notes of equal velocity
+retriggered the NT's velocity gate with no retrigger gap, so Q11 is not
+needed for that case. Judged by ear; not measured.
+
+The play half uses the sending loop in `../support/event_player.rs`, shared
+with `song_play_test`; it is a trimmed copy of the loop of
 `alsa_output/examples/control_track_test`. Its proper home is the app's
-sending thread (Architecture, Next, step 3); the copy goes when that
-exists.
+sending thread (Architecture, Next, step 3); the shared module goes when
+that exists. Revision 4 moved the play half onto the shared module, so it
+needs one more listening.
 
 ## Revisions
 
 - Revision 1, 5 Nov 2026: print the library, check six mistakes.
 - Revision 2, 5 Nov 2026: `--play` plays a rhythm on the beat-pulse port; `--transport` adds Start and Stop; setup notes; 6/8 rhythm corrected; name trimmed.
 - Revision 3, 5 Nov 2026: the beat pulse is a mono voice; velocity comes from the rhythm's marks, gate length from the written length; library accents written with `>`.
+- Revision 4, 5 Nov 2026: the play half uses the shared `support/event_player.rs`; listening findings with the NT's velocity gates.
+- Revision 5, 7 Nov 2026: places named in beats (and pulses in compound meters); "count" replaced by beat.

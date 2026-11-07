@@ -58,7 +58,7 @@ const MISTAKE_CASES: [MistakeCase; 8] = [
         kind: Kind::Song,
         text: concat!(
             "song \"T\"\ntrack \"Clock\"\n type clock_and_transport\n",
-            "section \"A\"\n meter 4/4  tempo 120 q/min\n line \"Drums\" | q q q q |\n"
+            "section \"A\"\n meter 4/4  tempo 120 beats/min\n line \"Drums\" | q q q q |\n"
         ),
         expected_message: "mistake.song line 6: \"Drums\" is not a track of the song. Declare it \
                            with track \"Drums\" before the sections, or fix the name",
@@ -70,10 +70,10 @@ const MISTAKE_CASES: [MistakeCase; 8] = [
             "song \"T\"\ntrack \"Clock\"\n type clock_and_transport\n",
             "track \"Keys\"\n type poly_voice\n clef grand\n lead\n",
             "track \"Bass\"\n type mono_voice\n clef bass\n",
-            "section \"A\"\n key C major  meter 4/4  tempo 120 q/min\n",
+            "section \"A\"\n key C major  meter 4/4  tempo 120 beats/min\n",
             " line \"Bass\" | q:C2 q q q:V7 |\n"
         ),
-        expected_message: "mistake.song line 13: line \"Bass\": bar 1 count 4: track \"Bass\" cannot \
+        expected_message: "mistake.song line 13: line \"Bass\": bar 1 beat 4: track \"Bass\" cannot \
                            play that: a mono voice plays one note at a time; write a single note \
                            such as C2",
     },
@@ -83,10 +83,10 @@ const MISTAKE_CASES: [MistakeCase; 8] = [
         text: concat!(
             "song \"T\"\ntrack \"Clock\"\n type clock_and_transport\n",
             "track \"Keys\"\n type poly_voice\n clef grand\n lead\n",
-            "section \"A\"\n key C major  meter 4/4  tempo 120 q/min\n",
+            "section \"A\"\n key C major  meter 4/4  tempo 120 beats/min\n",
             " line \"Keys\" | q q q q |\n"
         ),
-        expected_message: "mistake.song line 10: line \"Keys\": bar 1 count 1: the first note of a line \
+        expected_message: "mistake.song line 10: line \"Keys\": bar 1 beat 1: the first note of a line \
                            must say what it plays: write a colon and a chord or notes, e.g. q:I \
                            or q:[C3 E3 G3]",
     },
@@ -96,7 +96,7 @@ const MISTAKE_CASES: [MistakeCase; 8] = [
         text: concat!(
             "song \"T\"\ntrack \"Clock\"\n type clock_and_transport\n",
             "track \"Keys\"\n type poly_voice\n clef grand\n lead\n",
-            "section \"A\"\n meter 4/4  tempo 120 q/min\n line \"Keys\" | q:I q q q |\n"
+            "section \"A\"\n meter 4/4  tempo 120 beats/min\n line \"Keys\" | q:I q q q |\n"
         ),
         expected_message: "mistake.song line 8: section \"A\" has chords but no key. Add key to the \
                            section, e.g. key C major",
@@ -106,7 +106,7 @@ const MISTAKE_CASES: [MistakeCase; 8] = [
         kind: Kind::Song,
         text: concat!(
             "song \"T\"\ntrack \"Beat\"\n type mono_voice\n clef treble\n",
-            "section \"A\"\n meter 4/4  tempo 120 q/min\n line \"Beat\" | q:C4 q q q |\n"
+            "section \"A\"\n meter 4/4  tempo 120 beats/min\n line \"Beat\" | q:C4 q q q |\n"
         ),
         expected_message: "mistake.song line 1: the song has 0 clock and transport tracks. It needs \
                            exactly 1: add a track with type clock_and_transport",
@@ -117,10 +117,10 @@ const MISTAKE_CASES: [MistakeCase; 8] = [
         text: concat!(
             "song \"T\"\ntrack \"Clock\"\n type clock_and_transport\n",
             "track \"Keys\"\n type poly_voice\n clef grand\n lead\n",
-            "section \"A\"\n key C major  meter 4/4  tempo 120 q/min\n",
+            "section \"A\"\n key C major  meter 4/4  tempo 120 beats/min\n",
             " line \"Keys\" | q:IV9b q q q |\n"
         ),
-        expected_message: "mistake.song line 10: line \"Keys\": bar 1 count 1: \"IV9b\" is not a chord. \
+        expected_message: "mistake.song line 10: line \"Keys\": bar 1 beat 1: \"IV9b\" is not a chord. \
                            After an upper case numeral write nothing, 7, M7 or maj7, + or 7b9",
     },
     MistakeCase {
@@ -337,8 +337,8 @@ fn print_section(song: &Song, section: &Section) {
         } else {
             String::new()
         },
-        meter.counts_per_bar(),
-        meter.counts_per_whole_note(),
+        meter.pulses_per_bar(),
+        meter.pulses_per_whole_note(),
         section.tempo().milli_quarters_per_minute() / 1000,
         key_text,
     );

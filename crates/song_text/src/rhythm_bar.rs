@@ -207,7 +207,7 @@ fn place(
             + u128::from(written_offset_subticks) * u128::from(length_subticks);
         let denominator: u128 = u128::from(SUBTICKS_PER_TICK) * u128::from(written_total_subticks);
         let rounded: u128 = (2 * numerator + denominator) / (2 * denominator);
-        // Cannot be large: a bar is at most 255 counts of at most 20160 ticks.
+        // Cannot be large: a bar is at most 255 pulses of at most 20160 ticks.
         u64::try_from(rounded).unwrap_or(u64::MAX)
     };
 

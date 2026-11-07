@@ -25,7 +25,7 @@
 //! the program asks):
 //!
 //! - `Clock`: Timing Clock (F8) from the first count-in bar to the end.
-//! - `Beat pulse`: a note on every count (count 1 at velocity 127, the
+//! - `Beat pulse`: a note on every beat (beat 1 at velocity 127, the
 //!   others 64, each a 16th long), and a reset trigger note (a 32nd) on the
 //!   music's first bar.
 //! - `To SQ-1`: Start on the music's first bar, Stop at the end. With
@@ -69,7 +69,7 @@ const SQ1_PORT: &str = "To SQ-1";
 
 /// The player's lead window (D-8).
 const LEAD: Duration = Duration::from_ms(50);
-/// Time between Enter and the first count, so the first events are not
+/// Time between Enter and the first beat, so the first events are not
 /// already late when queued.
 const START_DELAY: Duration = Duration::from_ms(200);
 /// How long the sending loop sleeps between looks at the clock: well under
@@ -188,7 +188,7 @@ fn run() -> Result<(), String> {
     Ok(())
 }
 
-/// The beat: a mono voice playing one fixed note on every count, count 1 of
+/// The beat: a mono voice playing one fixed note on every beat, beat 1 of
 /// each bar accented, each note held for `BEAT_PULSE_LENGTH`.
 fn beat_track(
     settings: &Settings,
@@ -196,7 +196,7 @@ fn beat_track(
     stretch_length: ScoreLength,
 ) -> Result<NoteTrack, String> {
     let velocity = |value: u8| Velocity::new(value).map_err(|e| e.to_string());
-    let count_length_ticks: u64 = time_signature.count_length().ticks();
+    let beat_length_ticks: u64 = time_signature.beat_length().ticks();
     let bar_length_ticks: u64 = time_signature.bar_length().ticks();
     let mut notes: Vec<TimedNote> = Vec::new();
     let mut start_ticks: u64 = 0;
@@ -211,7 +211,7 @@ fn beat_track(
                 velocity(NORMAL_VELOCITY)?
             },
         });
-        start_ticks += count_length_ticks;
+        start_ticks += beat_length_ticks;
     }
     NoteTrack::new(
         "Beat",
@@ -352,7 +352,7 @@ fn play(
             if at < now {
                 late_events += 1;
             }
-            send(output, event, at, &mut sounding)?;
+            send(output, event, at, anchor, &mut sounding)?;
             describe(event, settings, time_signature, end);
             last_instant = at;
             next += 1;
@@ -397,6 +397,7 @@ fn send(
     output: &SequencerOutput,
     event: &ScheduledEvent,
     at: Instant,
+    anchor: Anchor,
     sounding: &mut Vec<SoundingNote>,
 ) -> Result<(), String> {
     let port: &OutputPort = find_port(output, &event.port)?;
@@ -430,6 +431,29 @@ fn send(
                     && sounding_note.note == note)
             });
             output.queue_note_off(port, at, channel.wire_value(), note.value())
+        }
+        OutputAction::TouchingNoteOff {
+            channel,
+            note,
+            note_on_position,
+            retrigger_gap,
+        } => {
+            sounding.retain(|sounding_note: &SoundingNote| {
+                !(sounding_note.port_name == event.port
+                    && sounding_note.channel == channel
+                    && sounding_note.note == note)
+            });
+            let note_on_at: Instant = anchor
+                .instant_at(note_on_position)
+                .map_err(|e| e.to_string())?;
+            output.queue_note_off_before_note_on(
+                port,
+                note_on_at,
+                at,
+                retrigger_gap,
+                channel.wire_value(),
+                note.value(),
+            )
         }
         OutputAction::ControlChange {
             channel,
@@ -475,7 +499,7 @@ fn describe(
             );
         }
         (EventSource::Notes { .. }, OutputAction::NoteOn { .. })
-            if counter.section == CounterSection::CountIn || counter.count == 1 =>
+            if counter.section == CounterSection::CountIn || counter.beat == 1 =>
         {
             println!("{place}");
         }
@@ -544,7 +568,8 @@ fn action_text(action: OutputAction) -> String {
             velocity.value(),
             channel.number()
         ),
-        OutputAction::NoteOff { channel, note } => {
+        OutputAction::NoteOff { channel, note }
+        | OutputAction::TouchingNoteOff { channel, note, .. } => {
             format!("note off {} on channel {}", note.value(), channel.number())
         }
         OutputAction::ControlChange {

@@ -90,24 +90,25 @@ pub fn describe_length(length_ticks: u64) -> LengthWords {
     }
 }
 
-/// Where a place is in the bar, in the musician's words: "bar 2 count 3" or
-/// "bar 1 count 4 plus an eighth note".
+/// Where a place is, in the words the counter uses: "bar 2 beat 3", and in
+/// compound time the pulse within the beat as well, "bar 1 beat 2 pulse 2".
+/// A place between pulses is named by the pulse it falls in: the message
+/// says what is wrong there, which is enough to find it (Jim, 7 Nov 2026).
 #[must_use]
 pub fn describe_place(start_ticks: u64, time_signature: TimeSignature) -> String {
     let bar_length_ticks: u64 = time_signature.bar_length().ticks();
-    let count_length_ticks: u64 = time_signature.count_length().ticks();
-    // ticks ÷ ticks/bar → bars; ticks within the bar ÷ ticks/count → counts.
+    let beat_length_ticks: u64 = time_signature.beat_length().ticks();
+    let pulse_length_ticks: u64 = time_signature.pulse_length().ticks();
+    // ticks ÷ ticks/bar → bars; the rest ÷ ticks/beat → beats into the bar;
+    // what is left ÷ ticks/pulse → pulses into the beat. Each counts from 1.
     let bar: u64 = start_ticks / bar_length_ticks + 1;
     let within_bar_ticks: u64 = start_ticks % bar_length_ticks;
-    let count: u64 = within_bar_ticks / count_length_ticks + 1;
-    let past_count_ticks: u64 = within_bar_ticks % count_length_ticks;
-    if past_count_ticks == 0 {
-        format!("bar {bar} count {count}")
+    let beat: u64 = within_bar_ticks / beat_length_ticks + 1;
+    let pulse: u64 = within_bar_ticks % beat_length_ticks / pulse_length_ticks + 1;
+    if time_signature.is_compound() {
+        format!("bar {bar} beat {beat} pulse {pulse}")
     } else {
-        format!(
-            "bar {bar} count {count} plus {}",
-            describe_length(past_count_ticks).description
-        )
+        format!("bar {bar} beat {beat}")
     }
 }
 
@@ -149,14 +150,26 @@ mod tests {
     }
 
     #[test]
-    fn says_a_place_in_counts() {
+    fn says_a_place_in_beats() {
         let four_four: TimeSignature = TimeSignature::new(4, 4).unwrap();
-        assert_eq!(describe_place(0, four_four), "bar 1 count 1");
+        assert_eq!(describe_place(0, four_four), "bar 1 beat 1");
+        // An eighth after beat 4 (3.5 q × 5040 ticks/q): named by its beat.
+        assert_eq!(describe_place(17_640, four_four), "bar 1 beat 4");
+        assert_eq!(describe_place(20_160 + 5040, four_four), "bar 2 beat 2");
+    }
+
+    #[test]
+    fn says_a_compound_place_in_beats_and_pulses() {
+        let six_eight: TimeSignature = TimeSignature::new(6, 8).unwrap();
+        // The fifth eighth: 4 × 2520 ticks, beat 2 (from 7560), its pulse 2.
+        assert_eq!(describe_place(10_080, six_eight), "bar 1 beat 2 pulse 2");
+        // A sixteenth later is still in that pulse.
         assert_eq!(
-            describe_place(17_640, four_four),
-            "bar 1 count 4 plus an eighth note"
+            describe_place(10_080 + 1260, six_eight),
+            "bar 1 beat 2 pulse 2"
         );
-        assert_eq!(describe_place(20_160 + 5040, four_four), "bar 2 count 2");
+        // Bar 2 (from 15120 ticks), beat 1, pulse 1.
+        assert_eq!(describe_place(15_120, six_eight), "bar 2 beat 1 pulse 1");
     }
 
     #[test]

@@ -1,6 +1,6 @@
 # The ALSA output examples — what they do and how to run them
 
-Revision 1 — 29 Oct 2026
+Revision 2 — 7 Nov 2026 (a MIDI clock message is a clock pulse; `--pulses` is now `--clock-pulses`)
 
 Three small programs that try the MIDI output on the real machine. They
 exist to answer one question for decision D-8: *can the ALSA sequencer's
@@ -40,21 +40,21 @@ us miss the time. Fifty milliseconds is the agreed compromise.
 
 **MIDI clock pulses.** Gear that follows a master (a sequencer, an
 arpeggiator) is told the tempo by a stream of 24 identical one-byte
-messages per quarter note. At 120 q/min a pulse is due every 20.833 ms.
-Pulses are the most timing-sensitive thing we send, so the measurements
-use them. (Here a *pulse* is a MIDI clock message, never a *tick*; a tick
+messages per quarter note. At 120 q/min a clock pulse is due every 20.833 ms.
+Clock pulses are the most timing-sensitive thing we send, so the measurements
+use them. (Here a *clock pulse* is a MIDI clock message, never a *tick*; a tick
 is the score unit of 1/5040 of a quarter note.)
 
 **What "timing quality" means here.** The queue's timer runs in steps.
 The question is how late after its stamped instant a message actually
 leaves. **Delay** = (instant the message actually arrived) − (instant it
 was stamped for). The **jitter** is how much the delay varies:
-p99 − minimum, that is, the spread that covers 99 of every 100 pulses.
+p99 − minimum, that is, the spread that covers 99 of every 100 clock pulses.
 A constant delay is harmless (everything is late together); a varying
 delay is what makes the beat wobble.
 
 **How the measurement stays honest.** Each example starts a second ALSA
-client of its own that receives the pulses. The kernel stamps each
+client of its own that receives the clock pulses. The kernel stamps each
 arrival with the queue's clock at the moment of arrival, so our own
 program's scheduling (which is what we are testing) cannot distort the
 reading. The method is borrowed from the Linux MIDI Router's spike 1.
@@ -69,7 +69,7 @@ so their numbers are directly comparable.
 |---|---|
 | `click.rs` | Plays eight clicks, one every 500 ms, each stamped about 50 ms ahead, and prints how far ahead of the clock each was stamped. Proves the output reaches a real device. |
 | `delivery_spread.rs` | Sends 3000 clock pulses through the queue (the adopted design) and reports the delay of each. |
-| `deadline_spread.rs` | The fallback: the program itself sleeps until each pulse's instant and sends it at once. Reports the same figures. Not adopted, kept for comparison. |
+| `deadline_spread.rs` | The fallback: the program itself sleeps until each clock pulse's instant and sends it at once. Reports the same figures. Not adopted, kept for comparison. |
 
 ## 3. Running them
 
@@ -98,22 +98,22 @@ channel 10; your device must listen to that channel to make a sound.
 ### 3.2 `delivery_spread` (the queue)
 
 ```bash
-cargo run --release -p alsa_output --example delivery_spread -- [--bpm N] [--pulses N] [--load N]
+cargo run --release -p alsa_output --example delivery_spread -- [--bpm N] [--clock-pulses N] [--load N]
 ```
 
 | Option | Meaning | Default |
 |---|---|---|
 | `--bpm N` | quarter notes per minute, whole number | 120 |
-| `--pulses N` | how many pulses to measure (at least 10) | 3000 |
+| `--clock-pulses N` | how many clock pulses to measure (at least 10) | 3000 |
 | `--load N` | N busy threads competing for the CPU, standing in for drawing | 0 |
 
 ### 3.3 `deadline_spread` (the fallback)
 
 ```bash
-cargo run --release -p alsa_output --example deadline_spread -- [--bpm N] [--pulses N] [--load N] [--spin-us N]
+cargo run --release -p alsa_output --example deadline_spread -- [--bpm N] [--clock-pulses N] [--load N] [--spin-us N]
 ```
 
-As above, plus `--spin-us N`: spend the last N µs before each pulse
+As above, plus `--spin-us N`: spend the last N µs before each clock pulse
 busy-waiting instead of sleeping (more exact on a free CPU, worse on a
 busy one). Default 0.
 
@@ -132,8 +132,8 @@ cargo run --release -p alsa_output --example deadline_spread -- --bpm 240 --load
 cargo run --release -p alsa_output --example deadline_spread -- --bpm 240 --load 32 --spin-us 200
 ```
 
-A run of 3000 pulses takes about 62 s at 120 q/min and 31 s at 240 q/min.
-For the tail (the rare late pulse), use `--pulses 30000`: about ten
+A run of 3000 clock pulses takes about 62 s at 120 q/min and 31 s at 240 q/min.
+For the tail (the rare late clock pulse), use `--clock-pulses 30000`: about ten
 minutes at 120 q/min. 32 busy threads on the Ryzen 3900X's 24 hardware
 threads is harsher than the real program will be; use `--load 16` for a
 gentler test.
@@ -141,28 +141,28 @@ gentler test.
 ## 4. Reading the output
 
 ```text
-3000 pulses at 240 q/min, 32 load threads, final 0 µs busy-waited
+3000 clock pulses at 240 q/min, 32 load threads, final 0 µs busy-waited
 Delay of delivery after the scheduled instant
   minimum            0.080 ms
-  median (p50)       0.580 ms      half the pulses were later than this
-  p99                0.997 ms      99 of every 100 pulses were on time or earlier
+  median (p50)       0.580 ms      half the clock pulses were later than this
+  p99                0.997 ms      99 of every 100 clock pulses were on time or earlier
   p99.9              0.997 ms
-  maximum            0.997 ms      the single worst pulse
+  maximum            0.997 ms      the single worst clock pulse
   jitter (p99 - min) 0.916 ms      the number to compare between runs
-Interval between pulses as received: 9.999 ms to 11.000 ms
+Interval between clock pulses as received: 9.999 ms to 11.000 ms
 ```
 
-- The last line compares with the ideal interval between pulses: 20.833 ms
+- The last line compares with the ideal interval between clock pulses: 20.833 ms
   at 120 q/min, 10.417 ms at 240 q/min. Steps of exactly 1 ms around
   the ideal mean the sender is working on a 1 ms grid.
 - A `WARNING:` line at the top means the queue is not on the HR timer, so
   the run is not valid; send the text to Jim.
-- An error such as "pulse N arrived with tag …" means a pulse was lost or
+- An error such as "clock pulse N arrived with tag …" means a clock pulse was lost or
   reordered; the run stops instead of reporting wrong numbers.
 
 **The pass mark** is the one the Linux MIDI Router spike used: jitter under
 1 ms in every row. The worst case also matters more than the typical one:
-a rare late pulse is what a listener could hear.
+a rare late clock pulse is what a listener could hear.
 
 ### Results so far (29 Oct 2026, idle desktop, no real drawing)
 
@@ -210,5 +210,5 @@ the "Delivery measured" table), with the date and what else was running.
 |---|---|
 | `open /dev/snd/seq failed: No such file or directory` | The ALSA sequencer is not available (for example inside a restricted shell). Run in a normal terminal. |
 | `MIDI timing may be uneven: queue N runs on 'system timer'` | Load the high-resolution timer: `sudo modprobe snd-hrtimer`, then run again. |
-| `Receiver: no pulse for 2 s` | Pulses did not reach the receiving client; the run stops. Run again; if it repeats, tell Jim. |
+| `Receiver: no clock pulse for 2 s` | Clock pulses did not reach the receiving client; the run stops. Run again; if it repeats, tell Jim. |
 | `connecting our port … failed` | The destination in `click` does not exist. Check `aconnect -l`. |

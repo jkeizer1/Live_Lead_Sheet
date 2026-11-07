@@ -397,7 +397,7 @@ mod tests {
     use super::*;
     use vocabulary::rhythm_pattern::AccentLevel;
 
-    const DEMO: &str = include_str!("../../../songs/Demo.studio");
+    const DEMO: &str = include_str!("../../../songs/song_test_count_in_and_verse.studio");
 
     fn errors_of(text: &str) -> Vec<String> {
         parse_studio("test.studio", text)
@@ -409,8 +409,9 @@ mod tests {
 
     #[test]
     fn the_demo_studio_loads() {
-        let studio: StudioConfiguration = parse_studio("Demo.studio", DEMO).unwrap();
-        assert_eq!(studio.name(), "Demo studio");
+        let studio: StudioConfiguration =
+            parse_studio("song_test_count_in_and_verse.studio", DEMO).unwrap();
+        assert_eq!(studio.name(), "Song test studio");
         assert_eq!(studio.port_names().len(), 5);
         let bass: &TrackOutput = studio.output_of("Bass").unwrap();
         assert_eq!(bass.channel.unwrap().number(), 2);
@@ -474,20 +475,26 @@ mod tests {
 
     #[test]
     fn the_demo_studio_covers_the_demo_song() {
-        let song =
-            crate::song_file::parse_song("Demo.song", include_str!("../../../songs/Demo.song"))
-                .unwrap();
-        let studio: StudioConfiguration = parse_studio("Demo.studio", DEMO).unwrap();
+        let song = crate::song_file::parse_song(
+            "song_test_count_in_and_verse.song",
+            include_str!("../../../songs/song_test_count_in_and_verse.song"),
+        )
+        .unwrap();
+        let studio: StudioConfiguration =
+            parse_studio("song_test_count_in_and_verse.studio", DEMO).unwrap();
         assert_eq!(studio.unmet_needs(&song), vec![]);
     }
 
     #[test]
     fn a_song_track_without_a_studio_entry_is_named() {
-        let song =
-            crate::song_file::parse_song("Demo.song", include_str!("../../../songs/Demo.song"))
-                .unwrap();
+        let song = crate::song_file::parse_song(
+            "song_test_count_in_and_verse.song",
+            include_str!("../../../songs/song_test_count_in_and_verse.song"),
+        )
+        .unwrap();
         let without_bass: String = DEMO.replace("track \"Bass\"", "track \"Not the bass\"");
-        let studio: StudioConfiguration = parse_studio("Demo.studio", &without_bass).unwrap();
+        let studio: StudioConfiguration =
+            parse_studio("song_test_count_in_and_verse.studio", &without_bass).unwrap();
         let unmet: Vec<String> = studio
             .unmet_needs(&song)
             .iter()
@@ -500,11 +507,13 @@ mod tests {
     #[test]
     fn a_mark_the_song_uses_needs_its_velocity() {
         let song = crate::song_file::parse_song(
-            "Demo.song",
-            &include_str!("../../../songs/Demo.song").replace("| q:C2 q q q |", "| q>>:C2 q q q |"),
+            "song_test_count_in_and_verse.song",
+            &include_str!("../../../songs/song_test_count_in_and_verse.song")
+                .replace("| q:C2 q q q |", "| q>>:C2 q q q |"),
         )
         .unwrap();
-        let studio: StudioConfiguration = parse_studio("Demo.studio", DEMO).unwrap();
+        let studio: StudioConfiguration =
+            parse_studio("song_test_count_in_and_verse.studio", DEMO).unwrap();
         let unmet: Vec<String> = studio
             .unmet_needs(&song)
             .iter()

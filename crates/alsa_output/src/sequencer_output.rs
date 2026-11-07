@@ -17,6 +17,7 @@ use alsa::seq::{
     Addr, EvCtrl, EvNote, EvQueueControl, Event, EventType, PortCap, PortSubscribe, PortType,
     Remove, RemoveEvents, Seq,
 };
+use vocabulary::duration::Duration;
 use vocabulary::instant::Instant;
 
 use crate::error::AlsaOutputError;
@@ -42,6 +43,12 @@ const ALL_NOTES_OFF_CONTROLLER: u8 = 123;
 /// fast-sequencer burst (a sequencer clocked as an oscillator) is a real
 /// use, so the headroom is kept.
 const OUTPUT_POOL_EVENTS: u32 = 2000;
+
+/// The least time a Note Off is sent before a Note On that follows it on the
+/// same track. A Note Off and Note On at one instant are lost as a pair by
+/// the Disting NT over USB; with 1500 µs one 2-minute run lost 17 of 480
+/// notes, with 5 ms and 20 ms none did (`retrigger_gap_test`, 5 Nov 2026).
+pub const TOUCHING_NOTE_OFF_LEAD: Duration = Duration::from_ms(5);
 
 /// `tv_sec` in ALSA's real-time stamp is 32 bits wide.
 const LARGEST_STAMP_SECONDS: u64 = u32::MAX as u64;
@@ -271,6 +278,32 @@ impl SequencerOutput {
         )
     }
 
+    /// Queues the note-off of a note that started at `note_on_at` and ends
+    /// where the next note on the same track starts, `next_note_on_at`. The
+    /// note-off is sent earlier than `next_note_on_at` by the larger of
+    /// [`TOUCHING_NOTE_OFF_LEAD`] and `retrigger_gap` (the studio's
+    /// setting), so the next note stays on its beat and only the first note
+    /// is shortened.
+    ///
+    /// # Errors
+    ///
+    /// As for [`SequencerOutput::queue_note_off`]; also when the note is no
+    /// longer than the lead, so the note-off would not come after its own
+    /// note-on.
+    pub fn queue_note_off_before_note_on(
+        &self,
+        port: &OutputPort,
+        note_on_at: Instant,
+        next_note_on_at: Instant,
+        retrigger_gap: Duration,
+        channel: u8,
+        note: u8,
+    ) -> Result<(), AlsaOutputError> {
+        let off_at: Instant =
+            touching_note_off_instant(note_on_at, next_note_on_at, retrigger_gap, channel, note)?;
+        self.queue_note_off(port, off_at, channel, note)
+    }
+
     /// Queues a control change on `port`, to be sent at `at`.
     ///
     /// # Errors
@@ -359,7 +392,7 @@ impl SequencerOutput {
 
     /// Queues a Timing Clock (F8) on `port`, to be sent at `at`. `tag`
     /// rides along unchanged to the receiver, so a measuring program can
-    /// tell which pulse arrived (it wraps every 256 pulses).
+    /// tell which clock pulse arrived (it wraps every 256 clock pulses).
     ///
     /// # Errors
     ///
@@ -626,6 +659,34 @@ fn c_string(what: &'static str, name: &str) -> Result<CString, AlsaOutputError> 
     })
 }
 
+/// When the note-off of a note that touches the next one is sent: the lead
+/// (the larger of [`TOUCHING_NOTE_OFF_LEAD`] and `retrigger_gap`) before
+/// `next_note_on_at`.
+fn touching_note_off_instant(
+    note_on_at: Instant,
+    next_note_on_at: Instant,
+    retrigger_gap: Duration,
+    channel: u8,
+    note: u8,
+) -> Result<Instant, AlsaOutputError> {
+    let lead: Duration = retrigger_gap.max(TOUCHING_NOTE_OFF_LEAD);
+    // A next note-on before the note-on counts as a note of no length.
+    let note_length: Duration = next_note_on_at
+        .checked_sub(note_on_at)
+        .unwrap_or(Duration::ZERO);
+    if note_length <= lead {
+        return Err(AlsaOutputError::NoteNotLongerThanLead {
+            channel,
+            note,
+            note_length_ns: note_length.ns(),
+            lead_ns: lead.ns(),
+        });
+    }
+    // Cannot underflow: the lead is shorter than the note, which started at
+    // or after instant 0.
+    Ok(Instant::from_ns(next_note_on_at.ns() - lead.ns()))
+}
+
 fn check_midi_value(what: &'static str, value: u8, largest: u8) -> Result<(), AlsaOutputError> {
     if value > largest {
         return Err(AlsaOutputError::MidiValueOutOfRange {
@@ -635,4 +696,63 @@ fn check_midi_value(what: &'static str, value: u8, largest: u8) -> Result<(), Al
         });
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn off_at(
+        note_on_ms: u64,
+        next_note_on_ms: u64,
+        retrigger_gap_ms: u64,
+    ) -> Result<Instant, AlsaOutputError> {
+        touching_note_off_instant(
+            Instant::from_ns(note_on_ms * 1_000_000),
+            Instant::from_ns(next_note_on_ms * 1_000_000),
+            Duration::from_ms(retrigger_gap_ms),
+            2,
+            24,
+        )
+    }
+
+    #[test]
+    fn with_no_studio_gap_the_note_off_comes_5_ms_before_the_next_note_on() {
+        // 250 ms - 5 ms = 245 ms.
+        assert_eq!(off_at(0, 250, 0).unwrap().ns(), 245_000_000);
+    }
+
+    #[test]
+    fn a_studio_gap_above_the_floor_raises_the_lead() {
+        // 250 ms - 8 ms = 242 ms.
+        assert_eq!(off_at(0, 250, 8).unwrap().ns(), 242_000_000);
+    }
+
+    #[test]
+    fn a_studio_gap_below_the_floor_does_not_lower_the_lead() {
+        assert_eq!(off_at(0, 250, 2).unwrap().ns(), 245_000_000);
+    }
+
+    #[test]
+    fn a_note_no_longer_than_the_lead_is_refused() {
+        assert!(matches!(
+            off_at(100, 105, 0),
+            Err(AlsaOutputError::NoteNotLongerThanLead {
+                note_length_ns: 5_000_000,
+                lead_ns: 5_000_000,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn a_next_note_on_before_the_note_on_is_refused() {
+        assert!(matches!(
+            off_at(100, 50, 0),
+            Err(AlsaOutputError::NoteNotLongerThanLead {
+                note_length_ns: 0,
+                ..
+            })
+        ));
+    }
 }

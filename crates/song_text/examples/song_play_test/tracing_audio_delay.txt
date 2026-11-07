@@ -1,0 +1,67 @@
+How the delay builds up
+
+The NT and the L-12 are two separate ALSA devices, and each one runs on its own clock crystal. PipeWire makes one of them the driver (the clock the graph follows). The other becomes a follower, and its audio is resampled continuously to match the driver.
+
+On the way from the NT’s sound to the L-12’s output, the audio passes through:
+
+the NT’s capture buffer,
+the follower’s resampler buffer,
+one graph cycle (the quantum),
+and the L-12’s playback ring buffer.
+
+At the default quantum of 1024 samples at 48 kHz, one cycle is 21.3 milliseconds. A handful of cycles gets you to about 60 ms.
+
+Getting to 250 ms, and seeing the delay change from one session to the next, usually takes one of three things:
+
+The devices aren’t on the “Pro Audio” profile. On the normal profiles, PipeWire uses timer-based scheduling with large ALSA ring buffers. How full those buffers are at startup decides the delay.
+A large quantum. An app such as a browser or Audacity can ask PipeWire for a larger quantum, up to clock.max-quantum (often 2048 samples, which is 42.7 milliseconds).
+Xruns (buffer underruns or overruns). Each one resets the follower’s buffer, so it can settle at a different fill level.
+What to check (no re-test needed, just look while a song plays)
+Run pw-top.
+Driver: the driver is the line at the top of each group, with its followers indented underneath. Note whether the NT or the L-12 is the driver.
+QUANT: the quantum in samples. Anything over 256 samples is suspect for this use.
+RATE: the follower’s resampling ratio.
+ERR: if this number climbs during a song, xruns are what’s making the delay vary.
+Run pw-metadata -n settings to see clock.quantum, clock.min-quantum, clock.max-quantum and any forced quantum.
+Check the profiles with pactl list cards | grep -i "active profile". Both the NT and the L-12 should be on Pro Audio.
+The likely fix
+Put both devices on Pro Audio. You can do this in pavucontrol’s Configuration tab, or with pactl set-card-profile <card> pro-audio.
+Force a small quantum: pw-metadata -n settings 0 clock.force-quantum 256, which is 5.3 milliseconds per cycle. Setting it back to 0 returns to the default. If ERR in pw-top starts climbing, try 512 samples (10.7 milliseconds).
+Optionally, make the L-12 the driver so it’s the clock the graph follows. Your Mint release ships WirePlumber 0.4.x, which uses Lua configuration files (wireplumber --version will confirm). For example, ~/.config/wireplumber/main.lua.d/51-l12-driver.lua:
+lua
+rule = {
+  matches = { { { "node.name", "matches", "alsa_output.usb-ZOOM*" } } },
+  apply_properties = { ["priority.driver"] = 2000 },
+}
+table.insert(alsa_monitor.rules, rule)
+
+Use the exact node name from pw-cli ls Node. The ZOOM* pattern is my guess at it. Restart WirePlumber afterwards with systemctl --user restart wireplumber.
+
+After that, one new measurement is enough: a single 80 BPM take, with the offset checked near the start and near the end. If the offset is small and the same at both points, it’s fixed. If it’s the same at both points but still too large, your router can delay the other outputs by that amount to line them up.
+
+If you paste the pw-top and pw-metadata output here, I’ll tell you which of these causes it is.
+
+
+=========================================================
+Before you go, two things might save you most of that setup time.
+
+1. Pin the L-12’s profile so you don’t have to pick it each time. You see one entry sometimes and two other times because the card’s profile and its default sink are chosen separately, and WirePlumber restores whatever it last saved. It saves both in ~/.local/state/wireplumber/, in the files default-profile and default-nodes. If those hold an old choice from the non-pro profile, the flip-flop you’re seeing is the result. To fix it:
+
+Delete those two files once, then restart WirePlumber with systemctl --user restart wireplumber.
+Add a rule that forces Pro Audio whenever the L-12 appears. This uses WirePlumber 0.4’s Lua format. Take the exact name from pw-cli ls Device, since ZOOM* is my guess:
+```
+-- ~/.config/wireplumber/main.lua.d/51-l12-pro-audio.lua
+rule = {
+  matches = { { { "device.name", "matches", "alsa_card.usb-ZOOM*" } } },
+  apply_properties = { ["device.profile"] = "pro-audio" },
+}
+table.insert(alsa_monitor.rules, rule)
+```
+2. Try restarting the audio services instead of rebooting. After you switch the L-12 between its card-reader and USB-interface modes, run:
+```
+systemctl --user restart pipewire pipewire-pulse wireplumber
+```
+That makes PipeWire rescan the USB devices from scratch. I can’t promise it fixes this, because it depends on whether the kernel’s USB audio driver re-enumerates the L-12 cleanly. If the L-12 doesn’t show up in aplay -l, the kernel hasn’t seen it, and restarting PipeWire won’t help. If it does show up there but PipeWire still misbehaves, the restart should bring it back without a reboot.
+
+When you have the pw-top and pw-metadata output from a test, paste it here and I’ll tell you which cause it points to.
+

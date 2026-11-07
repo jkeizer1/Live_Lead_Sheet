@@ -18,16 +18,16 @@ pub struct Word {
 /// A message saying how to write the meter.
 pub fn parse_meter(text: &str) -> Result<TimeSignature, String> {
     let wrong = || String::from("write the meter as two numbers, e.g. meter 4/4 or meter 6/8");
-    let Some((counts_text, note_text)) = text.trim().split_once('/') else {
+    let Some((pulses_text, note_text)) = text.trim().split_once('/') else {
         return Err(wrong());
     };
-    let Ok(counts_per_bar) = counts_text.trim().parse::<u8>() else {
+    let Ok(pulses_per_bar) = pulses_text.trim().parse::<u8>() else {
         return Err(wrong());
     };
-    let Ok(counts_per_whole_note) = note_text.trim().parse::<u8>() else {
+    let Ok(pulses_per_whole_note) = note_text.trim().parse::<u8>() else {
         return Err(wrong());
     };
-    TimeSignature::new(counts_per_bar, counts_per_whole_note).map_err(|error| error.to_string())
+    TimeSignature::new(pulses_per_bar, pulses_per_whole_note).map_err(|error| error.to_string())
 }
 
 /// The text after `keyword` and a space, when the line starts with it.

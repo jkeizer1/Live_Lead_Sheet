@@ -302,7 +302,7 @@ rhythm "Backbeat"
         assert!(
             errors[0]
                 .message()
-                .contains("the tie at bar 1 count 4 plus an eighth note has no note")
+                .contains("the tie at bar 1 beat 4 has no note")
         );
     }
 

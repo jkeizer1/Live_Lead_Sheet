@@ -1,10 +1,10 @@
 # Live Lead Sheet — Song Notation
 
-Revision 9 — 5 Nov 2026 (the beat pulse is an ordinary mono voice, not a track type; the note's length is its gate length)
+Revision 13 — 7 Nov 2026 (tempo written in beats; compound meters above 12 refused; "count" replaced by beat and pulse)
 
 **Status: draft for trial.** *Decided* marks what Jim has decided;
 everything else is a proposal to try with a working player. The questions
-still open are in section 9. Terms (bar, count, tick, score position) are
+still open are in section 9. Terms (bar, beat, pulse, tick, score position) are
 those of `Musical Time and Clock.md`. In this document a rhythm's
 **element** is one note or rest; a **sounding element** is a note.
 
@@ -43,8 +43,9 @@ can start from the chords' roots. Its result is written into the song.
   be any note. Filling in roots is a convenience of the editor.
 - **A note sounds for its written duration** (5 Nov 2026), with no
   gate-length percentage. Two marks change this per note: staccato
-  shortens it and legato joins it to the next (section 4). Whether a
-  short retrigger gap is also needed is open (Q11).
+  shortens it and legato joins it to the next (section 4). A note that
+  touches the next one on its track is shortened by 5 ms at the output, so
+  the receiver sees a note off before the next note on (Q11).
 - **Composition and studio configuration are separate** (5 Nov 2026), as
   above.
 - **A song's pitches are staff pitches** (5 Nov 2026), written in the
@@ -68,7 +69,7 @@ can start from the chords' roots. Its result is written into the song.
   only `progression` blocks.
 - **Bars** are written between `|`, as in a chord chart.
 - **Units stay in the file** where a number is a quantity: `tempo 120
-  q/min`, `settle_delay 2 ms`, `octave_offset -1 octaves`. *Decided.*
+  beats/min`, `settle_delay 2 ms`, `octave_offset -1 octaves`. *Decided.*
 - **Pitches** are written as a letter, an accidental (`#` or `b`) and an
   octave, with C4 the middle C of the piano: `C2`, `F#2`, `Bb1`. They are
   positions on the staff of the track's clef, not MIDI note numbers.
@@ -163,8 +164,8 @@ rhythm "Anticipation"
   | hr qr er e~ | q hr. |
 ```
 
-The eighth on the "and" of count 4 is held across the barline into
-count 1 of the next bar: one note an eighth plus a quarter long, a dotted
+The eighth on the "and" of beat 4 is held across the barline into
+beat 1 of the next bar: one note an eighth plus a quarter long, a dotted
 quarter. The rhythm line draws the tie across the barline (EFS-1.5). A tie
 belongs to the rhythm, so every voice track can use it.
 
@@ -184,7 +185,7 @@ For a part a human plays (section 5, `musician_voice`) the marks are the
 usual interpretation marks, shown and not sent. A fermata never changes
 timing in V1: a leader sending MIDI clock cannot hold time without
 disturbing every follower. The accent levels belong to the device (section
-6); the rhythm only says where the accents fall, so a backbeat on counts 2
+6); the rhythm only says where the accents fall, so a backbeat on beats 2
 and 4 is part of a rhythm pattern, e.g. `| q q> q q> |`.
 
 **Assigned to a bar range** (EFS-5.4): more bars than the pattern has, it
@@ -193,7 +194,7 @@ fits. A rhythm is refused for a section of a different meter, with a
 message naming both.
 
 **Not in a rhythm:** pitches and velocities. A rhythm's accent marks are
-part of it: where the accent falls (count 1 in 4/4; counts 1 and 4 in 6/8)
+part of it: where the accent falls (beat 1 in 4/4; beats 1 and 2 in 6/8)
 is written with `>`, so no meter has a rule of its own.
 
 Example message: `charleston.rhythm line 3: bar 1 is short by an eighth
@@ -267,11 +268,11 @@ track "Cues"
   cue "Start SQ-1"  destination "SQ-1"  start
 
 section "Count-in"  count-in
-  meter 4/4  tempo 120 q/min
+  meter 4/4  tempo 120 beats/min
   line "Beat"  | q>:C4 q q q |
 
 section "Verse"  repeat 2
-  key C major  meter 4/4  tempo 120 q/min
+  key C major  meter 4/4  tempo 120 beats/min
   line "Beat"  | q>:C4 q q q | q> q q q |
   line "Keys"  | q:I q q q | qr h:ii7 q:V7 |
   line "Bass"  | q:C2 q q q | qr h:D2 q:G2 |
@@ -354,6 +355,30 @@ short section. The initial tempo is the first section's.
   (nothing is assumed). A section with chords needs a key, written or
   carried; a count-in section needs none. `count-in` is for the first
   section only, one or two bars.
+- **Tempo counts beats**, as the meter defines them (`Musical Time and
+  Clock.md`, sections 2 and 13): `tempo 120 beats/min` or `tempo 2
+  beats/s`, a whole number. No note value is written. In simple time a
+  beat is the lower figure's note; in compound time (6, 9 or 12 on top) it
+  is three of them, a dotted note. So `meter 3/8  tempo 30 beats/min` is
+  30 eighths a minute, and `meter 6/8  tempo 60 beats/min` is 60 dotted
+  quarters a minute: 60 beats/min × 3 eighths/beat = 180 eighths a minute.
+  `q/min`, `e/min` and the like are refused, with a message saying what to
+  write. *Decided (Jim, 7 Nov 2026).*
+  - **A carried tempo keeps the note speed.** A section that changes the
+    meter but writes no tempo keeps the speed of the notes, not the number
+    of beats: after `meter 4/4  tempo 120 beats/min`, a section with only
+    `meter 6/8` plays quarters at 120 a minute, which is 120 q/min ÷
+    1.5 q/beat = 80 beats/min. *Decided (Jim, 7 Nov 2026).*
+  - **The same number with a new beat is a new speed.** After 4/4 at
+    `tempo 120 beats/min`, a 6/8 section writing `tempo 120 beats/min`
+    plays 120 dotted quarters/min × 1.5 q/dotted quarter = 180 q/min: the
+    quarter notes speed up from 120 to 180 a minute.
+  - *Open:* tempos that are not whole numbers (`112.5 beats/min`).
+- **Meters** are n/d with d = 1, 2, 4, 8 or 16. Compound meters stop at
+  12 on top: 15/8, 18/8 and other multiples of 3 above 12 are refused when
+  the song is read, with a message, until their beats are decided
+  (`Musical Time and Clock.md`, section 2). Other figures above 12 (13/8)
+  are simple time.
 - **Order in the file.** All `track` blocks come before the first
   `section`; a `line` names a track already declared. Settings (`key`,
   `meter`, `tempo`, `repeat`, `count-in`) may stand on the section line or
@@ -391,12 +416,14 @@ track "Cues"
 A `tempo_control` track is a line in rhythm notation whose sounding
 elements carry a tempo mark:
 
-- `step 100 q/min` — the tempo becomes 100 q/min at the start of the
-  element.
-- `ramp 60 q/min` — the tempo moves from what it was at the start of the
-  element to 60 q/min by the end of the element. A ramp lasts the
+- `step 100 beats/min` — the tempo becomes 100 beats/min at the start of
+  the element.
+- `ramp 60 beats/min` — the tempo moves from what it was at the start of
+  the element to 60 beats/min by the end of the element. A ramp lasts the
   element's written duration; a tie makes it longer. A ritardando over the
-  last four bars: `| w:ramp 60 q/min~ | w~ | w~ | w |`.
+  last four bars: `| w:ramp 60 beats/min~ | w~ | w~ | w |`.
+
+The beats are those of the section's meter, as for `tempo`.
 
 Ramps apply to any stretch of a section (a speeding up in the first bars,
 a slowing mid-phrase, a retard at the end after several bars at tempo).
@@ -478,8 +505,8 @@ destination "SQ-1"
   `>>`). `normal` is required; an accent level is required only when the
   song uses that mark, and the message names the track.
 - **Device timing**, optional and omitted when not needed: `retrigger_gap`
-  (a note off before the next note on, so a gate into an envelope drops,
-  Q11) and `settle_delay` (time for a quantizer's voltage to settle after
+  (a stopgap that raises the 5 ms lead of a note off before the next note
+  on above its floor; Q11) and `settle_delay` (time for a quantizer's voltage to settle after
   a note is sent). Both are durations in ms, sent as clock time where the
   MIDI is sent, not in ticks: a device's response time does not change
   with tempo (A-7). Omitted, each is 0 ms, a harmless default: no change
@@ -575,18 +602,19 @@ Each test has an example under `examples/<what>_test/` and its
 `explainer.md`.
 
 1. `rhythm_notation_test`: loads the starter rhythms, prints each element
-   in the musician's terms (for example "count 2, half note"), checks the
+   in the musician's terms (for example "bar 1 beat 2: a half note"), checks the
    error messages, then plays a chosen rhythm through the beat-pulse port
    at a chosen tempo, for Jim to hear on the FH-2.
 2. `song_notation_test` (built): loads `songs/Demo.song` and
    `songs/Demo.studio`, prints the song in the musician's terms, checks
    that the studio covers every track and cue destination the song uses,
    and checks the messages for eight kinds of mistake.
-3. `song_play_test`: loads `Demo.song` and `Demo.studio` and plays them:
-   count-in, beat pulse, harmony, bass and the SQ-1 Start cue. This needs
-   the voices' chords added to the player's schedule (which already takes
-   note tracks), and it is the first time Jim hears a composed song. Accents, staccato and
-   legato are tried here.
+3. `song_play_test` (built, not yet heard): loads `Demo.song` and `Demo.studio` and plays them:
+   count-in, beat pulse, harmony, bass and the SQ-1 Start cue. The player
+   turns a song and a studio into note tracks and cue tracks
+   (`player::song_plan`, with the chords voiced by `player::voicing`); it is
+   the first time Jim hears a composed song. Accents are tried here;
+   staccato and legato need the retrigger gap (Q11) and are tried after it.
 4. `apply_test`: from the terminal, choose progressions and rhythms and
    bar ranges and repeats, apply them to a song structure, write the
    song, and hand it to `song_play_test`'s player. This is the test Jim
@@ -616,16 +644,17 @@ the recommendation that will be used unless Jim says otherwise:
 - **Q5.** An element with nothing after it carries the previous element's
   contents. Keep that shorthand, or write the chord on every element?
   Recommended: keep it, as tempo already carries on (EFS-2.2).
-- **Q11.** Retrigger gap. A note sounds for its written duration, but two
-  notes that touch put a note off and a note on at the same instant, and a
-  driven device (an FH-2 gate into an envelope) may need the gate to drop
-  briefly to retrigger. Where it lives is settled: the studio
-  configuration, per track (section 6). Still to settle by a spike,
-  `retrigger_gap_test`: repeated eighths of one chord at a chosen tempo,
-  the gap stepped through 0 ms, 1 ms, 2 ms, 5 ms and 10 ms, with Jim
-  watching the FH-2's gate output and listening to the voice it drives.
-  Many synths have a release, so the cut is not sharp; the test shows
-  which of Jim's devices need a gap at all.
+- **Q11.** Retrigger gap. *Settled 5 Nov 2026.* Two notes that touch put a
+  note off and a note on at the same instant, and the Disting NT, fed over
+  USB, loses the gate of the second note. In 2-minute runs of 480 notes
+  (`retrigger_gap_test`), 5 ms and 20 ms lost none and 1500 µs lost 17.
+  The ALSA output therefore sends the note off of any note that touches
+  the next note on its track (a bass line or a chord alike, any pitch) at
+  least 5 ms before it, and the note on stays on its beat. The studio's
+  `retrigger_gap` can raise that lead above 5 ms as a stopgap. A legato
+  mark is a connected gate, with no gap; it is not built yet. Not proven:
+  why the NT loses the pair (its MIDI handling runs every 0.5 ms), and
+  devices other than the NT.
 - **Q12.** Minor keys: numerals against the natural minor (`i7`, `iv7`,
   `V7`), as the first rule to try? And modes: how a change of mode is
   annotated and made visible is not yet discussed.
@@ -643,26 +672,41 @@ the recommendation that will be used unless Jim says otherwise:
   cues and tempo marks. What each does is decided; the spelling is to be
   tried.
 
+- **Q19.** Driving a queued device such as the Korg SQ-1 (Jim, 5 Nov 2026;
+  *required, not yet designed*). A cue that only starts it
+  (`| w:"Start SQ-1" | wr |`) is not enough. The device is clocked, so the
+  song must make explicit the Timing Clock it sends to that device in
+  relation to the device's documented step resolution (the SQ-1 has six
+  settings: quarter, 8th or 16th note, at SYNC ×1 or ×2; see the router
+  project's `SQ-1 Observations.md`), and cues must be able to start and
+  stop it, once or looped for n loops. At high tempi the device is an
+  oscillator (22000 q/min was reached on 4 Nov 2026). The device
+  knowledge, including the step resolutions, belongs in a device profile
+  (EFS-4.6). Until this exists, the SQ-1 has no place in the song tests.
+
 ## Appendix A — Q14, a chord's intended place inside a library bar
 
 Four ways to write the same place. `A` is the draft.
 
-| Where the chord is meant to start | A: count + note value | B: spoken counting | C: offset by note values | D: lengths as weights |
+| Where the chord is meant to start | A: pulse + note value | B: spoken counting | C: offset by note values | D: lengths as weights |
 |---|---|---|---|---|
-| 4/4, count 3 | `vi7@3` | `vi7@3` | `vi7@+h` | `I@2 vi7@2` |
+| 4/4, pulse 3 | `vi7@3` | `vi7@3` | `vi7@+h` | `I@2 vi7@2` |
 | 4/4, the "and" of 2 | `vi7@2+e` | `vi7@2&` | `vi7@+q.` | `I@3 vi7@5` |
 | 4/4, the "e" of 2 (a sixteenth in) | `vi7@2+sx` | `vi7@2e` | `vi7@+q+sx` | `I@5 vi7@11` |
-| 4/4, a triplet eighth into count 2 | `vi7@2+trp e` | no standard form | `vi7@+q+trp e` | `I@4 vi7@8` |
-| 6/8, count 4 | `vi7@4` | `vi7@4` | `vi7@+q.` | `I@3 vi7@3` |
+| 4/4, a triplet eighth into pulse 2 | `vi7@2+trp e` | no standard form | `vi7@+q+trp e` | `I@4 vi7@8` |
+| 6/8, pulse 4 (beat 2) | `vi7@4` | `vi7@4` | `vi7@+q.` | `I@3 vi7@3` |
 
-- **A** reads like the counter (`Count: 2`) and uses the same letters as
-  the rhythm notation, so there is one rule for every case.
+- **A** numbers the pulses and uses the same letters as the rhythm
+  notation, so there is one rule for every case. It read like the counter
+  while the counter showed pulses; since 7 Nov 2026 the counter shows
+  beats (6/8: `Beat: 2`), so in compound meters A's `@4` and the counter's
+  beat 2 name the same place differently.
 - **B** is how players say it, and the fastest to type. It covers only
   eighths and sixteenths, it has no form for triplets, and its "e" for a
-  sixteenth would clash with the letter `e` for an eighth. In 6/8 the count
+  sixteenth would clash with the letter `e` for an eighth. In 6/8 the pulse
   is itself an eighth, so "&" would mean something else there.
-- **C** needs no counts, only the distance from the bar's start. With
-  letters it can no longer be mistaken for A (`@2` is count 2, `@+h` is a
+- **C** needs no pulse numbers, only the distance from the bar's start. With
+  letters it can no longer be mistaken for A (`@2` is pulse 2, `@+h` is a
   half note later).
 - **D** is the Strudel way (Appendix B): it never says where a change is,
   only how long each chord stays in effect, as a ratio. The weights add up

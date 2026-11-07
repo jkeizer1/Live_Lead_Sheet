@@ -14,15 +14,16 @@ track "Clock"
 
 track "Beat"
   port "Beat pulse"  channel 15
-  velocity normal 64  accent 127
+  velocity normal 80  accent 127
+  octave_offset 0 octaves
 
 track "Keys"
   port "Harmony"  channel 1
-  velocity normal 90  accent 105  strong 120
+  velocity normal 70  accent 105  strong 120
 
 track "Bass"
   port "Bass"  channel 2
-  octave_offset -1 octaves
+  octave_offset 1 octaves
   velocity normal 100  accent 115
   retrigger_gap 2 ms
 

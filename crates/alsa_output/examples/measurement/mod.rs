@@ -2,7 +2,7 @@
 //! a second ALSA client receives the clock pulses, the kernel stamps each
 //! arrival with the queue's real time (so the measuring program's own
 //! scheduling does not distort the result: the method of the Linux MIDI
-//! Router's spike 1), and the delay of every pulse is reported:
+//! Router's spike 1), and the delay of every clock pulse is reported:
 //!
 //!     delay_ns = arrival instant_ns − scheduled instant_ns
 //!
@@ -22,18 +22,18 @@ use vocabulary::duration::Duration;
 use vocabulary::instant::Instant;
 use vocabulary::ticks::TICKS_PER_QUARTER_NOTE;
 
-/// 5040 ticks/q ÷ 24 pulses/q = 210 ticks/pulse.
-const TICKS_PER_PULSE: u64 = 210;
+/// 5040 ticks/q ÷ 24 clock pulses/q = 210 ticks/clock pulse.
+const TICKS_PER_CLOCK_PULSE: u64 = 210;
 const NANOSECONDS_PER_MINUTE: u128 = 60_000_000_000;
 const MILLI_QUARTERS_PER_QUARTER_NOTE: u128 = 1000;
 pub const FIRST_PULSE_DELAY: Duration = Duration::from_ms(1000);
-/// The receiver gives up when no pulse has arrived for this long.
+/// The receiver gives up when no clock pulse has arrived for this long.
 const RECEIVER_PATIENCE: StdDuration = StdDuration::from_secs(2);
 const RECEIVER_POLL: StdDuration = StdDuration::from_millis(1);
 
 pub struct Settings {
     pub quarter_notes_per_minute: u64,
-    pub pulses: u64,
+    pub clock_pulses: u64,
     pub load_threads: u64,
     /// Final stretch before a deadline spent busy-waiting instead of
     /// sleeping; zero for senders that do not wait themselves.
@@ -46,10 +46,10 @@ struct Arrival {
 }
 
 /// Opens the output and a receiving client, connects them, starts the load,
-/// lets `send` send every pulse, and reports. `send` returns the instant
-/// each pulse was meant to be delivered, in order. The pulses go out on
+/// lets `send` send every clock pulse, and reports. `send` returns the instant
+/// each clock pulse was meant to be delivered, in order. The clock pulses go out on
 /// one output port, `PULSE_PORT_NAME`.
-/// The one output port the measurement sends its pulses on.
+/// The one output port the measurement sends its clock pulses on.
 pub const PULSE_PORT_NAME: &str = "Out";
 
 pub fn run_measurement<F>(client_name: &str, settings: &Settings, send: F) -> Result<(), String>
@@ -58,7 +58,7 @@ where
 {
     let (output, warnings): (SequencerOutput, Vec<OutputWarning>) =
         SequencerOutput::open(client_name, &[PULSE_PORT_NAME]).map_err(|e| e.to_string())?;
-    let Some(pulse_port): Option<OutputPort> = output.ports().first().cloned() else {
+    let Some(clock_pulse_port): Option<OutputPort> = output.ports().first().cloned() else {
         return Err(format!(
             "The output opened without its port {PULSE_PORT_NAME:?}."
         ));
@@ -69,20 +69,20 @@ where
 
     let (ready_sender, ready_receiver) = mpsc::channel::<Result<MidiDestination, String>>();
     let queue_id: i32 = output.queue_id();
-    let pulses: u64 = settings.pulses;
+    let clock_pulses: u64 = settings.clock_pulses;
     let receiver_thread: thread::JoinHandle<Result<Vec<Arrival>, String>> =
-        thread::spawn(move || receive_pulses(queue_id, pulses, &ready_sender));
+        thread::spawn(move || receive_clock_pulses(queue_id, clock_pulses, &ready_sender));
     let destination: MidiDestination = ready_receiver
         .recv()
         .map_err(|_| "The receiving client stopped before it was ready.".to_string())??;
     output
-        .connect_to(&pulse_port, destination)
+        .connect_to(&clock_pulse_port, destination)
         .map_err(|e| e.to_string())?;
 
     let stop_load: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
     let load: Vec<thread::JoinHandle<()>> = start_load(settings.load_threads, &stop_load);
 
-    let send_result: Result<Vec<Instant>, String> = send(&output, &pulse_port, settings);
+    let send_result: Result<Vec<Instant>, String> = send(&output, &clock_pulse_port, settings);
 
     // Stop the load before reporting, whatever happened.
     stop_load.store(true, Ordering::Relaxed);
@@ -99,36 +99,37 @@ where
 }
 
 /// T = T₀ + P × 60000000000 ns/min × 1000 mq/q ÷ (B × 5040 ticks/q), with
-/// P = `pulse_number` × 210 ticks/pulse × 1 pulse; ticks, mq and q cancel,
+/// P = `clock_pulse_number` × 210 ticks/clock pulse × 1 clock pulse; ticks, mq and q cancel,
 /// min cancels, leaving ns. Multiply first, divide once, round to nearest ns.
-pub fn pulse_instant(
-    first_pulse: Instant,
-    pulse_number: u64,
+pub fn clock_pulse_instant(
+    first_clock_pulse: Instant,
+    clock_pulse_number: u64,
     quarter_notes_per_minute: u64,
 ) -> Result<Instant, String> {
     let milli_quarters_per_minute: u64 = quarter_notes_per_minute * 1000;
-    let position_ticks: u128 = u128::from(pulse_number) * u128::from(TICKS_PER_PULSE);
+    let position_ticks: u128 = u128::from(clock_pulse_number) * u128::from(TICKS_PER_CLOCK_PULSE);
     let numerator: u128 = position_ticks * NANOSECONDS_PER_MINUTE * MILLI_QUARTERS_PER_QUARTER_NOTE;
     let denominator: u128 =
         u128::from(milli_quarters_per_minute) * u128::from(TICKS_PER_QUARTER_NOTE);
     let offset_ns: u128 = (numerator + denominator / 2) / denominator;
-    let offset_ns: u64 = u64::try_from(offset_ns)
-        .map_err(|_| format!("Pulse {pulse_number} is too far from the start to time."))?;
-    first_pulse
+    let offset_ns: u64 = u64::try_from(offset_ns).map_err(|_| {
+        format!("Clock pulse {clock_pulse_number} is too far from the start to time.")
+    })?;
+    first_clock_pulse
         .checked_add(Duration::from_ns(offset_ns))
         .map_err(|e| e.to_string())
 }
 
-/// The tag a pulse carries, so the receiver can check none was lost.
-pub fn tag_for(pulse_number: u64) -> Result<u8, String> {
-    u8::try_from(pulse_number % 256).map_err(|e| e.to_string())
+/// The tag a clock pulse carries, so the receiver can check none was lost.
+pub fn tag_for(clock_pulse_number: u64) -> Result<u8, String> {
+    u8::try_from(clock_pulse_number % 256).map_err(|e| e.to_string())
 }
 
 /// The second ALSA client: one input port stamping arrivals with the
 /// sender's queue time.
-fn receive_pulses(
+fn receive_clock_pulses(
     queue_id: i32,
-    pulses_wanted: u64,
+    clock_pulses_wanted: u64,
     ready: &mpsc::Sender<Result<MidiDestination, String>>,
 ) -> Result<Vec<Arrival>, String> {
     let seq: Seq = match open_receiving_client(queue_id) {
@@ -150,15 +151,15 @@ fn receive_pulses(
     let mut input = seq.input();
     let mut arrivals: Vec<Arrival> = Vec::new();
     let mut last_event: StdInstant = StdInstant::now();
-    while (arrivals.len() as u64) < pulses_wanted {
+    while (arrivals.len() as u64) < clock_pulses_wanted {
         let pending: u32 = input
             .event_input_pending(true)
-            .map_err(|e| format!("Receiver: checking for pulses: {e}"))?;
+            .map_err(|e| format!("Receiver: checking for clock pulses: {e}"))?;
         if pending == 0 {
             if last_event.elapsed() > RECEIVER_PATIENCE {
                 return Err(format!(
-                    "Receiver: no pulse for {} s; {} of {pulses_wanted} arrived. \
-                     A pulse was lost or the connection failed.",
+                    "Receiver: no clock pulse for {} s; {} of {clock_pulses_wanted} arrived. \
+                     A clock pulse was lost or the connection failed.",
                     RECEIVER_PATIENCE.as_secs(),
                     arrivals.len()
                 ));
@@ -168,14 +169,14 @@ fn receive_pulses(
         }
         let event = input
             .event_input()
-            .map_err(|e| format!("Receiver: reading pulse {}: {e}", arrivals.len()))?;
+            .map_err(|e| format!("Receiver: reading clock pulse {}: {e}", arrivals.len()))?;
         if event.get_type() != EventType::Clock {
             continue;
         }
         last_event = StdInstant::now();
         let Some(stamp) = event.get_time() else {
             return Err(format!(
-                "Receiver: pulse {} arrived without a real-time stamp; \
+                "Receiver: clock pulse {} arrived without a real-time stamp; \
                  port time-stamping is not working.",
                 arrivals.len()
             ));
@@ -220,7 +221,7 @@ fn open_receiving_client(queue_id: i32) -> Result<(Seq, MidiDestination), String
     ))
 }
 
-/// Busy threads that compete for the CPU while the pulses are measured.
+/// Busy threads that compete for the CPU while the clock pulses are measured.
 fn start_load(threads: u64, stop: &Arc<AtomicBool>) -> Vec<thread::JoinHandle<()>> {
     (0..threads)
         .map(|_| {
@@ -237,12 +238,12 @@ fn start_load(threads: u64, stop: &Arc<AtomicBool>) -> Vec<thread::JoinHandle<()
 
 fn report(settings: &Settings, scheduled: &[Instant], arrivals: &[Arrival]) -> Result<(), String> {
     let mut delays_ns: Vec<i128> = Vec::new();
-    for (pulse_number, (instant, arrival)) in scheduled.iter().zip(arrivals).enumerate() {
-        let expected_tag: u8 = tag_for(pulse_number as u64)?;
+    for (clock_pulse_number, (instant, arrival)) in scheduled.iter().zip(arrivals).enumerate() {
+        let expected_tag: u8 = tag_for(clock_pulse_number as u64)?;
         if arrival.tag != expected_tag {
             return Err(format!(
-                "Pulse {pulse_number} arrived with tag {}, expected {expected_tag}: \
-                 a pulse was lost or reordered.",
+                "Clock pulse {clock_pulse_number} arrived with tag {}, expected {expected_tag}: \
+                 a clock pulse was lost or reordered.",
                 arrival.tag
             ));
         }
@@ -255,10 +256,13 @@ fn report(settings: &Settings, scheduled: &[Instant], arrivals: &[Arrival]) -> R
     delays_ns.sort_unstable();
     intervals_ns.sort_unstable();
 
-    let smallest: i128 = delays_ns.first().copied().ok_or("No pulses measured.")?;
+    let smallest: i128 = delays_ns
+        .first()
+        .copied()
+        .ok_or("No clock pulses measured.")?;
     let p99: i128 = percentile(&delays_ns, 990);
     println!(
-        "{} pulses at {} q/min, {} load threads, final {} µs busy-waited",
+        "{} clock pulses at {} q/min, {} load threads, final {} µs busy-waited",
         arrivals.len(),
         settings.quarter_notes_per_minute,
         settings.load_threads,
@@ -276,7 +280,7 @@ fn report(settings: &Settings, scheduled: &[Instant], arrivals: &[Arrival]) -> R
     println!("  jitter (p99 - min) {}", ms(p99 - smallest));
     if let (Some(shortest), Some(longest)) = (intervals_ns.first(), intervals_ns.last()) {
         println!(
-            "Interval between pulses as received: {} to {}",
+            "Interval between clock pulses as received: {} to {}",
             ms(*shortest),
             ms(*longest)
         );
@@ -300,12 +304,12 @@ fn ms(value_ns: i128) -> String {
     )
 }
 
-/// `--bpm N`, `--pulses N`, `--load N`, and (only when `allow_spin`)
+/// `--bpm N`, `--clock-pulses N`, `--load N`, and (only when `allow_spin`)
 /// `--spin-us N`: whole numbers.
 pub fn parse_settings(allow_spin: bool) -> Result<Settings, String> {
     let mut settings: Settings = Settings {
         quarter_notes_per_minute: 120,
-        pulses: 3000,
+        clock_pulses: 3000,
         load_threads: 0,
         spin: Duration::ZERO,
     };
@@ -320,14 +324,14 @@ pub fn parse_settings(allow_spin: bool) -> Result<Settings, String> {
             .map_err(|_| format!("{name} needs a whole number, got {value:?}."))?;
         match name.as_str() {
             "--bpm" => settings.quarter_notes_per_minute = number,
-            "--pulses" => settings.pulses = number,
+            "--clock-pulses" => settings.clock_pulses = number,
             "--load" => settings.load_threads = number,
             "--spin-us" if allow_spin => settings.spin = Duration::from_ns(number * 1000),
             _ => return Err(format!("Unknown option {name}.")),
         }
     }
-    if settings.quarter_notes_per_minute == 0 || settings.pulses < 10 {
-        return Err("--bpm must be at least 1 and --pulses at least 10.".to_string());
+    if settings.quarter_notes_per_minute == 0 || settings.clock_pulses < 10 {
+        return Err("--bpm must be at least 1 and --clock-pulses at least 10.".to_string());
     }
     Ok(settings)
 }

@@ -107,7 +107,7 @@ fn contents_of(
 }
 
 /// A song error in the musician's words: where in the line, in bars and
-/// counts, rather than ticks.
+/// beats, rather than ticks.
 fn describe_song_error(error: &SongError, time_signature: TimeSignature) -> String {
     match error {
         SongError::ElementWithoutContents {
@@ -189,13 +189,13 @@ mod tests {
     #[test]
     fn the_first_note_of_a_line_must_say_what_it_plays() {
         let error: String = build_line(&keys(), "| q q q q |", four_four()).unwrap_err();
-        assert!(error.starts_with("bar 1 count 1: the first note of a line"));
+        assert!(error.starts_with("bar 1 beat 1: the first note of a line"));
     }
 
     #[test]
     fn a_chord_on_a_mono_voice_is_explained_at_its_place() {
         let error: String = build_line(&bass(), "| q:C2 q q q:ii7 |", four_four()).unwrap_err();
-        assert!(error.starts_with("bar 1 count 4:"));
+        assert!(error.starts_with("bar 1 beat 4:"));
         assert!(error.contains("one note"));
     }
 

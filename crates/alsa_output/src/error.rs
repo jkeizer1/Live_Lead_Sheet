@@ -22,6 +22,14 @@ pub enum AlsaOutputError {
     /// Our own output buffer is full: events were queued while the kernel's
     /// output pool stayed full.
     OutputBufferFull { doing: String },
+    /// A note that touches the next one is not longer than the lead its
+    /// note-off needs.
+    NoteNotLongerThanLead {
+        channel: u8,
+        note: u8,
+        note_length_ns: u64,
+        lead_ns: u64,
+    },
 }
 
 impl AlsaOutputError {
@@ -62,6 +70,17 @@ impl fmt::Display for AlsaOutputError {
                 f,
                 "MIDI output full while {doing}: events were queued faster than the kernel \
                  delivers them. Lower the tempo"
+            ),
+            AlsaOutputError::NoteNotLongerThanLead {
+                channel,
+                note,
+                note_length_ns,
+                lead_ns,
+            } => write!(
+                f,
+                "note {note} on channel {channel} lasts {note_length_ns} ns, which is not longer \
+                 than the {lead_ns} ns its note-off must come before the next note. Use a longer \
+                 note or a slower tempo"
             ),
             AlsaOutputError::InstantOutOfRange { instant_ns } => write!(
                 f,

@@ -1,6 +1,6 @@
 # ALSA output — test results and interpretation
 
-Revision 1 — 29 Oct 2026
+Revision 2 — 7 Nov 2026 (a MIDI clock message is a clock pulse)
 
 The record of every run of the programs in this folder, with what each
 result means. How to run them again, and what the terms mean, is in
@@ -21,7 +21,7 @@ was running, so results stay comparable.
 | Studio | Powered off for the measurements; the FH-2 and disting NT were connected for the FH-2 test only |
 | Drawing | None yet — the render half of the spike does not exist. "Load" below means busy threads (`--load N`), a stand-in |
 | Kernel timer settings | Default timer for new queues: global HR timer (`snd_seq` parameters `seq_default_timer_class` 1, `seq_default_timer_device` 3); `seq_default_timer_resolution` 0; the kernel is built with `CONFIG_HZ` 1000 and `CONFIG_SND_SEQ_HRTIMER_DEFAULT` |
-| Pulses | 3000 per row (about 62 s at 120 q/min, about 31 s at 240 q/min) |
+| Clock pulses | 3000 per row (about 62 s at 120 q/min, about 31 s at 240 q/min) |
 
 ## 2. Results
 
@@ -57,7 +57,7 @@ channel 10, about eight times.
 
 ### 2.2 `delivery_spread` — the queue (the adopted design)
 
-| Run | Minimum | Median | p99 | p99.9 | Worst | Jitter (p99 − min) | Interval between pulses as received |
+| Run | Minimum | Median | p99 | p99.9 | Worst | Jitter (p99 − min) | Interval between clock pulses as received |
 |---|---|---|---|---|---|---|---|
 | 120 q/min, no load | 0.126 ms | 0.626 ms | 0.960 ms | 0.960 ms | 0.961 ms | 0.833 ms | 19.998 to 21.001 ms |
 | 240 q/min, 16 busy threads | 0.015 ms | 0.515 ms | 0.932 ms | 0.932 ms | 0.932 ms | 0.916 ms | 9.999 to 11.000 ms |
@@ -65,10 +65,10 @@ channel 10, about eight times.
 
 **Interpretation.**
 
-- Delay is spread evenly from about 0 to 1 ms, and the pulse intervals are
+- Delay is spread evenly from about 0 to 1 ms, and the clock pulse intervals are
   whole-millisecond steps around the ideal (20.833 ms at 120 q/min, 10.417
   ms at 240 q/min). The queue releases each message at the next 1 ms tick
-  after its stamp. A pulse stamped just before a tick is delivered almost
+  after its stamp. A clock pulse stamped just before a tick is delivered almost
   at once; one stamped just after waits almost 1 ms.
 - Load changes nothing: the worst case was 0.961 ms idle and 0.997 ms with
   32 busy threads. The kernel delivers independently of our threads, which
@@ -85,10 +85,10 @@ channel 10, about eight times.
 ### 2.3 Explicit HR-timer selection (Python, from the Linux MIDI Router spike 1)
 
 Run in `~/Documents/Linux_MIDI_Router/spikes/spike-1-clock-jitter`: the test
-clock sends at 120 q/min, and `measure_latency.py` reports the pulse
+clock sends at 120 q/min, and `measure_latency.py` reports the clock pulse
 intervals as received. Only the sender's timer option differs.
 
-| Clock source | Pulse intervals as received (ideal 20.833 ms) |
+| Clock source | Clock pulse intervals as received (ideal 20.833 ms) |
 |---|---|
 | default ("1 ms system timer", as the program reports it) | 19.004 to 21.996 ms |
 | `--high-resolution-timer` (queue timer set explicitly) | 19.999 to 21.024 ms |
@@ -104,10 +104,10 @@ does hold, but only just: it is the same 1 ms grid.
 
 ### 2.4 `deadline_spread` — the fallback (not adopted)
 
-The program sleeps until each pulse's instant, reading the queue's clock,
-and sends the pulse at once.
+The program sleeps until each clock pulse's instant, reading the queue's clock,
+and sends the clock pulse at once.
 
-| Run | Minimum | Median | p99 | p99.9 | Worst | Jitter (p99 − min) | Interval between pulses as received |
+| Run | Minimum | Median | p99 | p99.9 | Worst | Jitter (p99 − min) | Interval between clock pulses as received |
 |---|---|---|---|---|---|---|---|
 | 120 q/min, no load, sleep | 0.027 ms | 0.058 ms | 0.062 ms | 0.069 ms | 0.871 ms | 0.035 ms | 20.019 to 21.646 ms |
 | 120 q/min, no load, sleep + 200 µs busy-wait | 0.000 ms | 0.001 ms | 0.003 ms | 0.509 ms | 1.805 ms | 0.002 ms | 19.029 to 22.637 ms |
@@ -116,11 +116,11 @@ and sends the pulse at once.
 
 **Interpretation.**
 
-- For 99% of pulses, sleeping to the deadline is about ten times more exact
+- For 99% of clock pulses, sleeping to the deadline is about ten times more exact
   than the queue: the typical delay is 58 µs against the queue's 0.5 ms,
-  and 99% of pulses are within 62 µs of the instant.
-- The tail is the problem. With 32 busy threads, about 1 pulse in 1000
-  arrived up to 3 ms late, and even with no load one pulse in 3000 was
+  and 99% of clock pulses are within 62 µs of the instant.
+- The tail is the problem. With 32 busy threads, about 1 clock pulse in 1000
+  arrived up to 3 ms late, and even with no load one clock pulse in 3000 was
   0.87 ms late. The queue never exceeds 1 ms.
 - Busy-waiting the last 200 µs is excellent on a free CPU (median 1 µs) and
   bad on a busy one: the waiting thread is descheduled by the operating
@@ -135,7 +135,7 @@ and sends the pulse at once.
 **Decision supported: the queue stays the one clock (D-8).** Its
 behaviour is coarse (a 1 ms grid) but bounded and independent of what the
 program is doing. The alternative is far more exact most of the time and
-much worse in rare moments, and a rare late pulse is the more audible
+much worse in rare moments, and a rare late clock pulse is the more audible
 fault than a constant small wobble.
 
 **Is the worst case audible?** The queue's worst case, 1 ms, is below what
@@ -145,8 +145,8 @@ listener detects a timing deviation in a steady rhythm from about 2 to
 5 ms, and a hit early or late by under 10 ms is heard as feel, not as
 error. USB MIDI delivers in 1 ms frames and a MIDI cable takes 0.32 ms per
 byte, so the followers' own timing is already about as coarse. The worst
-pulse of any run, 6.3 ms, is at the edge of what a trained listener might
-notice, and only if the follower steps on that very pulse. The listening
+clock pulse of any run, 6.3 ms, is at the edge of what a trained listener might
+notice, and only if the follower steps on that very clock pulse. The listening
 test has not been done; this is a judgement from numbers, not a hearing.
 
 **Limits of this evidence.**
@@ -154,8 +154,8 @@ test has not been done; this is a judgement from numbers, not a hearing.
 - The load is artificial. 32 busy threads on 24 hardware threads is harsher
   than the real program; real drawing is one thread mostly waiting on the
   GPU.
-- 3000 pulses give only 3 samples at p99.9. Tail figures are rough; the
-  explainer gives the `--pulses 30000` run for better ones.
+- 3000 clock pulses give only 3 samples at p99.9. Tail figures are rough; the
+  explainer gives the `--clock-pulses 30000` run for better ones.
 - The machine was otherwise idle. A game running, a browser, or PipeWire
   at a small buffer size could change the fallback's tail far more than
   the queue's.

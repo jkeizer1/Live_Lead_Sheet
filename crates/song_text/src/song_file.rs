@@ -8,6 +8,7 @@ use vocabulary::key::Key;
 use vocabulary::midi_values::{
     ControllerNumber, ControllerValue, NoteNumber, ProgramNumber, Velocity,
 };
+use vocabulary::score_length::ScoreLength;
 use vocabulary::song::{
     Clef, CueDefinition, CueDestination, CueMessage, Line, Section, Song, Track, TrackKind,
     VoiceKind,
@@ -49,12 +50,53 @@ struct OpenSection {
     repeat_count: Option<u32>,
     key: Option<Key>,
     time_signature: Option<TimeSignature>,
-    tempo: Option<Tempo>,
+    tempo: Option<WrittenTempo>,
     lines: Vec<RawLine>,
     errors_at_start: usize,
 }
 
-/// The key, meter and tempo a section carries on from the one before.
+/// A tempo as the song file writes it. How long a beat is comes from the
+/// section's meter, which may be written after the tempo or carried from
+/// the section before, so the conversion waits until the section closes.
+#[derive(Debug, Clone, Copy)]
+enum WrittenTempo {
+    BeatsPerMinute(u64),
+    BeatsPerSecond(u64),
+}
+
+impl WrittenTempo {
+    fn to_tempo(self, time_signature: TimeSignature) -> Result<Tempo, String> {
+        let beat_length: ScoreLength = time_signature.beat_length();
+        let (result, written): (Result<Tempo, TempoError>, String) = match self {
+            WrittenTempo::BeatsPerMinute(beats_per_minute) => (
+                Tempo::from_beats_per_minute(beats_per_minute, beat_length),
+                format!("{beats_per_minute} beats/min"),
+            ),
+            WrittenTempo::BeatsPerSecond(beats_per_second) => (
+                Tempo::from_beats_per_second(beats_per_second, beat_length),
+                format!("{beats_per_second} beats/s"),
+            ),
+        };
+        result.map_err(|error| match error {
+            TempoError::Zero => format!("a tempo of {written} never plays. Use 1 or more"),
+            TempoError::TooFast { .. }
+            | TempoError::BeatsTooFast { .. }
+            | TempoError::BeatsPerSecondTooFast { .. } => format!("{written} is too fast"),
+            TempoError::BeatNotWholeMilliQuarters { .. } => {
+                format!(
+                    "{written} in {}/{}: {error}",
+                    time_signature.pulses_per_bar(),
+                    time_signature.pulses_per_whole_note()
+                )
+            }
+        })
+    }
+}
+
+/// The key, meter and tempo a section carries on from the one before. The
+/// tempo carries as note speed, not as beats: a section that changes the
+/// meter but writes no tempo keeps the quarter note's speed (Jim, 7 Nov
+/// 2026).
 #[derive(Default)]
 struct Carried {
     key: Option<Key>,
@@ -306,15 +348,29 @@ impl SongReader<'_> {
             );
             return;
         };
-        let Some(tempo) = open.tempo.or(self.carried.tempo) else {
-            self.report(
-                open.line_number,
-                format!(
-                    "section \"{}\" has no tempo. Add tempo 120 q/min (or the tempo you want)",
-                    open.name
-                ),
-            );
-            return;
+        let tempo: Tempo = match (open.tempo, self.carried.tempo) {
+            (Some(written), _) => match written.to_tempo(time_signature) {
+                Ok(tempo) => tempo,
+                Err(message) => {
+                    self.report(
+                        open.line_number,
+                        format!("section \"{}\": {message}", open.name),
+                    );
+                    return;
+                }
+            },
+            (None, Some(carried)) => carried,
+            (None, None) => {
+                self.report(
+                    open.line_number,
+                    format!(
+                        "section \"{}\" has no tempo. Add tempo 120 beats/min (or the tempo \
+                         you want)",
+                        open.name
+                    ),
+                );
+                return;
+            }
         };
         let key: Option<Key> = open.key.or(self.carried.key);
         let lines: Vec<Line> = self.build_lines(&open, time_signature);
@@ -550,7 +606,7 @@ fn parse_cue_message(message_words: &[Word]) -> Option<Result<CueMessage, String
 }
 
 /// Reads `count-in`, `repeat n`, `key C major`, `meter 4/4`, `tempo 120
-/// q/min` in any order, on the section line or lines after it.
+/// beats/min` in any order, on the section line or lines after it.
 fn read_settings(section: &mut OpenSection, text: &str) -> Result<(), String> {
     let all: Vec<Word> = words(text)?;
     let mut remaining: &[Word] = &all;
@@ -574,7 +630,7 @@ fn read_settings(section: &mut OpenSection, text: &str) -> Result<(), String> {
             other => {
                 return Err(format!(
                     "\"{other}\" is not understood in a section. Expected count-in, repeat n, \
-                     key C major, meter 4/4, tempo 120 q/min, or line \"Track\" | ... |"
+                     key C major, meter 4/4, tempo 120 beats/min, or line \"Track\" | ... |"
                 ));
             }
         };
@@ -622,22 +678,37 @@ fn read_meter<'a>(section: &mut OpenSection, after: &'a [Word]) -> Result<&'a [W
     Ok(rest)
 }
 
+/// `tempo 120 beats/min` or `tempo 2 beats/s`: a whole number of beats,
+/// the beat being the one the meter defines.
 fn read_tempo<'a>(section: &mut OpenSection, after: &'a [Word]) -> Result<&'a [Word], String> {
-    let wrong = || String::from("write the tempo with its unit, e.g. tempo 120 q/min");
+    let wrong = || {
+        String::from(
+            "write the tempo as whole beats with its unit, e.g. tempo 120 beats/min or \
+             tempo 2 beats/s",
+        )
+    };
     let [number, unit, rest @ ..] = after else {
         return Err(wrong());
     };
-    if unit.text != "q/min" {
-        return Err(wrong());
+    let beats: u64 = number.text.parse::<u64>().map_err(|_| wrong())?;
+    let written: WrittenTempo = match unit.text.as_str() {
+        "beats/min" => WrittenTempo::BeatsPerMinute(beats),
+        "beats/s" => WrittenTempo::BeatsPerSecond(beats),
+        // The note-value units of earlier song files (q/min, e/min, ...).
+        old if old.ends_with("/min") || old.ends_with("/s") => {
+            return Err(format!(
+                "{old} is no longer read. Write the tempo in beats, e.g. tempo {beats} \
+                 beats/min. The meter says what a beat is (in 6/8, a dotted quarter)"
+            ));
+        }
+        _ => return Err(wrong()),
+    };
+    if beats == 0 {
+        return Err(String::from(
+            "a tempo of 0 beats never plays. Use 1 or more",
+        ));
     }
-    let quarter_notes_per_minute: u64 = number.text.parse::<u64>().map_err(|_| wrong())?;
-    let tempo: Tempo = Tempo::from_quarter_notes_per_minute(quarter_notes_per_minute).map_err(
-        |error| match error {
-            TempoError::Zero => String::from("a tempo of 0 q/min never plays. Use 1 or more"),
-            TempoError::TooFast { .. } => format!("{quarter_notes_per_minute} q/min is too fast"),
-        },
-    )?;
-    if section.tempo.replace(tempo).is_some() {
+    if section.tempo.replace(written).is_some() {
         return Err(String::from("tempo is written twice in this section"));
     }
     Ok(rest)
@@ -648,7 +719,7 @@ mod tests {
     use super::*;
     use vocabulary::song::ElementContents;
 
-    const DEMO: &str = include_str!("../../../songs/Demo.song");
+    const DEMO: &str = include_str!("../../../songs/song_test_count_in_and_verse.song");
 
     fn errors_of(text: &str) -> Vec<String> {
         parse_song("test.song", text)
@@ -664,14 +735,14 @@ mod tests {
             "song \"T\"\ntrack \"Clock\"\n  type clock_and_transport\n\
              track \"Keys\"\n  type poly_voice\n  clef grand\n  lead\n\
              track \"Bass\"\n  type mono_voice\n  clef bass\n\
-             section \"A\"\n  key C major  meter 4/4  tempo 120 q/min\n{tail}"
+             section \"A\"\n  key C major  meter 4/4  tempo 120 beats/min\n{tail}"
         )
     }
 
     #[test]
     fn the_demo_song_loads() {
-        let song: Song = parse_song("Demo.song", DEMO).unwrap();
-        assert_eq!(song.name(), "Demo");
+        let song: Song = parse_song("song_test_count_in_and_verse.song", DEMO).unwrap();
+        assert_eq!(song.name(), "Song test count-in and verse");
         assert_eq!(song.tracks().len(), 5);
         assert_eq!(song.sections().len(), 2);
         let verse: &Section = &song.sections()[1];
@@ -685,7 +756,7 @@ mod tests {
 
     #[test]
     fn the_second_chord_carries_to_the_rest_of_its_bar() {
-        let song: Song = parse_song("Demo.song", DEMO).unwrap();
+        let song: Song = parse_song("song_test_count_in_and_verse.song", DEMO).unwrap();
         let keys: &Line = song.sections()[1]
             .lines()
             .iter()
@@ -716,7 +787,7 @@ mod tests {
             "  line \"Keys\"  | q:I q q q |\n  line \"Bass\"  | q:C2 q q q:V7 |\n",
         ));
         assert_eq!(errors.len(), 1);
-        assert!(errors[0].contains("bar 1 count 4:"), "{}", errors[0]);
+        assert!(errors[0].contains("bar 1 beat 4:"), "{}", errors[0]);
     }
 
     #[test]
@@ -730,7 +801,7 @@ mod tests {
     #[test]
     fn a_song_without_a_lead_or_clock_is_refused() {
         let text: &str = "song \"T\"\ntrack \"Keys\"\n  type poly_voice\n  clef treble\n\
-                          section \"A\"\n  key C major  meter 4/4  tempo 120 q/min\n  line \"Keys\" | q:I q q q |\n";
+                          section \"A\"\n  key C major  meter 4/4  tempo 120 beats/min\n  line \"Keys\" | q:I q q q |\n";
         let errors: Vec<String> = errors_of(text);
         assert!(errors[0].contains("clock and transport"), "{}", errors[0]);
     }
@@ -757,7 +828,7 @@ mod tests {
     fn chords_in_a_section_without_a_key_are_refused() {
         let text: &str = "song \"T\"\ntrack \"Clock\"\n  type clock_and_transport\n\
                           track \"Keys\"\n  type poly_voice\n  clef treble\n  lead\n\
-                          section \"A\"\n  meter 4/4  tempo 120 q/min\n  line \"Keys\" | q:I q q q |\n";
+                          section \"A\"\n  meter 4/4  tempo 120 beats/min\n  line \"Keys\" | q:I q q q |\n";
         let errors: Vec<String> = errors_of(text);
         assert!(errors[0].contains("has chords but no key"), "{}", errors[0]);
     }
@@ -766,8 +837,119 @@ mod tests {
     fn a_cue_not_defined_is_refused() {
         let text: &str = "song \"T\"\ntrack \"Clock\"\n  type clock_and_transport\n\
                           track \"Cues\"\n  type cue_control\n  cue \"Go\" destination \"X\" start\n\
-                          section \"A\"\n  meter 4/4  tempo 120 q/min\n  line \"Cues\" | w:\"Stop\" |\n";
+                          section \"A\"\n  meter 4/4  tempo 120 beats/min\n  line \"Cues\" | w:\"Stop\" |\n";
         let errors: Vec<String> = errors_of(text);
         assert!(errors[0].contains("no cue named \"Stop\""), "{}", errors[0]);
+    }
+
+    /// Two Keys sections. Each is one bar, holding one chord: `first_bar`
+    /// and `second_bar` must fill the bar of `first` and `second`'s meter.
+    fn two_sections(first: &str, first_bar: &str, second: &str, second_bar: &str) -> String {
+        format!(
+            "song \"T\"\ntrack \"Clock\"\n  type clock_and_transport\n\
+             track \"Keys\"\n  type poly_voice\n  clef grand\n  lead\n\
+             section \"A\"\n  key C major  {first}\n  line \"Keys\" | {first_bar} |\n\
+             section \"B\"\n  {second}\n  line \"Keys\" | {second_bar} |\n"
+        )
+    }
+
+    fn tempos_of(text: &str) -> Vec<u64> {
+        parse_song("test.song", text)
+            .unwrap()
+            .sections()
+            .iter()
+            .map(|section: &Section| section.tempo().milli_quarters_per_minute())
+            .collect()
+    }
+
+    #[test]
+    fn a_tempo_counts_the_beats_of_its_meter() {
+        // 4/4: quarter-note beats. 120 beats/min = 120 q/min.
+        // 6/8: dotted-quarter beats. 60 beats/min × 1.5 q/beat = 90 q/min.
+        assert_eq!(
+            tempos_of(&two_sections(
+                "meter 4/4  tempo 120 beats/min",
+                "w:I",
+                "meter 6/8  tempo 60 beats/min",
+                "h.:I"
+            )),
+            vec![120_000, 90_000]
+        );
+        // 3/8: eighth-note beats. 30 beats/min × 0.5 q/beat = 15 q/min.
+        assert_eq!(
+            tempos_of(&two_sections(
+                "meter 3/8  tempo 30 beats/min",
+                "q.:I",
+                "meter 9/8  tempo 60 beats/min",
+                "h.:I q.:I"
+            )),
+            vec![15_000, 90_000]
+        );
+    }
+
+    #[test]
+    fn a_tempo_may_come_before_its_meter_and_in_beats_per_second() {
+        // 2 beats/s × 60 s/min = 120 dotted quarters/min × 1.5 q = 180 q/min.
+        assert_eq!(
+            tempos_of(&two_sections(
+                "tempo 120 beats/min  meter 4/4",
+                "w:I",
+                "tempo 2 beats/s  meter 6/8",
+                "h.:I"
+            )),
+            vec![120_000, 180_000]
+        );
+    }
+
+    #[test]
+    fn a_carried_tempo_keeps_the_note_speed_across_a_meter_change() {
+        // B writes no tempo: the quarter note stays at 120 q/min in 6/8
+        // (80 dotted-quarter beats/min), not 120 dotted quarters/min.
+        assert_eq!(
+            tempos_of(&two_sections(
+                "meter 4/4  tempo 120 beats/min",
+                "w:I",
+                "meter 6/8",
+                "h.:I"
+            )),
+            vec![120_000, 120_000]
+        );
+    }
+
+    #[test]
+    fn a_note_value_tempo_says_to_write_beats() {
+        let errors: Vec<String> =
+            errors_of(&song_with("").replace("tempo 120 beats/min", "tempo 30 e/min"));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(
+            errors[0].contains(
+                "e/min is no longer read. Write the tempo in beats, e.g. tempo 30 beats/min"
+            ),
+            "{}",
+            errors[0]
+        );
+    }
+
+    #[test]
+    fn a_tempo_without_whole_beats_and_a_unit_is_refused() {
+        for written in [
+            "tempo 120",
+            "tempo 112.5 beats/min",
+            "tempo 120 bpm",
+            "tempo 0 beats/min",
+        ] {
+            let errors: Vec<String> =
+                errors_of(&song_with("").replace("tempo 120 beats/min", written));
+            assert_eq!(errors.len(), 1, "{written}: {errors:?}");
+            assert!(errors[0].starts_with("test.song line 12:"), "{}", errors[0]);
+        }
+    }
+
+    #[test]
+    fn a_compound_meter_above_twelve_is_refused_at_its_line() {
+        let errors: Vec<String> = errors_of(&song_with("").replace("meter 4/4", "meter 15/8"));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(errors[0].starts_with("test.song line 12:"), "{}", errors[0]);
+        assert!(errors[0].contains("15/8 is not read yet"), "{}", errors[0]);
     }
 }

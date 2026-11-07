@@ -68,7 +68,7 @@ code only in adapters), but do not build them.
   "step 4") alone. Say in a few words what it requires or decides, and
   add the code only as a pointer. Jim has not memorized the documents.
 - **Music in musical terms.** In chat, explain rhythm and harmony in
-  counts, bars and note values ("a half note on beat 2"), not ticks or
+  bars, beats and note values ("a half note on beat 2"), not ticks or
   clock times. Ticks belong in the clock document and the code.
 - **Precise, in full context.** Explain in connected prose that carries
   the reasoning, not a series of terse points. Name the thing each time
@@ -127,8 +127,9 @@ These apply to code, code comments, doc comments, test names, error
 messages and documents alike:
 
 - **Terms** are those defined in `docs/Architecture/Musical Time and
-  Clock.md`, used with exactly those meanings: tick, count, pulse
-  (MIDI clock pulse), score position, score length, instant, duration,
+  Clock.md`, used with exactly those meanings: tick, pulse (the
+  lower figure's note), beat, clock pulse (a MIDI Timing Clock pulse),
+  score position, score length, instant, duration,
   tempo, anchor. "Tick" never means a MIDI clock pulse.
 - **Exact technical names**, never shorthand: "ALSA tick queue" and
   "ALSA realtime queue" (alsa-lib's terms), "Timing Clock (F8)", not
@@ -136,7 +137,7 @@ messages and documents alike:
 - **Units** in every name and every calculation comment
   (`length_ticks`, `instant_ns`, `TICKS_PER_QUARTER_NOTE`); a comment
   showing arithmetic shows the units and how they cancel.
-- **Plurals** as in ordinary English: `ticks`, `counts`, "5040 ticks",
+- **Plurals** as in ordinary English: `ticks`, `beats`, "5040 ticks",
   "1 tick"; in a rate the word after "per" stays singular
   (`ticks_per_quarter_note`, "ticks/q").
 - **Numbers:** in documents and comments, no digit grouping (20160). In
@@ -170,7 +171,7 @@ bright white fields or dropdowns.
   calculation carries its unit, and formulas show how units cancel.
   Write numbers without digit grouping (20160, not 20 160).
 - Use ordinary English plurals with unit words: *5040 ticks*,
-  *24 pulses*, *1 tick*. In a rate the word after "per" or "/" stays
+  *24 clock pulses*, *1 tick*. In a rate the word after "per" or "/" stays
   singular, as in "meters per second": *ticks/q*. Abbreviations are never
   pluralized (*60 s*, *4 q*).
 - In formulas, state each symbol's unit once in a symbols table; don't

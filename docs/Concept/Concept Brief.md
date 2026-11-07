@@ -1,6 +1,6 @@
 # Live Lead Sheet — Concept Brief
 
-Revision 13 — 5 Nov 2026 (the beat pulse is a mono voice)
+Revision 15 — 7 Nov 2026 (the counter shows beats; "count" replaced by beat and pulse)
 
 ## Purpose
 
@@ -19,7 +19,7 @@ numerals so one progression serves any key, with an intended place for a
 change inside a bar. *Example:* 12-bar blues — I7 ×4, IV7 ×2, I7 ×2, V7, IV7 (or
 V7), I7 / V7 turnaround.
 
-**Rhythm pattern** (library). One to eight bars of pulses, written as
+**Rhythm pattern** (library). One to eight bars of notes and rests, written as
 note values (quarter, eighth, triplet group, dotted half…). Assigned to
 more bars than its length, it repeats; assigned to fewer, it is cut.
 Applied to a progression, it puts each bar's chords on its notes; the
@@ -69,7 +69,7 @@ A control track holds:
 - the **beat pulse** — an ordinary voice playing one fixed note, with
   the accent written where it is wanted, for clock dividers and devices
   that follow notes better than MIDI clock;
-- later, **pulse bursts** — a fast stream of pulses for a set length, to
+- later, **pulse bursts** — a fast stream of notes for a set length, to
   clock a sequencer far above the song's tempo so it becomes an
   oscillator, or to fire fast voices: a sound blast from a cue.
 
@@ -113,7 +113,7 @@ musician when authoring. The leader plays exactly what is written.
 and repeats, with the current position.
 
 **Counter.** Large and plain, in the musician's terms:
-`Repeat: 3   Bar: 2   Count: 1`, the count advancing on each beat.
+`Repeat: 3   Bar: 2   Beat: 1`, advancing on each beat of the meter.
 
 **Voice tracks.** Each voice track has its own contained area:
 

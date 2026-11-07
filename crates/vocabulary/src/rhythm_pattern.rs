@@ -428,7 +428,7 @@ mod tests {
 
     #[test]
     fn an_element_may_not_cross_a_barline() {
-        // A half note starting on count 4 of bar 1.
+        // A half note starting on beat 4 of bar 1.
         let elements: Vec<RhythmElement> = vec![
             element(0, 15_120, ElementKind::Rest, false),
             element(15_120, 10_080, ElementKind::Sounding, false),

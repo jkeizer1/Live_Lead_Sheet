@@ -4,12 +4,13 @@
 //! Every voice is the same to the schedule: a note-on with a velocity at the
 //! start of an element and a note-off at its end. What the receiver does
 //! with them (a gate and a pitch CV on the FH-2, a velocity gate on the
-//! Disting NT) is the receiver's business. A click or a pulse for a clock
+//! Disting NT) is the receiver's business. A click or a trigger for a clock
 //! divider is a mono voice that plays one fixed note (Song Notation,
 //! section 5).
 
 use std::fmt;
 
+use vocabulary::duration::Duration;
 use vocabulary::midi_values::{MidiChannel, NoteNumber, Velocity};
 use vocabulary::phrase_cue::OutputPortName;
 use vocabulary::rhythm_pattern::{AccentLevel, ElementKind, RhythmPattern};
@@ -37,6 +38,8 @@ pub struct NoteTrack {
     port: OutputPortName,
     channel: MidiChannel,
     notes: Vec<TimedNote>,
+    /// The studio's `retrigger_gap` for this track's output.
+    retrigger_gap: Duration,
 }
 
 impl NoteTrack {
@@ -66,7 +69,25 @@ impl NoteTrack {
             port,
             channel,
             notes,
+            // Zero is harmless: the ALSA output's own lead floor still applies.
+            retrigger_gap: Duration::ZERO,
         })
+    }
+
+    /// The track with the studio's `retrigger_gap` for its output: a stopgap
+    /// that raises the lead of a touching note-off above the ALSA output's
+    /// floor.
+    #[must_use]
+    pub fn with_retrigger_gap(self, retrigger_gap: Duration) -> NoteTrack {
+        NoteTrack {
+            retrigger_gap,
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn retrigger_gap(&self) -> Duration {
+        self.retrigger_gap
     }
 
     /// A mono voice playing one fixed `note` on the notes of `rhythm`,
@@ -274,7 +295,7 @@ mod tests {
 
     #[test]
     fn a_rhythm_repeats_to_fill_the_stretch_and_its_marks_set_the_velocity() {
-        // Charleston with an accent on count 1: dotted quarter, eighth, half rest.
+        // Charleston with an accent on beat 1: dotted quarter, eighth, half rest.
         let accent: ElementMarks = ElementMarks::new(AccentLevel::Accent, false, false, false);
         let charleston: RhythmPattern = RhythmPattern::new(
             "Charleston",
@@ -335,7 +356,7 @@ mod tests {
     #[test]
     fn staccato_sounds_for_half_the_written_length_and_the_last_note_is_cut_at_the_end() {
         let staccato: ElementMarks = ElementMarks::new(AccentLevel::Normal, true, false, false);
-        let pulses: RhythmPattern = RhythmPattern::new(
+        let notes: RhythmPattern = RhythmPattern::new(
             "Short",
             four_four(),
             1,
@@ -352,7 +373,7 @@ mod tests {
         )
         .unwrap();
         // A stretch of 15000 ticks cuts the second note at 15000 - 10080 = 4920 ticks.
-        let track: NoteTrack = track_of(&pulses, 15_000).unwrap();
+        let track: NoteTrack = track_of(&notes, 15_000).unwrap();
         assert_eq!(
             starts_lengths_velocities(&track),
             vec![(0, 5040, 64), (10_080, 4920, 64)]

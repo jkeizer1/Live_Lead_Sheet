@@ -1,0 +1,37 @@
+# Test song, owned by the tests (song_text's song_file, studio_file and
+# demo_song_plan tests check exactly what is written here). Do not edit for
+# music; change it only together with those tests.
+#
+# A one-bar count-in, then a two-bar verse played twice.
+song "Song test count-in and verse"
+
+track "Clock"
+  type clock_and_transport
+
+track "Beat"
+  type mono_voice
+  clef treble
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+track "Bass"
+  type mono_voice
+  clef bass
+
+track "Cues"
+  type cue_control
+  cue "Start SQ-1"  destination "SQ-1"  start
+
+section "Count-in"  count-in
+  meter 4/4  tempo 120 beats/min
+  line "Beat"  | q>:C4 q q q |
+
+section "Verse"  repeat 2
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Beat"  | q>:C4 q q q   | q> q q q       |
+  line "Keys"  | q:I q q q     | qr h:ii7 q:V7  |
+  line "Bass"  | q:C2 q q q | q:G2 h q |
+  line "Cues"  | w:"Start SQ-1" | wr            |

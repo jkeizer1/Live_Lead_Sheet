@@ -1,6 +1,6 @@
 # Live Lead Sheet — Musical Time and Clock
 
-Revision 16 — 4 Nov 2026
+Revision 17 — 7 Nov 2026
 
 How the program represents *where* things are in a song, *how long* they
 last, and *when* they happen. Every term is defined before it is used;
@@ -21,16 +21,17 @@ that no digit grouping can be misread as an operator.
 | tick | tick | 1/5040 of a quarter note — the unit of score quantity |
 | q | quarter note | 5040 ticks |
 | w | whole note | 4 q = 20160 ticks |
-| pulse | MIDI clock pulse | 1/24 of a quarter note = 210 ticks |
-| count | one count of a bar | one whole note (w) divided by the time signature's lower number: in 4/4, 1/4 of a whole note = 5040 ticks; in 6/8, 1/8 of a whole note = 2520 ticks |
+| clock pulse | MIDI clock pulse | 1/24 of a quarter note = 210 ticks |
+| pulse | one pulse of a bar | the note value of the time signature's lower figure: a whole note (w) divided by it. In 4/4, 1/4 of a whole note = 5040 ticks; in 6/8, 1/8 of a whole note = 2520 ticks |
+| beat | one beat of a bar | in simple time 1 pulse; in compound time (upper figure 6, 9 or 12) 3 pulses, a dotted note (section 2) |
 | min, s, ms, µs, ns | minute, second, millisecond, microsecond, nanosecond | 1 min = 60 s; 1 s = 1000 ms = 1000000 µs = 1000000000 ns |
 | mq | milli-quarter | 1/1000 of a quarter note — used only for tempo |
-| mq/min | tempo | milli-quarters per minute; 120 BPM = 120000 mq/min |
+| mq/min | tempo, inside the program | milli-quarters per minute; 120 q/min = 120000 mq/min |
 
 **Writing units.** Ordinary English throughout, with one rule:
 
 - **Unit words take the English plural**, exactly as in "5 metres" or
-  "a speed in metres per second": *5040 ticks*, *24 pulses*, *6 counts*,
+  "a speed in metres per second": *5040 ticks*, *24 clock pulses*, *6 pulses*,
   *1 tick*. That applies everywhere, including table headings.
 - **In a rate, the word after "per" (or after /) stays singular**, as in
   "metres per second": *5040 ticks/q*, read "5040 ticks per quarter
@@ -49,15 +50,16 @@ check after each formula shows how the units cancel.
 | ΔP | score length, P − P₀ | ticks |
 | T, T₀ | instant; T₀ is an anchor's instant | ns |
 | B | tempo | mq/min |
-| n | upper number of the time signature: counts per bar | counts |
-| d | lower number of the time signature: counts per whole note | counts/w |
-| L_count | length of one count | ticks/count |
+| n | upper figure of the time signature: pulses per bar | pulses |
+| d | lower figure of the time signature: pulses per whole note | pulses/w |
+| L_pulse | length of one pulse | ticks/pulse |
+| L_beat | length of one beat | ticks/beat |
 | L_bar | length of one bar | ticks |
 
-**Counting units.** *count*, *pulse* and *beat* are counting units —
+**Counting units.** *pulse*, *beat* and *clock pulse* are counting units —
 dimensionless in the strict physical sense, like "items". They are kept
 in unit checks anyway, so that cancellations stay visible: for example
-counts × ticks/count → ticks.
+pulses × ticks/pulse → ticks.
 
 **Products are written with ×.** A space separates a number from its
 unit (*5040 ticks*, *60 s*), as in ordinary measurement writing. Where a
@@ -71,7 +73,7 @@ Conversion factors used below, each with its unit:
 |---|---|
 | ticks per quarter | 5040 ticks/q |
 | ticks per whole note | 20160 ticks/w |
-| ticks per pulse | 210 ticks/pulse |
+| ticks per clock pulse | 210 ticks/clock pulse |
 | milli-quarters per quarter | 1000 mq/q |
 | nanoseconds per minute | 60000000000 ns/min |
 
@@ -138,27 +140,52 @@ when playing starts. The strip shows bars in performance order
 **Score length (ΔP).** Ticks between two positions:
 `ΔP = later P − earlier P`.
 
-**Count length and bar length.** For time signature *n/d* — *n* counts
-per bar, each count 1/*d* of a whole note:
+**Pulse, beat and bar.** *Decided (Jim, 7 Nov 2026), following the
+rudiments (Barbara Wharram, Elementary Rudiments of Music, ch. 7, "Time").*
+For time signature *n/d*, the **pulse** is the lower figure's note value,
+1/*d* of a whole note, and a bar has *n* pulses. The **beat** depends on
+the kind of time:
+
+- **Simple time** (every *n* other than 6, 9 or 12): a beat is one pulse;
+  *n* beats a bar.
+- **Compound time** (*n* = 6, 9 or 12: duple, triple, quadruple): a beat
+  is three pulses, a dotted note; *n* ÷ 3 beats a bar. No lower figure
+  can name a dotted note, which is why the upper figure counts pulses.
 
 ```
-L_count = 20160 ticks/w ÷ d
-L_bar   = n × L_count
+L_pulse = 20160 ticks/w ÷ d
+L_beat  = L_pulse                (simple time)
+L_beat  = 3 pulses × L_pulse     (compound time)
+L_bar   = n × L_pulse
 ```
 
-Unit checks: `ticks/w ÷ counts/w` → ticks/count; `counts × ticks/count`
-→ ticks.
+Unit checks: `ticks/w ÷ pulses/w` → ticks/pulse;
+`pulses × ticks/pulse` → ticks.
 
-| Time signature | Count length | Bar length |
-|---|---|---|
-| 4/4 | 20160 ticks ÷ 4 = 5040 ticks | 4 × 5040 ticks = 20160 ticks |
-| 3/4 | 5040 ticks | 3 × 5040 ticks = 15120 ticks |
-| 6/8 | 20160 ticks ÷ 8 = 2520 ticks | 6 × 2520 ticks = 15120 ticks |
-| 5/4 | 5040 ticks | 5 × 5040 ticks = 25200 ticks |
-| 7/8 | 2520 ticks | 7 × 2520 ticks = 17640 ticks |
-| 2/2 (cut time) | 20160 ticks ÷ 2 = 10080 ticks | 2 × 10080 ticks = 20160 ticks |
+| Time signature | Kind | Pulse | Beats a bar | Beat | Bar |
+|---|---|---|---|---|---|
+| 4/4 | simple quadruple | 20160 ticks ÷ 4 = 5040 ticks | 4 | 5040 ticks | 4 × 5040 ticks = 20160 ticks |
+| 3/4 | simple triple | 5040 ticks | 3 | 5040 ticks | 15120 ticks |
+| 3/8 | simple triple | 2520 ticks | 3 | 2520 ticks | 7560 ticks |
+| 2/2 (cut time) | simple duple | 10080 ticks | 2 | 10080 ticks | 20160 ticks |
+| 5/4 | simple quintuple | 5040 ticks | 5 | 5040 ticks | 25200 ticks |
+| 7/8 | simple septuple | 2520 ticks | 7 | 2520 ticks | 17640 ticks |
+| 6/8 | compound duple | 2520 ticks | 6 ÷ 3 = 2 | 3 × 2520 ticks = 7560 ticks | 15120 ticks |
+| 9/8 | compound triple | 2520 ticks | 3 | 7560 ticks | 22680 ticks |
+| 12/8 | compound quadruple | 2520 ticks | 4 | 7560 ticks | 30240 ticks |
+| 9/4 | compound triple | 5040 ticks | 3 | 15120 ticks | 45360 ticks |
+| 12/16 | compound quadruple | 1260 ticks | 4 | 3780 ticks | 15120 ticks |
 
-Count 1 of each bar is the bar's first position (EFS-1.3).
+Check: beats a bar × beat = bar (6/8: 2 beats × 7560 ticks/beat = 15120
+ticks = 6 pulses × 2520 ticks/pulse).
+
+Beat 1 of each bar is the bar's first position (EFS-1.3). The felt
+grouping of an irregular meter (5/8 as 2+3, 7/8 as 2+2+3) is its **beat
+grouping**, a matter of display; its beat for tempo stays the pulse.
+*Open:* an upper figure that is a multiple of 3 outside the rudiments
+(15/8, 18/8) is refused when a song is read, with a message; and a
+meter meant against its figures (a 9/8 as 2+2+2+3, a 6/4 in three half
+notes) needs an override, decided with beat grouping.
 
 **Instant (T).** A clock reading: a whole number of nanoseconds from
 **the clock** (section 5). Instants are only compared and subtracted;
@@ -215,13 +242,13 @@ music uses. Each prime factor of the count permits one kind of division:
 | 7 | 5040 ticks ÷ 7 = 720 ticks | septuplets (rare) |
 
 **Time signatures need none of these factors.** The upper number
-*multiplies* (5/4: 5 counts × 5040 ticks/count); the lower number divides
+*multiplies* (5/4: 5 pulses × 5040 ticks/pulse); the lower number divides
 a whole note by 2, 4, 8 or 16 only, which 2⁴ covers. Dotted values
 multiply too (a dotted quarter = 3 × 2520 ticks). So 3/8, 6/8, 12/8, 5/4
 and 7/8 are all exact with factor 2 alone.
 
-**MIDI clock** sends 24 pulses/q:
-`5040 ticks/q ÷ 24 pulses/q = 210 ticks/pulse`, exactly.
+**MIDI clock** sends 24 clock pulses/q:
+`5040 ticks/q ÷ 24 clock pulses/q = 210 ticks/clock pulse`, exactly.
 
 **Overflow.** Positions are stored in 64 bits (largest value
 18446744073709551615 ticks). At 300 q/min the score advances
@@ -276,7 +303,7 @@ program creates for its MIDI output.
   `alsa` crate (0.12.1) does not offer, and it keeps its `snd_seq_t`
   handle private, so a separate FFI binding cannot reach our queue. It
   was also tried (the Linux MIDI Router's spike 1 clock source with
-  `--high-resolution-timer`, 29 Oct 2026): pulse intervals at 120 q/min
+  `--high-resolution-timer`, 29 Oct 2026): clock pulse intervals at 120 q/min
   were 19.999 to 21.024 ms with it, against 19.998 to 21.001 ms from our
   queue's default, so it changes nothing on this machine.
 - **How events are stamped.** Every event handed to the queue carries
@@ -291,7 +318,7 @@ program creates for its MIDI output.
   music changes.
 - **Fallback, tested and not adopted.** A thread that sleeps until each
   instant and sends the event at once was measured against the queue
-  (below). It is ten times more exact for 99% of pulses but its worst
+  (below). It is ten times more exact for 99% of clock pulses but its worst
   case is worse than the queue's under heavy load, so the queue stays.
 
 **Evidence** (Jim's machine, 29 Oct 2026, from `/proc/asound/timers`,
@@ -311,9 +338,9 @@ events arrive. Delivery accuracy was measured as described next.
 **Delivery measured** (Jim's machine, 29 Oct 2026; examples
 `delivery_spread` and `deadline_spread` in the `alsa_output` crate,
 release build, 3000 clock pulses per row). A second ALSA client of the
-same program receives the pulses; the kernel stamps each arrival with
+same program receives the clock pulses; the kernel stamps each arrival with
 the queue's real time. *Delay* is arrival instant minus the instant the
-pulse was meant for. *Load* is busy threads competing for the 24 hardware
+clock pulse was meant for. *Load* is busy threads competing for the 24 hardware
 threads of the CPU.
 
 | Sender | Tempo, load | Median | p99 | Worst | Jitter (p99 − min) |
@@ -328,17 +355,17 @@ threads of the CPU.
 
 What this shows:
 
-- The queue releases every pulse within 1 ms after its instant, with or
+- The queue releases every clock pulse within 1 ms after its instant, with or
   without load. Its average lateness (0.5 ms) is harmless: everything is
-  late together. Pulses arrive on a 1 ms grid (intervals of 9.999 to
+  late together. Clock pulses arrive on a 1 ms grid (intervals of 9.999 to
   11.000 ms around the ideal 10.417 ms at 240 q/min).
 - Sleeping to deadlines is typically about ten times more exact, but under
-  oversubscription about 1 pulse in 1000 arrives up to 3 ms late, and even
-  idle one pulse was 0.87 ms late. Busy-waiting is exact on a free CPU
+  oversubscription about 1 clock pulse in 1000 arrives up to 3 ms late, and even
+  idle one clock pulse was 0.87 ms late. Busy-waiting is exact on a free CPU
   and worse than the queue when the CPU is oversubscribed (the waiting
   thread is descheduled).
 - 32 busy threads on 24 hardware threads is harsher than the real program.
-  3000 pulses give only 3 samples at p99.9, so tail figures are rough.
+  3000 clock pulses give only 3 samples at p99.9, so tail figures are rough.
 
 **Is it audible?** The adopted queue's worst case, 1 ms, is far below
 what listeners are generally reported to notice. From memory of the
@@ -347,9 +374,9 @@ listener detects a timing deviation in a steady rhythm only from about
 2 to 5 ms, and a hit that is early or late by under 10 ms is heard as
 feel, not as an error. The followers' own timing is coarser still: USB
 MIDI delivers in 1 ms frames, and a MIDI cable takes 0.32 ms per byte.
-Even the worst case measured for any sender, 6.3 ms for a single pulse in
+Even the worst case measured for any sender, 6.3 ms for a single clock pulse in
 the harshest run, is at the edge of what a trained listener notices, and
-only if the follower steps on every pulse. So the choice between senders
+only if the follower steps on every clock pulse. So the choice between senders
 rests on predictability, not on audibility. The listening test (Part B of
 the Linux MIDI Router's spike 1) has not been done for this program; it
 remains the final check, with the real drawing load, through the
@@ -437,9 +464,9 @@ T = 14000000000 ns + (60480 ticks − 40320 ticks) × K ÷ (140000 mq/min × 504
 ```
 
 **Example 3 — 6/8.** At 120 q/min a quarter lasts 0.5 s. A 6/8 bar is
-15120 ticks = 15120 ticks ÷ 5040 ticks/q = 3 q = 1.5 s. Its two felt beats
-are dotted quarters, 7560 ticks = 1.5 q = 0.75 s each; its six counts are
-eighths, 2520 ticks = 0.5 q = 0.25 s each.
+15120 ticks = 15120 ticks ÷ 5040 ticks/q = 3 q = 1.5 s. Its two beats
+are dotted quarters, 7560 ticks = 1.5 q = 0.75 s each; its six pulses
+are eighths, 2520 ticks = 0.5 q = 0.25 s each.
 
 **Example 4 — the tempo slider at 90 %.** 120 q/min × 0.90 = 108 q/min
 = 108000 mq/min. A new anchor is made where the slider takes effect.
@@ -449,14 +476,14 @@ One 4/4 bar then lasts
 20160 ticks × K ÷ (108000 mq/min × 5040 ticks/q) = 2222222222 ns  (≈ 2.222 s)
 ```
 
-**Example 5 — MIDI clock pulses.** A pulse is sent at every multiple of
-210 ticks. At 120 q/min the interval between pulses is
+**Example 5 — MIDI clock pulses.** A clock pulse is sent at every multiple of
+210 ticks. At 120 q/min the interval between clock pulses is
 
 ```
 210 ticks × K ÷ (120000 mq/min × 5040 ticks/q) = 20833333 ns  (≈ 20.833 ms)
 ```
 
-which is 0.5 s/q ÷ 24 pulses/q. Each pulse's instant is computed from
+which is 0.5 s/q ÷ 24 clock pulses/q. Each clock pulse's instant is computed from
 the anchor, never by adding 20833333 ns repeatedly.
 
 ## 8. Anchors in practice
@@ -531,34 +558,34 @@ clock of section 5.
 
 | Message | Byte | What the owner means by it |
 |---|---|---|
-| Timing Clock | F8 | one pulse; 24 pulses/q |
-| Start | FA | play from the song's beginning; the next Timing Clock is its first pulse |
+| Timing Clock | F8 | one clock pulse; 24 clock pulses/q |
+| Start | FA | play from the song's beginning; the next Timing Clock is its first clock pulse |
 | Stop | FC | stop; followers keep their position |
-| Continue | FB | play from the followers' current position; the next Timing Clock is its first pulse |
+| Continue | FB | play from the followers' current position; the next Timing Clock is its first clock pulse |
 | Song Position Pointer | F2 | while stopped: set the position, in MIDI beats |
 
-A MIDI beat is a sixteenth note: 6 pulses × 210 ticks/pulse = 1260 ticks.
+A MIDI beat is a sixteenth note: 6 clock pulses × 210 ticks/clock pulse = 1260 ticks.
 No message carries a tempo: tempo is the rate of Timing Clock.
 
 **What a clock owner canonically does:**
 
-- *Set the tempo:* send Timing Clock every 1 ÷ (24 pulses/q × tempo).
+- *Set the tempo:* send Timing Clock every 1 ÷ (24 clock pulses/q × tempo).
 - *Start from the beginning:* Start, then the first Timing Clock at the
   downbeat.
 - *Start from a position:* while stopped, Song Position Pointer with the
   position in MIDI beats, then Continue, then the first Timing Clock at
   that position. Followers may need a short gap after Song Position
   Pointer to locate (section 15, facts to verify).
-- *Change tempo:* change the interval between pulses from the pulse where
+- *Change tempo:* change the interval between clock pulses from the clock pulse where
   the change is written. Nothing else is sent.
 - *While stopped:* many owners keep sending Timing Clock, so followers
   know the tempo before Start. The player does not (D-10): Timing Clock
   runs from Play to Stop, and the count-in section gives followers their
-  pulses before the music's first bar.
+  clock pulses before the music's first bar.
 
 **What a clock follower canonically does while stopped.** MIDI 1.0: after
 Stop, a device synced to external clock ignores further Timing Clock;
-Start or Continue takes effect at the next Timing Clock. So pulses sent
+Start or Continue takes effect at the next Timing Clock. So clock pulses sent
 while stopped can set a tempo display but advance nothing.
 
 **What the studio's devices were observed to do** (Linux MIDI Router
@@ -568,9 +595,9 @@ Observations rev 1, NK Observations rev 3, SQ-1 Observations; tests of
 
 | Device | Timing Clock while its transport is stopped | Start |
 |---|---|---|
-| FH-2 | tempo display measures the pulses; its **Clock** outputs give no pulses; the pulses are still forwarded to the disting NT | a **Start** (or Start/Cont) trigger output type gives a reset trigger |
+| FH-2 | tempo display measures the clock pulses; its **Clock** outputs give no clock pulses; the clock pulses are still forwarded to the disting NT | a **Start** (or Start/Cont) trigger output type gives a reset trigger |
 | FH-2 gates driven by notes | — (notes, not clock) | stayed in step whatever the transport did |
-| disting NT | MIDI monitor shows the pulses; Clock and Step Sequencer algorithms do not advance | Clock algorithm honours Start and Stop |
+| disting NT | MIDI monitor shows the clock pulses; Clock and Step Sequencer algorithms do not advance | Clock algorithm honours Start and Stop |
 | NiftyKEYZ in external clock mode | its **clock jack keeps pulsing** in tempo, at a musical rate set by its division keys (rates not yet recorded) | its arp starts on Start |
 | SQ-1, clock and transport on its `CTRL` port | not recorded | Stop then Start resets it to step 1 |
 
@@ -596,18 +623,18 @@ ahead (section 5), like every other event:
   Song Position Pointer is not sent: many followers ignore it (D-10).
   The state in effect there is sent first (EFS-4.5).
 - **Tempo changes** (written or slider): nothing extra is sent. The new
-  anchor (section 8) changes the instants of the pulses not yet queued.
+  anchor (section 8) changes the instants of the clock pulses not yet queued.
 
 - **Stop:** the steps of section 8.
 
 **Starting followers in step (D-10, 4 Nov 2026).** Clock and reset are
-separate, as in Eurorack practice. A clock *divider* counts pulses, so
-it follows from its next pulse; only its phase is unknown. A clock
-*multiplier* measures the time between pulses, so it lags every tempo
+separate, as in Eurorack practice. A clock *divider* counts clock pulses, so
+it follows from its next clock pulse; only its phase is unknown. A clock
+*multiplier* measures the time between clock pulses, so it lags every tempo
 change by about one input period: send the fastest rate anything needs
 and divide down. (To check in the 4ms Quad Clock Divider's manual: that
 its ÷N settings count and its ×N settings measure.) The count-in section
-gives the dividers their pulses; a reset cue on the music's first bar
+gives the dividers their clock pulses; a reset cue on the music's first bar
 fixes their phase and starts the sequencers together. Everything uses
 standard MIDI messages and notes, so setups without an FH-2 work the
 same; the FH-2's Start trigger and note-driven gates are one way to carry
@@ -629,7 +656,7 @@ is a section of the score, not a state (D-10). Each Play, play from a section, a
 The MIDI path has priority; the screen only follows (A-5).
 
 - **The player never waits for the screen.** It publishes the song
-  events (A-6: started, stopped, section, bar, count, tempo, warnings) on
+  events (A-6: started, stopped, section, bar, beat, tempo, warnings) on
   a channel, and the screen takes all pending ones each frame. Commands
   from the screen (Play, Stop, play from, slider, loop release) travel
   the other way as typed messages on their own channel. A MIDI controller
@@ -654,14 +681,14 @@ V1 does not block it.
 
 **What a clock follower canonically does:**
 
-- Counts Timing Clock; each pulse advances it 1/24 of a quarter note.
+- Counts Timing Clock; each clock pulse advances it 1/24 of a quarter note.
 - On Start: goes to its start position; the next Timing Clock is the
-  first pulse.
-- On Continue: the next Timing Clock is the next pulse from where it
+  first clock pulse.
+- On Continue: the next Timing Clock is the next clock pulse from where it
   stopped (or from a received Song Position Pointer).
 - On Stop: stops sounding and keeps its position.
 - Tempo is not received. It is measured from the interval between
-  pulses, and is needed only for what falls between pulses.
+  clock pulses, and is needed only for what falls between clock pulses.
 
 While following, the screen's transport controls are disabled and the
 player follows the clock owner's Start, Stop and Continue (EFS-2.9).
@@ -671,90 +698,104 @@ position 0 is the music's first bar, so the count-in section is not
 played (EFS-2.9).
 
 **How it could be done.** An ALSA sequencer queue cannot itself follow
-an external MIDI clock, so the player counts pulses:
+an external MIDI clock, so the player counts clock pulses:
 
 - The external source's port (e.g. the FH-2) is subscribed to the
   player's input port with timestamping on the player's queue in real
   time. Each received Timing Clock then carries the queue's real time of
   its arrival, set by the kernel, not by when the player's thread woke.
-- A **pulse anchor** (k₀, P₀) says "pulse k₀ is position P₀":
+- A **clock pulse anchor** (k₀, P₀) says "clock pulse k₀ is position P₀":
 
   ```
-  P = P₀ + (k − k₀) × 210 ticks/pulse
+  P = P₀ + (k − k₀) × 210 ticks/clock pulse
   ```
 
-  Unit check: `pulses × ticks/pulse` → ticks.
+  Unit check: `clock pulses × ticks/clock pulse` → ticks.
 - Events at Pₖ are sent at once; events after Pₖ and before Pₖ₊₁ are
   stamped in real time:
 
   ```
-  T = Tₖ + (P − Pₖ) × I ÷ 210 ticks/pulse
+  T = Tₖ + (P − Pₖ) × I ÷ 210 ticks/clock pulse
   ```
 
-  Unit check: `ticks × ns/pulse ÷ ticks/pulse` → ns.
+  Unit check: `ticks × ns/clock pulse ÷ ticks/clock pulse` → ns.
 - Displayed tempo:
-  `B = 60000000000 ns/min × 1000 mq/q ÷ (24 pulses/q × I)`.
-  Unit check: `ns/min × mq/q ÷ (pulses/q × ns/pulse)` → mq/min.
+  `B = 60000000000 ns/min × 1000 mq/q ÷ (24 clock pulses/q × I)`.
+  Unit check: `ns/min × mq/q ÷ (clock pulses/q × ns/clock pulse)` → mq/min.
 - **Song Position Pointer** while stopped: the play position becomes
   P_music + (MIDI beats received) × 1260 ticks/MIDI beat, where P_music
   is the position of the music's first bar (the length of the count-in
   section; 0 ticks without one).
 - **Start or Continue:** the start position S is the music's first bar
-  (P_music) or the play position, as the start control says. The pulse
-  anchor is (0 pulses, S).
+  (P_music) or the play position, as the start control says. The clock pulse
+  anchor is (0 clock pulses, S).
 - **Clock lost:** if no Timing Clock arrives for 1 s while playing
   (EFS-2.9; a starting value, to be tested), the player stops, sends
   Note Off for every sounding note, and shows the message of EFS-2.9.
-  It can wake for this check without a timer of its own: after each pulse
-  it schedules an Echo event to its own input port at that pulse's
-  arrival plus 1 s, and ignores the Echo if a later pulse came first.
+  It can wake for this check without a timer of its own: after each clock pulse
+  it schedules an Echo event to its own input port at that clock pulse's
+  arrival plus 1 s, and ignores the Echo if a later clock pulse came first.
 - While the clock source is external, Stopped means waiting for Start or
   Continue from the clock owner.
 
 | Symbol | Meaning | Unit |
 |---|---|---|
-| k, k₀ | pulse count since Start or Continue; k₀ at the pulse anchor | pulses |
-| Pₖ, Tₖ | position and arrival instant of pulse k | ticks, ns |
-| I | measured interval between pulses | ns/pulse |
+| k, k₀ | clock pulse count since Start or Continue; k₀ at the clock pulse anchor | clock pulses |
+| Pₖ, Tₖ | position and arrival instant of clock pulse k | ticks, ns |
+| I | measured interval between clock pulses | ns/clock pulse |
 
 Here the player sends notes as soon as its thread wakes, so its timing
 depends on that thread. Following has priority over drawing (EFS-2.9);
 whether that needs a real-time thread priority, which is a system
 setting, is measured when following is spiked.
 
-## 13. Displayed tempo versus internal tempo
+## 13. Tempo: beats per minute or per second
 
-**Decided (Jim, 29 Oct 2026):** the tempo the musician enters and sees,
-in BPM, counts the time signature's **counts** per minute — the note
-value of its lower number. In 4/4, 120 BPM is 120 quarter notes per
-minute; in 3/8 or 6/8, 120 BPM is 120 eighth notes per minute; in 2/2,
-60 BPM is 60 half notes per minute. This matches how bars are counted
-(EFS-1.3: 6/8 counts 1–6).
+**Decided (Jim, 7 Nov 2026; replaces the 29 Oct decision, which counted
+the lower figure's note value in every meter):** tempo counts **beats**
+(section 2), per minute or per second. The song file writes
+`tempo 30 beats/min` or `tempo 2 beats/s`; no note value is written, as
+the meter already says what a beat is.
 
-Internally, tempo is always B, in mq/min (section 2). The conversion
-uses the count length L_count:
+Inside, tempo is always B, in mq/min (section 2). The conversion uses the
+beat length L_beat:
 
 ```
-quarter tempo = displayed tempo × L_count ÷ 5040 ticks/q
-B             = quarter tempo × 1000 mq/q
+B = tempo in beats/min × L_beat × 1000 mq/q ÷ 5040 ticks/q
+B = tempo in beats/s × 60 s/min × L_beat × 1000 mq/q ÷ 5040 ticks/q
 ```
 
-Unit check: `counts/min × ticks/count ÷ ticks/q` → q/min;
-`q/min × mq/q` → mq/min.
+Unit check: `beats/min × ticks/beat × mq/q ÷ ticks/q` → mq/min.
 
-| Time signature | Displayed tempo | L_count | Quarter tempo | B |
-|---|---|---|---|---|
-| 4/4 | 120 BPM | 5040 ticks/count | 120 counts/min × 5040 ticks/count ÷ 5040 ticks/q = 120 q/min | 120000 mq/min |
-| 3/8 | 120 BPM | 2520 ticks/count | 120 counts/min × 2520 ticks/count ÷ 5040 ticks/q = 60 q/min | 60000 mq/min |
-| 6/8 | 120 BPM | 2520 ticks/count | 60 q/min | 60000 mq/min |
-| 2/2 | 60 BPM | 10080 ticks/count | 60 counts/min × 10080 ticks/count ÷ 5040 ticks/q = 120 q/min | 120000 mq/min |
+**Exact.** The shortest beat is a sixteenth (d = 16 is the largest lower
+figure): 1260 ticks × 1000 mq/q ÷ 5040 ticks/q = 250 mq per beat. Every
+beat is a whole multiple of a sixteenth, so a whole number of beats/min
+or beats/s always gives a whole number of mq/min: B is exact, with no
+rounding.
 
-**Consequence to keep in mind:** when a song moves between meters with
-different lower numbers, the same displayed number means a different
-speed. A 4/4 section at 120 BPM followed by a 6/8 section at 120 BPM
-plays the eighth notes of the 6/8 at the speed of the quarter notes of
-the 4/4 — the music halves in quarter-note speed. The song file states
-each section's tempo in its own counts, so this is always explicit.
+| Time signature | Tempo | L_beat | B |
+|---|---|---|---|
+| 4/4 | 120 beats/min | 5040 ticks/beat | 120 beats/min × 5040 ticks/beat × 1000 mq/q ÷ 5040 ticks/q = 120000 mq/min |
+| 3/8 | 30 beats/min | 2520 ticks/beat | 15000 mq/min (15 q/min) |
+| 2/2 | 60 beats/min | 10080 ticks/beat | 120000 mq/min |
+| 5/4 | 100 beats/min | 5040 ticks/beat | 100000 mq/min |
+| 6/8 | 60 beats/min | 7560 ticks/beat | 90000 mq/min (90 q/min, 180 eighths/min) |
+| 9/8 | 60 beats/min | 7560 ticks/beat | 90000 mq/min |
+| 12/8 | 60 beats/min | 7560 ticks/beat | 90000 mq/min |
+| 9/16 | 80 beats/min | 3780 ticks/beat | 60000 mq/min |
+| 6/8 | 2 beats/s | 7560 ticks/beat | 2 beats/s × 60 s/min × 7560 ticks/beat × 1000 mq/q ÷ 5040 ticks/q = 180000 mq/min |
+
+**Consequence to keep in mind:** the same number means a different speed
+when the beat changes. A 4/4 section at 120 beats/min followed by a 6/8
+section at 120 beats/min goes from quarter-note beats to dotted-quarter
+beats: 120 dotted quarters/min × 1.5 q/dotted quarter = 180 q/min, so
+the quarter notes speed up from 120 q/min to 180 q/min. The song file
+states each section's tempo in its own beats, so this is always explicit.
+
+*Open:* whether decimal tempos (`112.5 beats/min`) are allowed; with a
+sixteenth beat (250 mq/min per beat/min), a tempo with more than one
+decimal place can fall between whole mq/min (112.25 beats/min × 250 =
+28062.5).
 
 ## 14. Names in the code
 
@@ -781,8 +822,12 @@ each section's tempo in its own counts, so this is always explicit.
   (a quarter, a dotted eighth) are converted to ticks when they are
   created, so quantities in different note units are never mixed as raw
   numbers.
-- "Tick" means only the unit of 1/5040 of a quarter note. MIDI's clock messages, sent at
-  24 pulses/q, are always **clock pulses**.
+- "Tick" means only the unit of 1/5040 of a quarter note. MIDI's clock
+  messages, sent at 24 clock pulses/q, are always **clock pulses**;
+  "pulse" alone always means a pulse of the bar (section 2).
+- **Decided (Jim, 7 Nov 2026):** "count" is no longer a term: it is
+  replaced by *pulse* and *beat* (section 2), as musicians and the
+  rudiments use them. The counter shows beats (EFS-1.3).
 - "Instant" means a clock reading in ns; "duration" means a difference
   of instants.
 
@@ -814,7 +859,7 @@ is still open.
   (a Start cue on one output port and a Timing Clock on the clock
   output) are delivered in the order sent.
 - **FH-2 clock while stopped — settled 2 Nov 2026.** The FH-2's Clock
-  outputs give no pulses while its transport is stopped; its tempo
+  outputs give no clock pulses while its transport is stopped; its tempo
   display still measures them, and it forwards them to the disting NT
   (section 9).
 - **Beat pulse into a divider.** An FH-2 gate driven by the beat pulse,

@@ -1,0 +1,31 @@
+# Demo studio: where the tracks of Demo.song go. Port names are the names
+# of the program's MIDI output ports; connecting them to devices is done
+# outside (the MIDI router, aconnect).
+studio "jimssong1.studio"
+
+port "ClockP"
+port "HarmonyP"
+port "BassP"
+port "BeatP"
+
+track "Clock"
+  port "ClockP"
+
+track "Harmony"
+  port "HarmonyP"  channel 1
+  velocity normal 70  accent 105  strong 120
+
+track "Bass"
+  port "BassP"  channel 3
+  octave_offset 1 octaves
+  velocity normal 100  accent 115
+  retrigger_gap 2 ms
+
+track "Beat"
+  port "BeatP"  channel 2
+  velocity normal 80  accent 127
+  octave_offset 0 octaves
+
+
+
+
