@@ -27,11 +27,11 @@ track "Cues"
 
 section "Count-in"  count-in
   meter 4/4  tempo 120 beats/min
-  line "Beat"  | q>:C4 q q q |
+  line "Beat"  | C4:q> / / / |
 
 section "Verse"  repeat 2
   key C major  meter 4/4  tempo 120 beats/min
-  line "Beat"  | q>:C4 q q q   | q> q q q       |
-  line "Keys"  | q:I q q q     | qr h:ii7 q:V7  |
-  line "Bass"  | q:C2 q q q | q:G2 h q |
-  line "Cues"  | w:"Start SQ-1" | wr            |
+  line "Beat"  | C4:q> / / /   | /> / / /       |
+  line "Keys"  | I:q / / /     | r ii7:h V7:q   |
+  line "Bass"  | C2:q / / / | G2 /:h /:q |
+  line "Cues"  | "Start SQ-1":w | r             |

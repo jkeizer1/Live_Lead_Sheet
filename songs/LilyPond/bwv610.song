@@ -1,0 +1,86 @@
+# BWV 610 "Jesu, meine Freude", J. S. Bach, from the Mutopia LilyPond file
+# songs/LilyPond/bach-bwv610.ly (Peters edition, ed. Ernst H. Wolfram).
+# The manuals are one track with three voice layers (the chorale, and the
+# two inner voices of the right and left hands); the pedal is its own track.
+#
+# Does not load yet, for two reasons outside this notation change:
+# minor keys are not designed (key C minor is refused), and the F sharps in
+# bars 4, 10, 11, 12 and 13 are cut off by the comment sign.
+song "Jesu, meine Freude"
+
+track "Clock"
+  type clock_and_transport
+
+track "Manual"
+  type poly_voice
+  clef grand
+  lead
+
+track "Pedal"
+  type mono_voice
+  clef bass
+
+section "Stollen"  repeat 2
+  key C minor  meter 4/4  tempo 40 beats/min
+  line "Manual"  voice_layer 1
+    | G4:q G4 F4 Eb4 |
+    | D4:h C4^ |
+    | G4:q G4 A4 B4 |
+    | C5:h B4^ |
+    | C5:e. D5:sx Eb5:q D5:q. D5:e |
+    | C5:w^ |
+  line "Manual"  voice_layer 2
+    | Eb4:sx D4 Eb4:e~ Eb4:sx F4 Eb4 D4 C4:e D4~ D4 C4 |
+    | C4 C4:q B3:e C4:e. G3:sx C4 B3 C4 D4 |
+    | Eb4 D4 Eb4:e~ Eb4:sx F4 Eb4 D4 C4:e D4:sx Eb4 F4 Ab4 G4 F4~ |
+    | F4 E4 F4:e~ F4:sx G4 F4 Eb4 D4 Eb4 D4:e~ D4:sx Eb4 F4 D4 |
+    | G4:e F4 Eb4:sx G4 Ab4 Eb4 F4 Eb4 F4 D4 G4 Ab4 G4 F4 |
+    | E4:e F4:sx G4 Ab4 G4 Ab4 E4 F4 G4 F4:e~ F4:sx F4 Eb4 D4 |
+  line "Manual"  voice_layer 3
+    | C4:sx B3 C4:e~ C4:sx B3 C4 G3 A3:e G3~ G3:sx G3 Ab3 Eb3 |
+    | F3 Eb3 F3 D3 G3 Ab3 G3 F3 Eb3 D3 Eb3:e~ Eb3:sx F3 Eb3 D3 |
+    | C3 B2 C3 G3 C4 B3 C4 C3 F3:e. G3:sx Ab3:q~ |
+    | Ab3:sx G3 Ab3 Bb3 C4 B3 C4:e D4:e. C4:sx B3 C4 D4 B3 |
+    | Eb4 D4 Eb4 D4~ D4:e C4~ C4 C4:q B3:e |
+    | C4:q~ C4:e. Bb3:sx Ab3 Bb3 Ab3:e G3:sx Ab3 G3 F3 |
+  line "Pedal"
+    | r:e C3:sx D3 Eb3 D3 Eb3:e~ Eb3:sx A2 B2 G2 C3 B2 C3:e |
+    | r:sx G2 Ab2 F2 G2 F2 G2:e C2:h |
+    | r:e C3:sx D3 Eb3 D3 Eb3:e~ Eb3:sx C3 F3 Eb3 D3 C3 D3:e |
+    | C3 F3:sx G3 Ab3 G3 Ab3:e~ Ab3:sx D3 F#3 D3 G3 F#3 G3:e |
+    | r A3:sx B3 C4 B3 C4:e r:sx G3 Ab3 F3 G3 F3 G3:e |
+    | r:sx G3 Ab3 E3 F3 E3 F3:e r:sx E3 F3 B2 C3 B2 C3:e |
+
+section "Abgesang"
+  line "Manual"  voice_layer 1
+    | G4:q G4 Ab4 G4 |
+    | F4:q. F4:e Eb4:h^ |
+    | G4:q G4 A4 B4 |
+    | C5 Bb4 A4:h |
+    | G4:w^ |
+    | G4:q G4 F4 Eb4 |
+    | D4:h C4^ |
+  line "Manual"  voice_layer 2
+    | Eb4:sx D4 Eb4:e~ Eb4:sx F4 Eb4 Db4 C4:e Bb3~ Bb3:sx Bb3 C4 G3 |
+    | Ab3 G3 Ab3 F3 Bb3 C4 Bb3 Ab3 G3 F3 G3:e~ G3:sx Bb3 C4 D4 |
+    | Eb4 D4 Eb4:e~ Eb4:sx F4 Eb4 D4 C4:e D4:sx Eb4 F4 Ab4 G4 F4 |
+    | Eb4 D4 Eb4:e D4 G4~ G4 G4:q F#4:e |
+    | G4:sx D4 Eb4 C4 D4 B3 C4 A3 B3 A3 B3 C4 D4 B3 G3 B3 |
+    | C4 B3 C4 D4 Eb4 D4 Eb4:e~ Eb4 D4:q C4:e~ |
+    | C4:sx B3 C4:e~ C4 B3 C4:sx G3 Ab3:e G3:q^ |
+  line "Manual"  voice_layer 3
+    | Eb3:sx F3 G3 Ab3 Bb3 Db4 C4 Bb3 Ab3 G3 F3:e~ F3 Eb3 |
+    | Eb3 Eb3:q D3:e Eb3:e. Bb2:sx Eb3 D3 Eb3 F3 |
+    | Eb3 F3 G3:e C4:sx D4 C4 Bb3 A3 G3 F3:e~ F3:q |
+    | G3:sx F#3 G3 A3 Bb3 A3 Bb3 G3 C4 Bb3 C4 A3 D4 Eb4 D4 C4 |
+    | B3:e C4:sx A3 B3 G3 A3 F#3 G3:e D3:sx Eb3 F3 Eb3 F3:e~ |
+    | F3:sx D3 Eb3 B2 C3 B2 C3:e r:sx F3 G3 D3 Eb3 G3 Ab3 F#3 |
+    | G3 D3 F3 Eb3 F3 Ab3 G3 F3 E3:e. F3:sx~ F3 D3 E3:e^ |
+  line "Pedal"
+    | r:e Eb3:sx F3 G3 F3 G3:e~ G3:sx C3 D3 Bb2 Eb3 D3 Eb3:e |
+    | r:sx Bb2 C3 Ab2 Bb2 Ab2 Bb2:e Eb2:h |
+    | r:e C3:sx D3 Eb3 D3 Eb3:e~ Eb3:sx C3 F3 Eb3 D3 C3 D3:e |
+    | C3 Eb3:sx F3 G3 F#3 G3:e r:sx D3 Eb3 C3 D3 C3 D3:e |
+    | G2:w |
+    | C3:q C2:e C3:sx Bb2 A2:e B2 C3:sx B2 C3:e |
+    | r:sx G2 Ab2 F#2 G2 F#2 G2:e C2:h^ |

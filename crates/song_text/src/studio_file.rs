@@ -509,7 +509,7 @@ mod tests {
         let song = crate::song_file::parse_song(
             "song_test_count_in_and_verse.song",
             &include_str!("../../../songs/song_test_count_in_and_verse.song")
-                .replace("| q:C2 q q q |", "| q>>:C2 q q q |"),
+                .replace("| C2:q / / / |", "| C2:q>> / / / |"),
         )
         .unwrap();
         let studio: StudioConfiguration =

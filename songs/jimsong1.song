@@ -21,7 +21,7 @@ track "Bass"
 
 section "Gate test"  repeat 300
   key C major  meter 3/8  tempo 180 beats/min
-  line "Harmony"  | e:I e e:V7                       | e:IV           sx:iidim  sxr        e:ii     | 
-  line "Bass"     | sx:C2 sx:G2 e:E2 sxr sx:C4       | sx:F2 sx:A3    e:B3         sx:B2 sxr    |
+  line "Harmony"  | I:e / V7                         | IV           iidim:sx  r        ii:e         | 
+  line "Bass"     | C2:sx G2 E2:e r:sx C4            | F2 A3    B3:e         B2:sx r            |
 # line "Beat"     | sx>:C5 sxr  sx:B3 sxr  sx sx:C4  | sx>:C5 sxr     sx:B3 sx     sx sx:C6 |
-  line "Beat"     | sx>:C6 sxr  sx:B3 sxr  sx sxr    | sx>:C5 sxr     er           sx:C8 sxr|
+  line "Beat"     | C6:sx> r  B3 r  / r              | C5> r     r:e           C8:sx r      |

@@ -14,4 +14,4 @@ track "Bass"
 
 section "Gate test"  repeat 1
   key C major  meter 4/4  tempo 120 beats/min
-  line "Bass"  | e:C2 er e:G2 er e:D2 er e:A2 er | e:C2 er e:C2 er e:C2 er e:C2 er |
+  line "Bass"  | C2:e r G2 r D2 r A2 r           | C2 r C2 r C2 r C2 r             |

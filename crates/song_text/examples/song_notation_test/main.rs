@@ -25,8 +25,8 @@ use song_text::song_file::parse_song;
 use song_text::studio_file::parse_studio;
 use vocabulary::rhythm_pattern::{AccentLevel, ElementKind};
 use vocabulary::song::{
-    Clef, CueDestination, CueMessage, ElementContents, Line, LineElement, Section, Song, Track,
-    TrackKind, VoiceKind,
+    Clef, CueDestination, CueMessage, ElementContents, Line, LineElement, LineRole, Section, Song,
+    Track, TrackKind, VoiceKind, VoiceLayerName, VoiceLayerNumber,
 };
 
 const DEFAULT_SONG_FILE: &str = "songs/Demo.song";
@@ -52,13 +52,13 @@ const SONG_HEAD: &str = "song \"T\"\ntrack \"Clock\"\n type clock_and_transport\
                          track \"Keys\"\n type poly_voice\n clef grand\n lead\n\
                          track \"Bass\"\n type mono_voice\n clef bass\n";
 
-const MISTAKE_CASES: [MistakeCase; 8] = [
+const MISTAKE_CASES: [MistakeCase; 9] = [
     MistakeCase {
         what: "a line for a track the song does not have",
         kind: Kind::Song,
         text: concat!(
             "song \"T\"\ntrack \"Clock\"\n type clock_and_transport\n",
-            "section \"A\"\n meter 4/4  tempo 120 beats/min\n line \"Drums\" | q q q q |\n"
+            "section \"A\"\n meter 4/4  tempo 120 beats/min\n line \"Drums\" | C4:q D4 E4 F4 |\n"
         ),
         expected_message: "mistake.song line 6: \"Drums\" is not a track of the song. Declare it \
                            with track \"Drums\" before the sections, or fix the name",
@@ -71,24 +71,35 @@ const MISTAKE_CASES: [MistakeCase; 8] = [
             "track \"Keys\"\n type poly_voice\n clef grand\n lead\n",
             "track \"Bass\"\n type mono_voice\n clef bass\n",
             "section \"A\"\n key C major  meter 4/4  tempo 120 beats/min\n",
-            " line \"Bass\" | q:C2 q q q:V7 |\n"
+            " line \"Bass\" | C2:q / / V7 |\n"
         ),
         expected_message: "mistake.song line 13: line \"Bass\": bar 1 beat 4: track \"Bass\" cannot \
                            play that: a mono voice plays one note at a time; write a single note \
                            such as C2",
     },
     MistakeCase {
-        what: "a first note that says nothing about what it plays",
+        what: "a first note with no length",
         kind: Kind::Song,
         text: concat!(
             "song \"T\"\ntrack \"Clock\"\n type clock_and_transport\n",
             "track \"Keys\"\n type poly_voice\n clef grand\n lead\n",
             "section \"A\"\n key C major  meter 4/4  tempo 120 beats/min\n",
-            " line \"Keys\" | q q q q |\n"
+            " line \"Keys\" | I / / / |\n"
         ),
-        expected_message: "mistake.song line 10: line \"Keys\": bar 1 beat 1: the first note of a line \
-                           must say what it plays: write a colon and a chord or notes, e.g. q:I \
-                           or q:[C3 E3 G3]",
+        expected_message: "mistake.song line 10: line \"Keys\": \"I\" has no length, and nothing \
+                           before it in this line gives one. Write it, e.g. I:q",
+    },
+    MistakeCase {
+        what: "a line in the old order, length first",
+        kind: Kind::Song,
+        text: concat!(
+            "song \"T\"\ntrack \"Clock\"\n type clock_and_transport\n",
+            "track \"Keys\"\n type poly_voice\n clef grand\n lead\n",
+            "section \"A\"\n key C major  meter 4/4  tempo 120 beats/min\n",
+            " line \"Keys\" | q:I q q q |\n"
+        ),
+        expected_message: "mistake.song line 10: line \"Keys\": \"q:I\": a song line writes what it \
+                           plays first, then its length, e.g. C4:q, I:q or r:q, not q:C4",
     },
     MistakeCase {
         what: "chords in a section with no key",
@@ -96,7 +107,7 @@ const MISTAKE_CASES: [MistakeCase; 8] = [
         text: concat!(
             "song \"T\"\ntrack \"Clock\"\n type clock_and_transport\n",
             "track \"Keys\"\n type poly_voice\n clef grand\n lead\n",
-            "section \"A\"\n meter 4/4  tempo 120 beats/min\n line \"Keys\" | q:I q q q |\n"
+            "section \"A\"\n meter 4/4  tempo 120 beats/min\n line \"Keys\" | I:q / / / |\n"
         ),
         expected_message: "mistake.song line 8: section \"A\" has chords but no key. Add key to the \
                            section, e.g. key C major",
@@ -106,7 +117,7 @@ const MISTAKE_CASES: [MistakeCase; 8] = [
         kind: Kind::Song,
         text: concat!(
             "song \"T\"\ntrack \"Beat\"\n type mono_voice\n clef treble\n",
-            "section \"A\"\n meter 4/4  tempo 120 beats/min\n line \"Beat\" | q:C4 q q q |\n"
+            "section \"A\"\n meter 4/4  tempo 120 beats/min\n line \"Beat\" | C4:q / / / |\n"
         ),
         expected_message: "mistake.song line 1: the song has 0 clock and transport tracks. It needs \
                            exactly 1: add a track with type clock_and_transport",
@@ -118,7 +129,7 @@ const MISTAKE_CASES: [MistakeCase; 8] = [
             "song \"T\"\ntrack \"Clock\"\n type clock_and_transport\n",
             "track \"Keys\"\n type poly_voice\n clef grand\n lead\n",
             "section \"A\"\n key C major  meter 4/4  tempo 120 beats/min\n",
-            " line \"Keys\" | q:IV9b q q q |\n"
+            " line \"Keys\" | IV9b:q / / / |\n"
         ),
         expected_message: "mistake.song line 10: line \"Keys\": bar 1 beat 1: \"IV9b\" is not a chord. \
                            After an upper case numeral write nothing, 7, M7 or maj7, + or 7b9",
@@ -250,6 +261,7 @@ fn describe_track(track: &Track) -> String {
             clef,
             lead,
             home_octave,
+            voice_layer_names,
         } => {
             let voice_text: &str = match voice {
                 VoiceKind::Poly => "poly voice (chords and notes)",
@@ -262,8 +274,18 @@ fn describe_track(track: &Track) -> String {
             };
             let octave_text: String =
                 home_octave.map_or_else(String::new, |octave| format!(", home octave {octave}"));
+            let mut names_text: String = String::new();
+            for named in voice_layer_names {
+                let named: &VoiceLayerName = named;
+                let _ = write!(
+                    names_text,
+                    ", voice layer {} named \"{}\"",
+                    named.number().value(),
+                    named.name()
+                );
+            }
             format!(
-                "{voice_text}, {} clef{octave_text}{lead_text}",
+                "{voice_text}, {} clef{octave_text}{lead_text}{names_text}",
                 clef_name(*clef)
             )
         }
@@ -343,22 +365,46 @@ fn print_section(song: &Song, section: &Section) {
         key_text,
     );
     // The tracks in the order the song gives them, not the order the lines
-    // were written.
+    // were written; a track's voice layers in the order they are written.
     for track in song.tracks() {
-        if let Some(line) = section
+        let lines: Vec<&Line> = section
             .lines()
             .iter()
-            .find(|line| line.track_name() == track.name())
-        {
-            print_line(line, section);
-        } else if !matches!(track.kind(), TrackKind::ClockAndTransport) {
-            println!("  {}: rests for the whole section", track.name());
+            .filter(|line: &&Line| line.track_name() == track.name())
+            .collect();
+        if lines.is_empty() {
+            if !matches!(track.kind(), TrackKind::ClockAndTransport) {
+                println!("  {}: rests for the whole section", track.name());
+            }
+            continue;
+        }
+        let several: bool = lines.len() > 1;
+        for line in lines {
+            print_line(track, line, several, section);
         }
     }
 }
 
-fn print_line(line: &Line, section: &Section) {
-    println!("  {}:", line.track_name());
+/// A track's line, headed by the track's name, and by its voice layer when
+/// the track has several in the section or the line is not layer 1.
+fn print_line(track: &Track, line: &Line, several: bool, section: &Section) {
+    match line.role() {
+        LineRole::VoiceLayer(number) if several || number != VoiceLayerNumber::FIRST => {
+            let name: String = track.voice_layer_display_name(number);
+            if name == number.value().to_string() {
+                println!("  {}, voice layer {}:", line.track_name(), number.value());
+            } else {
+                println!(
+                    "  {}, voice layer {} \"{name}\":",
+                    line.track_name(),
+                    number.value()
+                );
+            }
+        }
+        LineRole::VoiceLayer(_) | LineRole::CuePlacement => {
+            println!("  {}:", line.track_name());
+        }
+    }
     for line_element in line.elements() {
         let element = line_element.element();
         let place: String = describe_place(element.start().ticks(), section.time_signature());

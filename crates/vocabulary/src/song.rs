@@ -127,6 +127,115 @@ impl CueDefinition {
     }
 }
 
+/// Which voice layer of its track a line is: 1, 2, 3 and so on (Song
+/// Notation, section 5). A voice track's layers are independent rhythmic
+/// lines on one instrument: they share the track's port and channel and
+/// are drawn on its staff.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct VoiceLayerNumber(u8);
+
+impl VoiceLayerNumber {
+    /// The layer a line is when it names none.
+    pub const FIRST: VoiceLayerNumber = VoiceLayerNumber(1);
+
+    /// # Errors
+    ///
+    /// When the number is 0: layers are counted from 1.
+    pub fn new(number: u8) -> Result<VoiceLayerNumber, SongError> {
+        if number == 0 {
+            return Err(SongError::VoiceLayerZero);
+        }
+        Ok(VoiceLayerNumber(number))
+    }
+
+    #[must_use]
+    pub fn value(self) -> u8 {
+        self.0
+    }
+}
+
+/// A name given to one voice layer of a track, e.g. layer 2 "Inner". A
+/// layer without a name is called by its number.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VoiceLayerName {
+    number: VoiceLayerNumber,
+    name: String,
+}
+
+impl VoiceLayerName {
+    /// # Errors
+    ///
+    /// When the name is empty.
+    pub fn new(number: VoiceLayerNumber, name: &str) -> Result<VoiceLayerName, SongError> {
+        if name.trim().is_empty() {
+            return Err(SongError::EmptyName {
+                what: "voice layer",
+            });
+        }
+        Ok(VoiceLayerName {
+            number,
+            name: name.to_string(),
+        })
+    }
+
+    #[must_use]
+    pub fn number(&self) -> VoiceLayerNumber {
+        self.number
+    }
+
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+/// What a line does for its track. A section holds at most one line per
+/// track and role. More roles (the decorating streams of
+/// `docs/Concept/concept_idea.md`) are to come.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LineRole {
+    /// One of a voice track's layers.
+    VoiceLayer(VoiceLayerNumber),
+    /// The line of a cue control track, placing its cues.
+    CuePlacement,
+}
+
+impl fmt::Display for LineRole {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LineRole::VoiceLayer(number) => write!(f, "voice layer {}", number.value()),
+            LineRole::CuePlacement => write!(f, "cue placement"),
+        }
+    }
+}
+
+/// Names given to voice layers: each number and each name at most once, and
+/// a mono voice has only layer 1.
+fn check_voice_layer_names(
+    track_name: &str,
+    voice: VoiceKind,
+    names: &[VoiceLayerName],
+) -> Result<(), SongError> {
+    for (index, named) in names.iter().enumerate() {
+        if voice == VoiceKind::Mono && named.number() != VoiceLayerNumber::FIRST {
+            return Err(SongError::VoiceLayerOnMonoVoice {
+                track_name: track_name.to_string(),
+                number: named.number().value(),
+            });
+        }
+        if names[..index].iter().any(|earlier: &VoiceLayerName| {
+            earlier.number() == named.number() || earlier.name() == named.name()
+        }) {
+            return Err(SongError::VoiceLayerNamedTwice {
+                track_name: track_name.to_string(),
+                number: named.number().value(),
+                name: named.name().to_string(),
+            });
+        }
+    }
+    Ok(())
+}
+
 /// What a track is and can do (Song Notation, section 5). The later types
 /// (tempo control, musician voice, automation control) are not here yet.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -137,6 +246,9 @@ pub enum TrackKind {
         /// Its chords drive the chord symbols and the key wheel (EFS-3.7).
         lead: bool,
         home_octave: Option<i8>,
+        /// Names given to some of its voice layers; a layer without one is
+        /// called by its number.
+        voice_layer_names: Vec<VoiceLayerName>,
     },
     /// Timing Clock and Stop; has a port and no channel.
     ClockAndTransport,
@@ -154,10 +266,19 @@ pub struct Track {
 impl Track {
     /// # Errors
     ///
-    /// When the name is empty.
+    /// When the name is empty, or the voice layer names repeat a number or
+    /// a name, or name a layer above 1 on a mono voice.
     pub fn new(name: &str, kind: TrackKind) -> Result<Track, SongError> {
         if name.trim().is_empty() {
             return Err(SongError::EmptyName { what: "track" });
+        }
+        if let TrackKind::Voice {
+            voice,
+            voice_layer_names,
+            ..
+        } = &kind
+        {
+            check_voice_layer_names(name, *voice, voice_layer_names)?;
         }
         Ok(Track {
             name: name.to_string(),
@@ -173,6 +294,24 @@ impl Track {
     #[must_use]
     pub fn kind(&self) -> &TrackKind {
         &self.kind
+    }
+
+    /// What a voice layer of this track is called: its given name, or
+    /// else its number ("2"). Not a voice track: the number.
+    #[must_use]
+    pub fn voice_layer_display_name(&self, number: VoiceLayerNumber) -> String {
+        let given: Option<&VoiceLayerName> = match &self.kind {
+            TrackKind::Voice {
+                voice_layer_names, ..
+            } => voice_layer_names
+                .iter()
+                .find(|named: &&VoiceLayerName| named.number() == number),
+            TrackKind::ClockAndTransport | TrackKind::CueControl { .. } => None,
+        };
+        given.map_or_else(
+            || number.value().to_string(),
+            |named| named.name().to_string(),
+        )
     }
 }
 
@@ -226,26 +365,31 @@ impl LineElement {
     }
 }
 
-/// One track's rhythm and contents across the bars of a section.
+/// One line of a track across the bars of a section: its rhythm and what
+/// each element plays, in the line's role for the track.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Line {
     track_name: String,
+    role: LineRole,
     bar_count: u32,
     elements: Vec<LineElement>,
 }
 
 impl Line {
-    /// Makes the line of `track` for `bar_count` bars, refusing elements
-    /// that do not fill whole bars and contents the track cannot play.
+    /// Makes the line of `track` in `role` for `bar_count` bars, refusing
+    /// elements that do not fill whole bars and contents the track cannot
+    /// play.
     ///
     /// # Errors
     ///
     /// When the elements do not tile the bars; when a track that takes no
-    /// line is given one; or when a sounding element's contents do not fit
-    /// the track (a chord on a mono voice, a cue not defined on the track,
-    /// nothing on a voice or cue).
+    /// line is given one; when the role does not suit the track (a voice
+    /// layer on a cue track, layer 2 on a mono voice); or when a sounding
+    /// element's contents do not fit the track (a chord on a mono voice, a
+    /// cue not defined on the track, nothing on a voice or cue).
     pub fn new(
         track: &Track,
+        role: LineRole,
         time_signature: TimeSignature,
         bar_count: u32,
         elements: Vec<LineElement>,
@@ -266,13 +410,10 @@ impl Line {
                 check_contents(track, line_element)?;
             }
         }
-        if matches!(track.kind(), TrackKind::ClockAndTransport) {
-            return Err(SongError::LineOnClockTrack {
-                track_name: track.name().to_string(),
-            });
-        }
+        check_role(track, role)?;
         Ok(Line {
             track_name: track.name().to_string(),
+            role,
             bar_count,
             elements,
         })
@@ -284,6 +425,11 @@ impl Line {
     }
 
     #[must_use]
+    pub fn role(&self) -> LineRole {
+        self.role
+    }
+
+    #[must_use]
     pub fn bar_count(&self) -> u32 {
         self.bar_count
     }
@@ -291,6 +437,35 @@ impl Line {
     #[must_use]
     pub fn elements(&self) -> &[LineElement] {
         &self.elements
+    }
+}
+
+/// The role against the kind of track: voice layers on a voice track (only
+/// layer 1 on a mono voice), cue placement on a cue control track, and no
+/// line at all on the clock and transport track.
+fn check_role(track: &Track, role: LineRole) -> Result<(), SongError> {
+    match (track.kind(), role) {
+        (TrackKind::ClockAndTransport, _) => Err(SongError::LineOnClockTrack {
+            track_name: track.name().to_string(),
+        }),
+        (
+            TrackKind::Voice {
+                voice: VoiceKind::Mono,
+                ..
+            },
+            LineRole::VoiceLayer(number),
+        ) if number != VoiceLayerNumber::FIRST => Err(SongError::VoiceLayerOnMonoVoice {
+            track_name: track.name().to_string(),
+            number: number.value(),
+        }),
+        (TrackKind::Voice { .. }, LineRole::VoiceLayer(_))
+        | (TrackKind::CueControl { .. }, LineRole::CuePlacement) => Ok(()),
+        (TrackKind::Voice { .. } | TrackKind::CueControl { .. }, _) => {
+            Err(SongError::RoleNotForTrack {
+                track_name: track.name().to_string(),
+                role,
+            })
+        }
     }
 }
 
@@ -359,7 +534,7 @@ impl Section {
     ///
     /// When the name is empty; the repeat count is 0; there are no lines;
     /// the lines differ in length (Song Notation, polymeter is deferred);
-    /// two lines are for one track; a count-in section is longer than two
+    /// two lines are for one track in one role; a count-in section is longer than two
     /// bars; or a line carries a chord and no key is in effect.
     #[allow(clippy::too_many_arguments)] // one value per thing a section states
     pub fn new(
@@ -394,13 +569,13 @@ impl Section {
                     expected_bar_count: bar_count,
                 });
             }
-            if lines[..index]
-                .iter()
-                .any(|earlier: &Line| earlier.track_name() == line.track_name())
-            {
-                return Err(SongError::TwoLinesForOneTrack {
+            if lines[..index].iter().any(|earlier: &Line| {
+                earlier.track_name() == line.track_name() && earlier.role() == line.role()
+            }) {
+                return Err(SongError::TwoLinesForOneRole {
                     section_name: name.to_string(),
                     track_name: line.track_name().to_string(),
+                    role: line.role(),
                 });
             }
         }
@@ -604,9 +779,24 @@ pub enum SongError {
         bar_count: u32,
         expected_bar_count: u32,
     },
-    TwoLinesForOneTrack {
+    TwoLinesForOneRole {
         section_name: String,
         track_name: String,
+        role: LineRole,
+    },
+    VoiceLayerZero,
+    VoiceLayerOnMonoVoice {
+        track_name: String,
+        number: u8,
+    },
+    VoiceLayerNamedTwice {
+        track_name: String,
+        number: u8,
+        name: String,
+    },
+    RoleNotForTrack {
+        track_name: String,
+        role: LineRole,
     },
     LineForUnknownTrack {
         section_name: String,
@@ -690,12 +880,45 @@ impl fmt::Display for SongError {
                  but the lines before it have {expected_bar_count}. All lines of a section \
                  must have the same number of bars"
             ),
-            SongError::TwoLinesForOneTrack {
+            SongError::TwoLinesForOneRole {
                 section_name,
                 track_name,
+                role,
+            } => match role {
+                LineRole::VoiceLayer(number) => write!(
+                    f,
+                    "section {section_name:?} has two lines for {track_name:?} voice layer {}. \
+                     Keep one, or give the other its own number: voice_layer {}",
+                    number.value(),
+                    number.value().saturating_add(1)
+                ),
+                LineRole::CuePlacement => write!(
+                    f,
+                    "section {section_name:?} has two lines for {track_name:?}. Keep one"
+                ),
+            },
+            SongError::VoiceLayerZero => write!(
+                f,
+                "voice layers are counted from 1. Write voice_layer 1, 2, 3 ..."
+            ),
+            SongError::VoiceLayerOnMonoVoice { track_name, number } => write!(
+                f,
+                "{track_name:?} is a mono voice, so it has only voice layer 1, not {number}. \
+                 Make it type poly_voice, or give the line its own track"
+            ),
+            SongError::VoiceLayerNamedTwice {
+                track_name,
+                number,
+                name,
             } => write!(
                 f,
-                "section {section_name:?} has two lines for {track_name:?}. Keep one"
+                "track {track_name:?}: voice layer {number} \"{name}\" repeats a number or a \
+                 name given above it. Give each layer its own number and name"
+            ),
+            SongError::RoleNotForTrack { track_name, role } => write!(
+                f,
+                "track {track_name:?} cannot have a {role} line. Voice layers are for voice \
+                 tracks"
             ),
             SongError::LineForUnknownTrack {
                 section_name,
@@ -790,6 +1013,10 @@ mod tests {
         .unwrap()
     }
 
+    fn layer_one() -> LineRole {
+        LineRole::VoiceLayer(VoiceLayerNumber::FIRST)
+    }
+
     fn track(name: &str, kind: TrackKind) -> Track {
         Track::new(name, kind).unwrap()
     }
@@ -802,6 +1029,7 @@ mod tests {
                 clef: Clef::Grand,
                 lead: true,
                 home_octave: None,
+                voice_layer_names: Vec::new(),
             },
         )
     }
@@ -814,6 +1042,7 @@ mod tests {
                 clef: Clef::Bass,
                 lead: false,
                 home_octave: None,
+                voice_layer_names: Vec::new(),
             },
         )
     }
@@ -841,14 +1070,29 @@ mod tests {
 
     #[test]
     fn a_chord_on_a_poly_voice_and_a_note_on_a_mono_voice_are_accepted() {
-        assert!(Line::new(&keys(), four_four(), 1, four_quarters(&one_chord())).is_ok());
-        assert!(Line::new(&bass(), four_four(), 1, four_quarters(&c2())).is_ok());
+        assert!(
+            Line::new(
+                &keys(),
+                layer_one(),
+                four_four(),
+                1,
+                four_quarters(&one_chord())
+            )
+            .is_ok()
+        );
+        assert!(Line::new(&bass(), layer_one(), four_four(), 1, four_quarters(&c2())).is_ok());
     }
 
     #[test]
     fn a_chord_on_a_mono_voice_is_refused() {
-        let error: SongError =
-            Line::new(&bass(), four_four(), 1, four_quarters(&one_chord())).unwrap_err();
+        let error: SongError = Line::new(
+            &bass(),
+            layer_one(),
+            four_four(),
+            1,
+            four_quarters(&one_chord()),
+        )
+        .unwrap_err();
         assert!(matches!(error, SongError::ContentsNotAllowed { .. }));
     }
 
@@ -858,7 +1102,7 @@ mod tests {
             .map(|index| quarter(index, ElementKind::Sounding, None))
             .collect();
         assert!(matches!(
-            Line::new(&keys(), four_four(), 1, elements).unwrap_err(),
+            Line::new(&keys(), layer_one(), four_four(), 1, elements).unwrap_err(),
             SongError::ElementWithoutContents { .. }
         ));
     }
@@ -888,17 +1132,24 @@ mod tests {
             .map(|index| quarter(index, ElementKind::Sounding, Some(one_chord())))
             .collect();
         assert!(matches!(
-            Line::new(&keys(), four_four(), 1, elements).unwrap_err(),
+            Line::new(&keys(), layer_one(), four_four(), 1, elements).unwrap_err(),
             SongError::Rhythm(_)
         ));
     }
 
     #[test]
     fn lines_of_one_section_must_have_the_same_length() {
-        let one_bar: Line =
-            Line::new(&keys(), four_four(), 1, four_quarters(&one_chord())).unwrap();
+        let one_bar: Line = Line::new(
+            &keys(),
+            layer_one(),
+            four_four(),
+            1,
+            four_quarters(&one_chord()),
+        )
+        .unwrap();
         let two_bars: Line = Line::new(
             &bass(),
+            layer_one(),
             four_four(),
             2,
             (0..8)
@@ -925,7 +1176,14 @@ mod tests {
 
     #[test]
     fn chords_need_a_key() {
-        let line: Line = Line::new(&keys(), four_four(), 1, four_quarters(&one_chord())).unwrap();
+        let line: Line = Line::new(
+            &keys(),
+            layer_one(),
+            four_four(),
+            1,
+            four_quarters(&one_chord()),
+        )
+        .unwrap();
         assert!(matches!(
             Section::new("Verse", false, 1, None, four_four(), tempo(), vec![line]).unwrap_err(),
             SongError::ChordsWithoutKey { .. }
@@ -935,7 +1193,14 @@ mod tests {
     #[test]
     fn a_song_needs_one_clock_track_and_one_lead() {
         let clock: Track = track("Clock", TrackKind::ClockAndTransport);
-        let line: Line = Line::new(&keys(), four_four(), 1, four_quarters(&one_chord())).unwrap();
+        let line: Line = Line::new(
+            &keys(),
+            layer_one(),
+            four_four(),
+            1,
+            four_quarters(&one_chord()),
+        )
+        .unwrap();
         let section = || {
             Section::new(
                 "Verse",
@@ -969,6 +1234,7 @@ mod tests {
                 clef: Clef::Treble,
                 lead: false,
                 home_octave: None,
+                voice_layer_names: Vec::new(),
             },
         );
         assert!(matches!(
@@ -995,6 +1261,7 @@ mod tests {
         let place = |name: &str| {
             Line::new(
                 &cues,
+                LineRole::CuePlacement,
                 four_four(),
                 1,
                 vec![
@@ -1013,6 +1280,135 @@ mod tests {
         assert!(matches!(
             place("Start SQ-2").unwrap_err(),
             SongError::UnknownCue { .. }
+        ));
+    }
+
+    fn layer(number: u8) -> LineRole {
+        LineRole::VoiceLayer(VoiceLayerNumber::new(number).unwrap())
+    }
+
+    fn section_of(lines: Vec<Line>) -> Result<Section, SongError> {
+        Section::new(
+            "Verse",
+            false,
+            1,
+            Some(c_major()),
+            four_four(),
+            tempo(),
+            lines,
+        )
+    }
+
+    #[test]
+    fn a_poly_voice_may_have_several_voice_layers_in_a_section() {
+        let first: Line = Line::new(
+            &keys(),
+            layer(1),
+            four_four(),
+            1,
+            four_quarters(&one_chord()),
+        )
+        .unwrap();
+        let second: Line =
+            Line::new(&keys(), layer(2), four_four(), 1, four_quarters(&c2())).unwrap();
+        let section: Section = section_of(vec![first, second]).unwrap();
+        assert_eq!(section.lines().len(), 2);
+        assert_eq!(section.lines()[1].role(), layer(2));
+    }
+
+    #[test]
+    fn two_lines_for_one_voice_layer_are_refused() {
+        let first: Line = Line::new(
+            &keys(),
+            layer(2),
+            four_four(),
+            1,
+            four_quarters(&one_chord()),
+        )
+        .unwrap();
+        let again: Line = Line::new(
+            &keys(),
+            layer(2),
+            four_four(),
+            1,
+            four_quarters(&one_chord()),
+        )
+        .unwrap();
+        let error: SongError = section_of(vec![first, again]).unwrap_err();
+        assert!(matches!(error, SongError::TwoLinesForOneRole { .. }));
+        assert!(error.to_string().contains("voice layer 2"));
+    }
+
+    #[test]
+    fn a_mono_voice_has_only_voice_layer_one() {
+        let error: SongError =
+            Line::new(&bass(), layer(2), four_four(), 1, four_quarters(&c2())).unwrap_err();
+        assert!(matches!(
+            error,
+            SongError::VoiceLayerOnMonoVoice { number: 2, .. }
+        ));
+    }
+
+    #[test]
+    fn roles_must_suit_the_track() {
+        let error: SongError = Line::new(
+            &keys(),
+            LineRole::CuePlacement,
+            four_four(),
+            1,
+            four_quarters(&one_chord()),
+        )
+        .unwrap_err();
+        assert!(matches!(error, SongError::RoleNotForTrack { .. }));
+    }
+
+    #[test]
+    fn voice_layers_count_from_one() {
+        assert!(matches!(
+            VoiceLayerNumber::new(0).unwrap_err(),
+            SongError::VoiceLayerZero
+        ));
+    }
+
+    fn manual(names: Vec<VoiceLayerName>, voice: VoiceKind) -> Result<Track, SongError> {
+        Track::new(
+            "Manual",
+            TrackKind::Voice {
+                voice,
+                clef: Clef::Grand,
+                lead: true,
+                home_octave: None,
+                voice_layer_names: names,
+            },
+        )
+    }
+
+    fn named(number: u8, name: &str) -> VoiceLayerName {
+        VoiceLayerName::new(VoiceLayerNumber::new(number).unwrap(), name).unwrap()
+    }
+
+    #[test]
+    fn a_voice_layer_is_called_by_its_name_or_else_its_number() {
+        let track: Track = manual(vec![named(2, "Inner")], VoiceKind::Poly).unwrap();
+        let two: VoiceLayerNumber = VoiceLayerNumber::new(2).unwrap();
+        let three: VoiceLayerNumber = VoiceLayerNumber::new(3).unwrap();
+        assert_eq!(track.voice_layer_display_name(two), "Inner");
+        assert_eq!(track.voice_layer_display_name(three), "3");
+    }
+
+    #[test]
+    fn voice_layer_names_must_not_repeat() {
+        assert!(matches!(
+            manual(vec![named(2, "Inner"), named(2, "Alto")], VoiceKind::Poly).unwrap_err(),
+            SongError::VoiceLayerNamedTwice { .. }
+        ));
+        assert!(matches!(
+            manual(vec![named(2, "Inner"), named(3, "Inner")], VoiceKind::Poly).unwrap_err(),
+            SongError::VoiceLayerNamedTwice { .. }
+        ));
+        assert!(matches!(
+            manual(vec![named(2, "Inner")], VoiceKind::Mono).unwrap_err(),
+            SongError::VoiceLayerOnMonoVoice { .. }
         ));
     }
 }

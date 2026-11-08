@@ -1,6 +1,6 @@
 # Live Lead Sheet — Song Notation
 
-Revision 14 — 7 Nov 2026 (a line may go on over several text lines; tempo written in beats; compound meters above 12 refused; "count" replaced by beat and pulse)
+Revision 15 — 8 Nov 2026 (song lines write what an element plays first, then its length; a length left off carries; `/`; voice layers; rests written in full)
 
 **Status: draft for trial.** *Decided* marks what Jim has decided;
 everything else is a proposal to try with a working player. The questions
@@ -19,7 +19,7 @@ There are four kinds of file, each with its own extension.
 
 | File | Extension | What it holds | Written by |
 |---|---|---|---|
-| Song (the composition) | `.song` | Tracks, sections, and for each track, bar by bar, its rhythm and the notes each sounding element plays. Cues and tempo marks. Nothing about ports, channels or devices. | Apply, then the musician by hand |
+| Song (the composition) | `.song` | Tracks, sections, and for each track (or each voice layer of a track), bar by bar, the notes or chords it plays and their lengths. Cues and tempo marks. Nothing about ports, channels or devices. | Apply, then the musician by hand |
 | Studio configuration | `.studio` | Which output ports exist, and for each track of a song: port, channel, octave offset, velocity levels, device timing. | The musician, once per studio |
 | Rhythm library | `.library` | Rhythm patterns, in groups. | Starter file, and the musician |
 | Progression library | `.library` | Chord progressions in Roman numerals, in groups. | Starter file, and the musician |
@@ -58,6 +58,23 @@ can start from the chords' roots. Its result is written into the song.
   so the author never counts bars including repeats.
 - **Polymeter is deferred** (5 Nov 2026). In V1 every line of a section
   has the same number of bars (section 5).
+- **What an element plays comes first, then its length** (8 Nov 2026):
+  `Eb4:sx`, `I:q`, `r:h`. A length left off is the one before it in the
+  line, and `/` plays the chord or note before it again (section 4). The
+  rhythm library keeps the note value first, since a rhythm plays nothing.
+- **Voice layers** (8 Nov 2026). A voice track may hold several
+  independent lines in a section, its voice layers, numbered 1, 2, 3 and
+  so on, each filling its bars by itself. They share the track's port,
+  channel and timbre and are drawn on its staff; a layer may be given a
+  name, and is otherwise called by its number (section 5). This is how two
+  voices on one staff are written (the soprano and alto of an organ's
+  right hand).
+- **Rests are written in full; engraving stays out of the song**
+  (8 Nov 2026). Each line and each voice layer writes all its rests, even
+  where printed music leaves them out to reduce clutter: the rest is what
+  places the next note. Hidden rests, stem directions and other
+  engraving choices are not in the song file; different engravers may
+  draw the same song differently later.
 
 ## 2. Rules shared by all files
 
@@ -95,7 +112,9 @@ can start from the chords' roots. Its result is written into the song.
 ## 3. Rhythm notation
 
 A rhythm is one to eight whole bars of one time signature, written as
-note values and rests.
+note values and rests. This section spells them as the rhythm library
+does, note value first (`q. e hr`); a song's lines write the same values
+after what each element plays (section 4).
 
 | Letter | Value |
 |---|---|
@@ -156,7 +175,8 @@ A bar must add up exactly. Charleston is 1½ + ½ + 2 = 4 quarters, a full
   can be added later without changing the player. Which ones is open.
 
 **Ties.** `~` joins an element to the one after it into a single note of
-the combined duration. It may stand before a barline:
+the combined duration. It may stand before a barline (here in the rhythm
+library's spelling):
 
 ```
 rhythm "Anticipation"
@@ -169,7 +189,8 @@ beat 1 of the next bar: one note an eighth plus a quarter long, a dotted
 quarter. The rhythm line draws the tie across the barline (EFS-1.5). A tie
 belongs to the rhythm, so every voice track can use it.
 
-**Marks.** Written after the letter, the dots and `r`, and before a tie.
+**Marks.** Written after the length (in the rhythm library, after the
+letter, the dots and `r`), and before a tie.
 They apply to a sounding element (a fermata may also stand on a rest). The
 spellings are proposed; what each does is the decision.
 
@@ -212,7 +233,12 @@ sixteenth and a double-dotted thirty-second also fall on half ticks.
 
 ## 4. Elements, contents and marks in a line
 
-What a sounding element carries follows a colon:
+A song line writes, for each element, **what it plays first, then its
+length**, then its marks, then a tie: `Eb4:sx`, `C5:e.>`, `I:q`, `r:h`,
+`D4:e~`. This is the order musicians name a note in ("E-flat, a
+sixteenth"), and the order LilyPond and ABC notation write it in.
+
+**What an element plays:**
 
 - **Poly voice** (a track that can play chords): a chord name in the
   section's key (`ii7` in C major is D minor seventh), voiced plainly: in
@@ -223,19 +249,67 @@ What a sounding element carries follows a colon:
   changed voicing is proposed (Q15).
 - **Mono voice** (a track that can play one note at a time): one note with
   its octave (`C2`, `F#2`, `Bb1`). Two sounding elements may not overlap.
-- **Cue and tempo tracks:** see section 5. A beat pulse needs no section
-  of its own: it is a mono voice that writes the same note on each
-  element, e.g. `| q>:C4 q q q |`.
-- **An element with nothing after it carries the previous element's
-  contents** within the line, across barlines (a strum is several elements
-  of one chord). The first sounding element of a line in a section must
-  carry its own (Q5). Only voice tracks carry forward; every cue on a cue
-  control track names its cue.
+- **Cue control track:** a cue's name in quotes (`"Start SQ-1"`).
+- **A rest:** `r`.
+- **The same again:** `/` plays what the sounding element before it in
+  the line played (a strum is several elements of one chord); rests in
+  between do not count. A `/` takes its own length and marks: `/`, `/:e`,
+  `/>`. A cue control track names every cue; `/` is refused there.
+- A beat pulse needs no section of its own: it is a mono voice that writes
+  the same note on each element, e.g. `| C4:q> / / / |`.
 
-**Order inside an element** (fixed by the parser): the note value, then
-`r` and the dots, then the marks, then `~`, then the colon and the contents
-(`q>>:C2`, `e'~:ii7`). Contents end at the next space, except inside `[...]`
-or a quoted cue name. A rest carries nothing.
+**Lengths.** The note values and dots of section 3: `w h q e sx tx`, and up
+to three dots. **A length left off is the one before it** in the line,
+dots included, across barlines and across the text lines a line goes on
+over. The first element of a line writes its length. Marks and ties never
+carry; each belongs to one element.
+
+**The colon** separates what an element plays from its length. It may be
+left off where nothing is ambiguous: after a pitch, whose octave ends it
+(`Eb4sx`, `C5e.>`), after notes in brackets or a quoted cue name, and after
+`r` and `/`. **After a chord name the colon is required** (`I:q`,
+`ii7:h.`), because a chord name has no fixed end: `Iq` is refused with the
+advice `write I:q`. The colon may always be written, even with nothing
+after it (`D4:~`). Marks and ties need no colon, chords included (`ii7>`,
+`I~`), since none of `> ' _ ^ ~` appears in a note or chord name.
+
+**Groups.** Inside `trp` and `fit` an element takes and carries its written
+length as anywhere else, and the group squeezes it. After the group, a
+length left off is the written one, not the squeezed one: in
+`| trp (C4:q D4 E4) F4 G4 |` the F4 and G4 are plain quarters.
+
+**Order inside an element** (fixed by the parser): what it plays, then `:`
+and the length with its dots, then the marks, then `~` (`C2:q>>`,
+`ii7:e'~`, `D4~`). An element ends at the next space, except inside `[...]`
+or a quoted cue name.
+
+**Examples**, in the order of Revision 14 and in this one:
+
+| | Revision 14 | Revision 15 |
+|---|---|---|
+| A melodic line (BWV 610, alto, bar 1) | `sx:Eb4 sx:D4 e~:Eb4 sx:Eb4 sx:F4 sx:Eb4 sx:D4 e:C4 e~:D4 e:D4 e:C4` | `Eb4:sx D4 Eb4:e~ Eb4:sx F4 Eb4 D4 C4:e D4~ D4 C4` |
+| Every length changes (BWV 610, soprano, bar 5) | `e.:C5 sx:D5 q:Eb5 q.:D5 e:D5` | `C5:e. D5:sx Eb5:q D5:q. D5:e` |
+| Rests (BWV 610, pedal, bar 1, first half) | `er sx:C3 sx:D3 sx:Eb3 sx:D3 e~:Eb3` | `r:e C3:sx D3 Eb3 D3 Eb3:e~` |
+| Chords, the same again | `q:I q q q` then `qr h:ii7 q:V7` | `I:q / / /` then `r ii7:h V7:q` |
+| A beat pulse | `q>:C4 q q q` then `q> q q q` | `C4:q> / / /` then `/> / / /` |
+| A bass with rests | `h:C2 qr q:G2` then `q:G2 q:B2 q:D2 q:G2` | `C2:h r:q G2` then `G2 B2 D2 G2` |
+| A mark with no length (3/8) | `sx:C6 sxr sx>:C5 sxr sx:C4 sx:C5` | `C6:sx r C5> r C4 C5` |
+| A cue | `w:"Start SQ-1"` then `wr` | `"Start SQ-1":w` then `r` |
+| A group | `trp (q:C4 q:D4 q:E4) h:F4` | `trp (C4:q D4 E4) F4:h` |
+
+In the first example `D4` is a sixteenth, carried from `Eb4:sx`; `Eb4:e~`
+is a tied eighth, and `Eb4:sx`, where the tie lands, is a sixteenth again.
+The Debussy case, a half note on beat 3 of an inner voice printed with no
+half rest before it, is written with the rest: `| r:h A4~ | A4 … |`
+(section 1).
+
+A line written in the order of Revision 14 is refused, with a message
+giving the new spelling:
+
+```
+line "Keys": "q:I": a song line writes what it plays first, then its length, e.g. C4:q, I:q or r:q, not q:C4
+line "Bass": "C2" has no length, and nothing before it in this line gives one. Write it, e.g. C2:q
+```
 
 ## 5. The song (`.song`)
 
@@ -269,14 +343,14 @@ track "Cues"
 
 section "Count-in"  count-in
   meter 4/4  tempo 120 beats/min
-  line "Beat"  | q>:C4 q q q |
+  line "Beat"  | C4:q> / / / |
 
 section "Verse"  repeat 2
   key C major  meter 4/4  tempo 120 beats/min
-  line "Beat"  | q>:C4 q q q | q> q q q |
-  line "Keys"  | q:I q q q | qr h:ii7 q:V7 |
-  line "Bass"  | q:C2 q q q | qr h:D2 q:G2 |
-  line "Cues"  | w:"Start SQ-1" | wr |    # fires on each pass: passes are not designed (EFS-4.4)
+  line "Beat"  | C4:q> / / / | /> / / / |
+  line "Keys"  | I:q / / / | r ii7:h V7:q |
+  line "Bass"  | C2:q / / / | r D2:h G2:q |
+  line "Cues"  | "Start SQ-1":w | r |    # fires on each pass: passes are not designed (EFS-4.4)
 ```
 
 ### Tracks and their types
@@ -310,7 +384,7 @@ file matter most there. The `retrigger_gap` of the studio file drops the
 gate between two notes.
 
 **A beat pulse is a mono voice** that writes one fixed pitch on each
-element, with `>` where the accent falls: `| q>:C4 q q q |`. Its pitch is a
+element, with `>` where the accent falls: `| C4:q> / / / |`. Its pitch is a
 pitch like any other (with `octave_offset` to suit the device, and the
 pitch CV it makes at a CV and gate output), and it needs no transport. It
 can clock a divider, or voice a metronome in the modular.
@@ -322,7 +396,13 @@ Attributes of a voice track:
   composer composes in the clef; the music stays on the staff and not on
   ledger lines. The rhythm line always uses the percussion clef (EFS-1.5).
 - `lead` — exactly one voice track carries it: its chords drive the key
-  wheel and the chord symbols (EFS-3.7).
+  wheel and the chord symbols (EFS-3.7). When the lead track has several
+  voice layers, the chords are read from voice layer 1 (proposed; nothing
+  reads chord symbols yet).
+- `voice_layer n "Name"` — optional, one line per name: a name for one of
+  the track's voice layers, e.g. `voice_layer 2 "Inner"`. A layer without
+  a name is called by its number, and the editor shows the number until a
+  name is given. Numbers and names may not repeat within a track.
 - `home_octave` — optional. The octave where a plain voicing puts the root
   and where apply puts a bass line's roots. Without it, by clef: treble
   4, alto 3, tenor 3, bass 2, grand 4 (Q14).
@@ -334,6 +414,41 @@ is stored as the concert pitch that sounds, and drawn a major second
 higher, as notation software does. Transposing instruments (Appendix C)
 are the only place a written pitch differs from a sounding one.
 
+### Voice layers
+
+A voice track's line in a section may name its voice layer after the
+track's name; a line that names none is voice layer 1. A section holds at
+most one line per track and layer, and every layer fills its bars by
+itself, with its rests written (section 1). The layers of one track share
+its port, channel and timbre: they are independent rhythms on one
+instrument, not separate instruments. A mono voice has only voice layer 1.
+
+```
+track "Manual"
+  type poly_voice
+  clef grand
+  lead
+
+section "Stollen"  repeat 2
+  key C major  meter 4/4  tempo 40 beats/min
+  line "Manual"  voice_layer 1  | G4:q G4 F4 Eb4 | …
+  line "Manual"  voice_layer 2  | Eb4:sx D4 Eb4:e~ Eb4:sx F4 Eb4 D4 C4:e D4~ D4 C4 | …
+  line "Manual"  voice_layer 3  | C4:sx B3 C4:e~ C4:sx B3 C4 G3 A3:e G3~ G3:sx G3 Ab3 Eb3 | …
+```
+
+(BWV 610 is in C minor; the example says C major only because minor keys
+are not designed yet, Q12. The whole piece is `songs/LilyPond/bwv610.song`.)
+
+In the vocabulary a line has a **role** for its track: a voice layer with
+its number, or the placing of a cue control track's cues. More roles, for
+the decorating streams of `docs/Concept/concept_idea.md`, are to come; a
+track can then hold several lines of different roles.
+
+Two voice layers of one track may hold the same pitch at once (BWV 610
+does this seven times between its chorale and inner voices). On one MIDI
+channel the first note-off ends both. What the player does about it is
+open (Q20); for now the notes are sent as written.
+
 ### Sections
 
 `section "Name"` with `count-in` for the first section if wanted, `repeat
@@ -343,7 +458,7 @@ all happen at a section boundary; a change that lasts a few bars is a
 short section. The initial tempo is the first section's.
 
 - **Section length** is the number of bars in its lines. In V1 all lines
-  in a section have the same number of bars, and a track with no line in a
+  in a section, voice layers included, have the same number of bars, and a track with no line in a
   section rests. That is how the voices rest in the count-in section
   (D-10). *Polymeter* (a line that is a shorter cycle repeated to fill
   the section) is deferred; if it is added, such a line must be marked as a
@@ -390,12 +505,12 @@ short section. The initial tempo is the first section's.
   message. The track's name may stand alone, with all its bars below:
 
   ```
-  line "Keys"  | h:I h | h:V h | h:vi h | w:IV |
+  line "Keys"  | I:h / | V / | vi / | IV:w |
   # second phrase
-               | h:I h | h:V h | w:I    | w    |
+               | I:h / | V / | I:w  | /    |
   line "Bass"
-    | q:C2 q q q | q:G2 q q q | q:A2 q q q | q:F2 q q q |
-    | q:C2 q q q | q:G2 q q q | w:C2       | w          |
+    | C2:q / / / | G2 / / / | A2 / / / | F2 / / / |
+    | C2 / / /   | G2 / / / | C2:w     | /        |
   ```
 
   Bars are numbered along the whole line, and a message names the text
@@ -419,7 +534,7 @@ track "Cues"
 ```
 
 - A cue fires at the start of its element. Counting and repeats are the
-  rhythm's, so no bar numbers are written: `| w:"Start SQ-1" | wr |`.
+  rhythm's, so no bar numbers are written: `| "Start SQ-1":w | r |`.
 - For a `note` cue, the element's written duration is the note's length: a
   short note is a trigger, a held one a gate (EFS-4.3). For the other
   messages the duration does not matter.
@@ -439,7 +554,8 @@ elements carry a tempo mark:
 - `ramp 60 beats/min` — the tempo moves from what it was at the start of
   the element to 60 beats/min by the end of the element. A ramp lasts the
   element's written duration; a tie makes it longer. A ritardando over the
-  last four bars: `| w:ramp 60 beats/min~ | w~ | w~ | w |`.
+  last four bars, in this revision's order (the spelling of a tempo mark is
+  to be settled when it is built): `| "ramp 60 beats/min":w~ | /~ | /~ | / |`.
 
 The beats are those of the section's meter, as for `tempo`.
 
@@ -455,6 +571,10 @@ Until then, tempo changes are stepped, per section.
 Chord symbols and the key wheel read the chords carried by the lead track
 (EFS-3.7), at the element where each chord starts. A bass line is free: it
 plays the roots in the example, but nothing requires it.
+
+**Not in the song at all:** engraving choices, such as rests left out
+to reduce clutter, stem directions and where a voice layer crosses to the
+other staff of a grand staff. The renderer decides them.
 
 **Not designed yet:** voicing changes beyond the spelling in section 4
 (EFS-5.5), key changes between sections (EFS-1.9), limiting a cue to
@@ -608,9 +728,9 @@ conveniences, and everything it writes can be changed by hand:
 6. The song keeps the result and no link to the library entries.
 
 *Example.* The progression `ii-V` and the rhythm `Rest, half, quarter` in
-C major give `| qr h:ii7 q:V7 |` for the harmony track and `| qr h:D2
-q:G2 |` for the bass. The same progression under `q q q q` gives `| q:ii7
-q q:V7 q |`. How the editor snaps to a grid, and what it asks when rule 4
+C major give `| r:q ii7:h V7:q |` for the harmony track and `| r:q D2:h
+G2:q |` for the bass. The same progression under `q q q q` gives `| ii7:q /
+V7 / |`. How the editor snaps to a grid, and what it asks when rule 4
 applies, are decided with the editor.
 
 ## 8. Build order, tests and where the code lives
@@ -626,7 +746,7 @@ Each test has an example under `examples/<what>_test/` and its
 2. `song_notation_test` (built): loads `songs/Demo.song` and
    `songs/Demo.studio`, prints the song in the musician's terms, checks
    that the studio covers every track and cue destination the song uses,
-   and checks the messages for eight kinds of mistake.
+   and checks the messages for nine kinds of mistake.
 3. `song_play_test` (built, not yet heard): loads `Demo.song` and `Demo.studio` and plays them:
    count-in, beat pulse, harmony, bass and the SQ-1 Start cue. The player
    turns a song and a studio into note tracks and cue tracks
@@ -659,9 +779,6 @@ the recommendation that will be used unless Jim says otherwise:
 - **Q4.** The tie mark. `~` is the tie in printed notation and LilyPond,
   but in Strudel it is a rest. Keep `~` for ties (our rest is `r`)?
   Recommended: keep.
-- **Q5.** An element with nothing after it carries the previous element's
-  contents. Keep that shorthand, or write the chord on every element?
-  Recommended: keep it, as tempo already carries on (EFS-2.2).
 - **Q11.** Retrigger gap. *Settled 5 Nov 2026.* Two notes that touch put a
   note off and a note on at the same instant, and the Disting NT, fed over
   USB, loses the gate of the second note. In 2-minute runs of 480 notes
@@ -690,9 +807,20 @@ the recommendation that will be used unless Jim says otherwise:
   cues and tempo marks. What each does is decided; the spelling is to be
   tried.
 
+- **Q20.** Two voice layers of one track holding the same pitch at once
+  (section 5): send as written, merge them into one held note, warn, or
+  refuse? *Deferred (Jim, 8 Nov 2026).*
+- **Q21.** A bar repeat, `%`: the previous bar of the line again. It meets
+  ties into the bar and the carried length; to be settled with the
+  editor's slash and repeat display. *Deferred (8 Nov 2026).*
+- **Q22.** `#` is both the comment sign (section 2) and the sharp (`F#2`):
+  a sharp outside quotes starts a comment, so `C#4:q` loses the rest of
+  its line. Found on 8 Nov 2026 writing BWV 610. One remedy: a comment
+  starts at `#` only at the start of a line or after a space. *Open.*
+
 - **Q19.** Driving a queued device such as the Korg SQ-1 (Jim, 5 Nov 2026;
   *required, not yet designed*). A cue that only starts it
-  (`| w:"Start SQ-1" | wr |`) is not enough. The device is clocked, so the
+  (`| "Start SQ-1":w | r |`) is not enough. The device is clocked, so the
   song must make explicit the Timing Clock it sends to that device in
   relation to the device's documented step resolution (the SQ-1 has six
   settings: quarter, 8th or 16th note, at SYNC ×1 or ×2; see the router
@@ -744,7 +872,7 @@ language for live coding; it has no bars.
 | Unit of time | A cycle; the steps written in it share it equally | A bar of the song's meter | Keep bars: the counter, cues and ties all need them |
 | Grouping | `[ ]` fits a group into one slot | `trp (...)`, `fitQ(...)`, `fitBar(...)` | Borrowed, with a named length so a group can span a note or a bar |
 | Unequal lengths | `@` weight: `a@3 b` is 3 to 1 | Dotted values, ties, and the proportions inside a `fit` | Printed-music spelling, which the rhythm line draws |
-| Rest | `~` | `qr` | `~` is a tie here (Q4) |
+| Rest | `~` | `r` (`r:q`) | `~` is a tie here (Q4) |
 | Repeat | `*2` plays a group twice as fast; `!` repeats a step | A rhythm repeats over a bar range | Same need, different tools |
 | Euclidean rhythms | `bd(3,8)` spreads 3 hits over 8 steps | None | A candidate for pulse bursts later (EFS-4.7) |
 | Chords | Symbols like `Am7`, with `voicing()` choosing notes that move least | Chord names carried by elements, voiced plainly unless the musician changes them (A-9, EFS-5.5) | Do not adopt automatic voicing |

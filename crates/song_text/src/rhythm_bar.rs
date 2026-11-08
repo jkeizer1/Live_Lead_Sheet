@@ -1,5 +1,8 @@
 //! One bar of rhythm notation: note values, rests, dots, marks, ties and
-//! the groups `trp` and `fit` (Song Notation, section 3).
+//! the groups `trp` and `fit` (Song Notation, section 3), in either of its
+//! two spellings: a rhythm library's, note value first (`q. e hr`), or a
+//! song line's, what it plays first (`C4:q. D4:e r:h`, Song Notation,
+//! section 4), where a length left off is the one before it in the line.
 //!
 //! Positions are worked out in subticks, eighths of a tick, so that a
 //! thirty-second note with two dots (1102.5 ticks) adds up exactly and a
@@ -12,6 +15,7 @@
 use vocabulary::rhythm_pattern::{AccentLevel, ElementKind, ElementMarks};
 use vocabulary::ticks::{TICKS_PER_QUARTER_NOTE, TICKS_PER_WHOLE_NOTE};
 
+use crate::contents_text::parse_chord;
 use crate::length_words::{MAX_DOTS, describe_length, dotted_length_subticks};
 
 const SUBTICKS_PER_TICK: u64 = 8;
@@ -25,9 +29,49 @@ pub struct BarElement {
     pub kind: ElementKind,
     pub marks: ElementMarks,
     pub tied_to_next: bool,
-    /// The text after the colon, if any, exactly as written; the song parser
-    /// reads it as a chord, notes or a cue name.
+    /// What the element plays, exactly as written (`C4`, `ii7`,
+    /// `[D3 F3 A3]`, `"Start SQ-1"`), for the song parser to read. `None`
+    /// for a rest, for every element of a rhythm library, and for `/` in a
+    /// song line, which plays what the sounding element before it played.
     pub contents_text: Option<String>,
+}
+
+/// Which of the two spellings a bar is written in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BarNotation {
+    /// A rhythm library's: note value, then `r` and dots, then marks and
+    /// tie (`q.`, `hr`, `e>~`). Nothing is played, so nothing is written.
+    Rhythm,
+    /// A song line's: what it plays (a pitch, chord, notes, cue name, `r`
+    /// for a rest or `/` for the same again), then its length, then marks
+    /// and tie (`Eb4:sx`, `C5e.>`, `I:q`, `r:h`, `/`).
+    SongLine,
+}
+
+/// A note value with its dots, as written: what a song line's element
+/// takes when it writes no length of its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct WrittenLength {
+    base_ticks: u64,
+    dots: u32,
+}
+
+/// The length a song line carries forward: the last one written, dots
+/// included, across barlines and the text lines a line goes on over. In a
+/// group it is the written value, before the group squeezes it, so the
+/// element after `trp (C4:q D4 E4)` is a plain quarter (Song Notation,
+/// section 4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LengthCarry {
+    written: Option<WrittenLength>,
+}
+
+impl LengthCarry {
+    /// Nothing written yet: the first element of a line writes its length.
+    #[must_use]
+    pub fn start_of_line() -> LengthCarry {
+        LengthCarry { written: None }
+    }
 }
 
 /// An element as written, before it is placed.
@@ -49,19 +93,20 @@ enum GroupLength {
     Fixed { length_ticks: u64 },
 }
 
-/// Parses the text between two barlines.
+/// Parses the text between two barlines, in `notation`. A song line's
+/// carried length comes in and goes out through `carry`.
 ///
 /// # Errors
 ///
 /// A message saying what is wrong and what to type instead; the caller adds
 /// the file and line. Also when the elements do not add up exactly to
-/// `bar_length_ticks`, or when an element carries contents (`q:C2`) and
-/// `allow_contents` is false (a rhythm library holds rhythm only).
+/// `bar_length_ticks`.
 pub fn parse_bar(
     bar_text: &str,
     bar_number: usize,
     bar_length_ticks: u64,
-    allow_contents: bool,
+    notation: BarNotation,
+    carry: &mut LengthCarry,
 ) -> Result<Vec<BarElement>, String> {
     let mut cursor: Cursor = Cursor::new(bar_text);
     let mut placed: Vec<BarElement> = Vec::new();
@@ -74,7 +119,7 @@ pub fn parse_bar(
         }
         if cursor.starts_with("trp") || cursor.starts_with("fit") {
             let (group_length, inner): (GroupLength, Vec<WrittenElement>) =
-                parse_group(&mut cursor, bar_length_ticks, allow_contents)?;
+                parse_group(&mut cursor, bar_length_ticks, notation, carry)?;
             let natural_subticks: u64 = inner.iter().map(|element| element.length_subticks).sum();
             let group_subticks: u64 = match group_length {
                 GroupLength::TwoThirds => {
@@ -96,7 +141,7 @@ pub fn parse_bar(
             )?);
             position_subticks += group_subticks;
         } else {
-            let element: WrittenElement = parse_element(&mut cursor, allow_contents)?;
+            let element: WrittenElement = parse_element(&mut cursor, notation, carry)?;
             let element_subticks: u64 = element.length_subticks;
             placed.extend(place(
                 position_subticks,
@@ -109,17 +154,24 @@ pub fn parse_bar(
     }
 
     if placed.is_empty() {
+        let example: &str = match notation {
+            BarNotation::Rhythm => "q q q q",
+            BarNotation::SongLine => "C4:q D4 E4 r",
+        };
         return Err(format!(
-            "bar {bar_number} is empty. Write its notes and rests, e.g. q q q q"
+            "bar {bar_number} is empty. Write its notes and rests, e.g. {example}"
         ));
     }
     let bar_subticks: u64 = bar_length_ticks * SUBTICKS_PER_TICK;
     if position_subticks < bar_subticks {
         let short_ticks: u64 = (bar_subticks - position_subticks).div_ceil(SUBTICKS_PER_TICK);
         let words = describe_length(short_ticks);
-        let advice: String = match words.letters {
-            Some(letters) => format!(" Add {letters} or {letters}r."),
-            None => String::from(" Add a note or rest to fill the bar."),
+        let advice: String = match (words.letters, notation) {
+            (Some(letters), BarNotation::Rhythm) => format!(" Add {letters} or {letters}r."),
+            (Some(letters), BarNotation::SongLine) => {
+                format!(" Add a note or a rest of that length, e.g. r:{letters}.")
+            }
+            (None, _) => String::from(" Add a note or rest to fill the bar."),
         };
         return Err(format!(
             "bar {bar_number} is short by {}.{advice}",
@@ -146,12 +198,17 @@ pub fn parse_bars(
     line: &str,
     bars_so_far: usize,
     bar_length_ticks: u64,
-    allow_contents: bool,
+    notation: BarNotation,
+    carry: &mut LengthCarry,
 ) -> Result<Vec<Vec<BarElement>>, String> {
     let line: &str = line.trim();
     if !line.starts_with('|') || !line.ends_with('|') || line.len() < 2 {
-        return Err(String::from(
-            "a line of bars starts and ends with |, e.g. | q q q q |",
+        let example: &str = match notation {
+            BarNotation::Rhythm => "| q q q q |",
+            BarNotation::SongLine => "| C4:q D4 E4 F4 |",
+        };
+        return Err(format!(
+            "a line of bars starts and ends with |, e.g. {example}"
         ));
     }
     let inside: &str = &line[1..line.len() - 1];
@@ -162,7 +219,8 @@ pub fn parse_bars(
             bar_text,
             bar_number,
             bar_length_ticks,
-            allow_contents,
+            notation,
+            carry,
         )?);
     }
     Ok(bars)
@@ -239,7 +297,8 @@ fn place(
 fn parse_group(
     cursor: &mut Cursor,
     bar_length_ticks: u64,
-    allow_contents: bool,
+    notation: BarNotation,
+    carry: &mut LengthCarry,
 ) -> Result<(GroupLength, Vec<WrittenElement>), String> {
     let name: String = cursor.take_while(char::is_ascii_alphabetic);
     let group_length: GroupLength = match name.as_str() {
@@ -290,7 +349,7 @@ fn parse_group(
                          inner group as separate elements"
                     ));
                 }
-                inner.push(parse_element(cursor, allow_contents)?);
+                inner.push(parse_element(cursor, notation, carry)?);
             }
         }
     }
@@ -311,10 +370,21 @@ fn parse_group(
     Ok((group_length, inner))
 }
 
-/// One element: value, then `r` and dots in either order (`hr.` and `h.r`
-/// are the same dotted half rest), then marks, then a tie, then `:` and
-/// the contents (a chord, notes or a cue name) when the file allows them.
-fn parse_element(cursor: &mut Cursor, allow_contents: bool) -> Result<WrittenElement, String> {
+/// One element in `notation`.
+fn parse_element(
+    cursor: &mut Cursor,
+    notation: BarNotation,
+    carry: &mut LengthCarry,
+) -> Result<WrittenElement, String> {
+    match notation {
+        BarNotation::Rhythm => parse_rhythm_element(cursor),
+        BarNotation::SongLine => parse_song_element(cursor, carry),
+    }
+}
+
+/// A rhythm library's element: value, then `r` and dots in either order
+/// (`hr.` and `h.r` are the same dotted half rest), then marks, then a tie.
+fn parse_rhythm_element(cursor: &mut Cursor) -> Result<WrittenElement, String> {
     let base_ticks: u64 = parse_note_value(cursor)?;
 
     let mut is_rest: bool = false;
@@ -339,25 +409,19 @@ fn parse_element(cursor: &mut Cursor, allow_contents: bool) -> Result<WrittenEle
     }
 
     let marks: ElementMarks = parse_marks(cursor)?;
-
     let tied_to_next: bool = cursor.peek() == Some('~');
     if tied_to_next {
         cursor.next();
     }
 
-    let mut contents_text: Option<String> = None;
     match cursor.peek() {
         None | Some(')') => {}
         Some(character) if character.is_whitespace() => {}
-        Some(':') if !allow_contents => {
+        Some(':') => {
             return Err(String::from(
                 "':' in a rhythm pattern. A rhythm carries no notes or chords; \
                  they are written in a song's lines",
             ));
-        }
-        Some(':') => {
-            cursor.next();
-            contents_text = Some(parse_contents_text(cursor)?);
         }
         Some(character) => {
             return Err(format!(
@@ -372,20 +436,81 @@ fn parse_element(cursor: &mut Cursor, allow_contents: bool) -> Result<WrittenEle
     } else {
         ElementKind::Sounding
     };
-    if kind == ElementKind::Rest {
-        if marks.accent() != AccentLevel::Normal || marks.staccato() || marks.legato() {
-            return Err(String::from(
-                "a rest takes no accent, staccato or legato mark. Only a fermata (^) \
-                 may stand on a rest",
-            ));
-        }
-        if tied_to_next {
-            return Err(String::from("a rest cannot be tied. Tie notes, not rests"));
-        }
-    }
-
+    check_rest(kind, marks, tied_to_next)?;
     Ok(WrittenElement {
         length_subticks: dotted_length_subticks(base_ticks, dots, SUBTICKS_PER_TICK),
+        kind,
+        marks,
+        tied_to_next,
+        contents_text: None,
+    })
+}
+
+/// What a song line's element plays, as written.
+enum WrittenContents {
+    /// `r`.
+    Rest,
+    /// `/`: what the sounding element before it played.
+    Same,
+    /// A pitch, chord, notes in brackets or a quoted cue name.
+    Text(String),
+}
+
+/// A song line's element: what it plays, then `:` and its length (the
+/// colon may be left off except after a chord name), then marks, then a
+/// tie. `C4:q`, `Eb4sx`, `D4~`, `I:q>`, `[C3 E3 G3]h`, `r:h.`, `/>`.
+fn parse_song_element(
+    cursor: &mut Cursor,
+    carry: &mut LengthCarry,
+) -> Result<WrittenElement, String> {
+    let element_text: String = cursor.element_text();
+    if element_text.starts_with(|character: char| "whqest".contains(character)) {
+        return Err(format!(
+            "\"{element_text}\": a song line writes what it plays first, then its length, \
+             e.g. C4:q, I:q or r:q, not q:C4"
+        ));
+    }
+    let contents: WrittenContents = parse_song_contents(cursor, &element_text)?;
+    if cursor.peek() == Some(':') {
+        cursor.next();
+    }
+    let written_length: Option<WrittenLength> = parse_written_length(cursor)?;
+    let marks: ElementMarks = parse_marks(cursor)?;
+    let tied_to_next: bool = cursor.peek() == Some('~');
+    if tied_to_next {
+        cursor.next();
+    }
+    match cursor.peek() {
+        None | Some(')') => {}
+        Some(character) if character.is_whitespace() => {}
+        Some(character) => {
+            return Err(format!(
+                "'{character}' is not expected in \"{element_text}\". Write what it plays, \
+                 then its length, then marks (> >> ' _ ^), then ~ for a tie, e.g. C4:q>~"
+            ));
+        }
+    }
+    let length: WrittenLength = match written_length {
+        Some(written) => {
+            carry.written = Some(written);
+            written
+        }
+        None => carry.written.ok_or_else(|| {
+            format!(
+                "\"{element_text}\" has no length, and nothing before it in this line \
+                 gives one. Write it, e.g. {}:q",
+                element_text.trim_end_matches(['>', '\'', '_', '^', '~', ':'])
+            )
+        })?,
+    };
+    let (kind, contents_text): (ElementKind, Option<String>) = match contents {
+        WrittenContents::Rest => (ElementKind::Rest, None),
+        WrittenContents::Same => (ElementKind::Sounding, None),
+        WrittenContents::Text(text) => (ElementKind::Sounding, Some(text)),
+    };
+    check_rest(kind, marks, tied_to_next)?;
+    Ok(WrittenElement {
+        length_subticks: dotted_length_subticks(length.base_ticks, length.dots, SUBTICKS_PER_TICK),
         kind,
         marks,
         tied_to_next,
@@ -393,57 +518,170 @@ fn parse_element(cursor: &mut Cursor, allow_contents: bool) -> Result<WrittenEle
     })
 }
 
-/// The text after a colon: a quoted name (`"Start SQ-1"`), or characters up
-/// to the next space outside square brackets (`ii7`, `C2`, `[D3 F3 A3]`,
-/// `ii7[F3 A3 C4]`). What it means is for the song parser to say.
-fn parse_contents_text(cursor: &mut Cursor) -> Result<String, String> {
-    let mut text: String = String::new();
-    if cursor.peek() == Some('"') {
-        text.push('"');
-        cursor.next();
-        loop {
-            match cursor.next() {
-                None => {
-                    return Err(String::from(
-                        "a quoted name after ':' is missing its closing \"",
-                    ));
-                }
-                Some('"') => {
-                    text.push('"');
-                    return Ok(text);
-                }
-                Some(character) => text.push(character),
+/// A rest takes only a fermata, and is never tied.
+fn check_rest(kind: ElementKind, marks: ElementMarks, tied_to_next: bool) -> Result<(), String> {
+    if kind != ElementKind::Rest {
+        return Ok(());
+    }
+    if marks.accent() != AccentLevel::Normal || marks.staccato() || marks.legato() {
+        return Err(String::from(
+            "a rest takes no accent, staccato or legato mark. Only a fermata (^) \
+             may stand on a rest",
+        ));
+    }
+    if tied_to_next {
+        return Err(String::from("a rest cannot be tied. Tie notes, not rests"));
+    }
+    Ok(())
+}
+
+/// The start of a song line's element: `r`, `/`, a quoted cue name, notes
+/// in brackets, a pitch (`Eb4`: it ends at its octave, so a length may
+/// follow with no colon), or a chord name with its voicing if any (`ii7`,
+/// `ii7[F3 A3 C4]`). A chord name ends at a space, `:`, `[`, a mark or a
+/// tie, so a length after it needs the colon. What the text means is for
+/// the song parser to say.
+fn parse_song_contents(cursor: &mut Cursor, element_text: &str) -> Result<WrittenContents, String> {
+    match cursor.peek() {
+        Some('r') => {
+            cursor.next();
+            Ok(WrittenContents::Rest)
+        }
+        Some('/') => {
+            cursor.next();
+            Ok(WrittenContents::Same)
+        }
+        Some('"') => Ok(WrittenContents::Text(take_quoted(cursor)?)),
+        Some('[') => Ok(WrittenContents::Text(take_bracketed(cursor)?)),
+        Some(letter) if "ABCDEFG".contains(letter) => {
+            let mut text: String = String::new();
+            text.push(letter);
+            cursor.next();
+            if let Some(accidental @ ('#' | 'b')) = cursor.peek() {
+                text.push(accidental);
+                cursor.next();
             }
+            if cursor.peek() == Some('-') {
+                text.push('-');
+                cursor.next();
+            }
+            let octave: String = cursor.take_while(char::is_ascii_digit);
+            if octave.is_empty() {
+                return Err(format!(
+                    "\"{element_text}\" is not a note: a note needs its octave, e.g. C4, \
+                     F#2 or Bb1"
+                ));
+            }
+            text.push_str(&octave);
+            Ok(WrittenContents::Text(text))
+        }
+        Some(':' | '>' | '\'' | '_' | '^' | '~') | None => Err(format!(
+            "\"{element_text}\" does not say what it plays. Write a note, chord, r or / \
+             first, e.g. C4:q"
+        )),
+        Some(_) => {
+            let name: String = cursor.take_while(|character: &char| {
+                !character.is_whitespace() && !":[)>'_^~".contains(*character)
+            });
+            if let Some(advice) = chord_with_length_run_on(&name) {
+                return Err(advice);
+            }
+            let mut text: String = name;
+            if cursor.peek() == Some('[') {
+                text.push_str(&take_bracketed(cursor)?);
+            }
+            Ok(WrittenContents::Text(text))
         }
     }
-    let mut inside_brackets: bool = false;
-    while let Some(character) = cursor.peek() {
-        if !inside_brackets && (character.is_whitespace() || character == ')') {
-            break;
+}
+
+/// A chord name with its length run on (`Iq`, `ii7h.`): after a chord
+/// name the length needs a colon, because a chord name has no fixed end.
+/// The advice, when the text is a chord followed by a length.
+fn chord_with_length_run_on(name: &str) -> Option<String> {
+    let without_dots: &str = name.trim_end_matches('.');
+    for value in ["sx", "tx", "w", "h", "q", "e"] {
+        let Some(chord) = without_dots.strip_suffix(value) else {
+            continue;
+        };
+        if !chord.is_empty() && parse_chord(chord).is_ok() {
+            let length: &str = &name[chord.len()..];
+            return Some(format!(
+                "\"{name}\" is not a chord. A chord needs a colon before its length: \
+                 write {chord}:{length}"
+            ));
         }
-        match character {
-            '[' if inside_brackets => {
+    }
+    None
+}
+
+/// `"Start SQ-1"`, quotes included.
+fn take_quoted(cursor: &mut Cursor) -> Result<String, String> {
+    let mut text: String = String::new();
+    if cursor.next() != Some('"') {
+        return Err(String::from("a quoted name starts with \""));
+    }
+    text.push('"');
+    loop {
+        match cursor.next() {
+            None => {
+                return Err(String::from("a quoted name is missing its closing \""));
+            }
+            Some('"') => {
+                text.push('"');
+                return Ok(text);
+            }
+            Some(character) => text.push(character),
+        }
+    }
+}
+
+/// `[D3 F3 A3]`, brackets included.
+fn take_bracketed(cursor: &mut Cursor) -> Result<String, String> {
+    let mut text: String = String::new();
+    if cursor.next() != Some('[') {
+        return Err(String::from("notes in brackets start with ["));
+    }
+    text.push('[');
+    loop {
+        match cursor.next() {
+            None | Some('|') => return Err(String::from("a '[' is missing its closing ]")),
+            Some('[') => {
                 return Err(String::from(
                     "'[' inside square brackets. Close the first with ]",
                 ));
             }
-            '[' => inside_brackets = true,
-            ']' => inside_brackets = false,
-            _ => {}
+            Some(']') => {
+                text.push(']');
+                return Ok(text);
+            }
+            Some(character) => text.push(character),
         }
-        text.push(character);
+    }
+}
+
+/// A length if one is written here: a note value and its dots.
+fn parse_written_length(cursor: &mut Cursor) -> Result<Option<WrittenLength>, String> {
+    let starts_a_length: bool = match cursor.peek() {
+        Some('w' | 'h' | 'q' | 'e') => true,
+        Some('s' | 't') => cursor.peek_second() == Some('x'),
+        _ => false,
+    };
+    if !starts_a_length {
+        return Ok(None);
+    }
+    let base_ticks: u64 = parse_note_value(cursor)?;
+    let mut dots: u32 = 0;
+    while cursor.peek() == Some('.') {
         cursor.next();
+        dots += 1;
+        if dots > MAX_DOTS {
+            return Err(format!(
+                "more than {MAX_DOTS} dots on one element. Use a tie"
+            ));
+        }
     }
-    if inside_brackets {
-        return Err(String::from("a '[' after ':' is missing its closing ]"));
-    }
-    if text.is_empty() {
-        return Err(String::from(
-            "nothing after ':'. Write a chord such as ii7, a note such as C2, \
-             notes such as [C3 E3 G3], or a quoted cue name",
-        ));
-    }
-    Ok(text)
+    Ok(Some(WrittenLength { base_ticks, dots }))
 }
 
 /// `w h q e sx tx` → the plain length in ticks.
@@ -535,6 +773,33 @@ impl Cursor {
         character
     }
 
+    fn peek_second(&self) -> Option<char> {
+        self.characters.get(self.position + 1).copied()
+    }
+
+    /// The element starting here, as written, for messages: up to the next
+    /// space or `)`, keeping quoted names and brackets whole. Nothing is
+    /// consumed.
+    fn element_text(&self) -> String {
+        let mut text: String = String::new();
+        let mut inside_quotes: bool = false;
+        let mut inside_brackets: bool = false;
+        for character in &self.characters[self.position..] {
+            match character {
+                '"' => inside_quotes = !inside_quotes,
+                '[' if !inside_quotes => inside_brackets = true,
+                ']' if !inside_quotes => inside_brackets = false,
+                ')' if !inside_quotes && !inside_brackets => break,
+                character if character.is_whitespace() && !inside_quotes && !inside_brackets => {
+                    break;
+                }
+                _ => {}
+            }
+            text.push(*character);
+        }
+        text
+    }
+
     fn skip_whitespace(&mut self) {
         while self.peek().is_some_and(char::is_whitespace) {
             self.position += 1;
@@ -566,8 +831,28 @@ mod tests {
 
     const FOUR_FOUR_BAR_TICKS: u64 = 20_160;
 
+    fn rhythm(bar_text: &str) -> Result<Vec<BarElement>, String> {
+        parse_bar(
+            bar_text,
+            1,
+            FOUR_FOUR_BAR_TICKS,
+            BarNotation::Rhythm,
+            &mut LengthCarry::start_of_line(),
+        )
+    }
+
+    fn song(bar_text: &str) -> Result<Vec<BarElement>, String> {
+        parse_bar(
+            bar_text,
+            1,
+            FOUR_FOUR_BAR_TICKS,
+            BarNotation::SongLine,
+            &mut LengthCarry::start_of_line(),
+        )
+    }
+
     fn starts_and_lengths(bar_text: &str) -> Vec<(u64, u64)> {
-        parse_bar(bar_text, 1, FOUR_FOUR_BAR_TICKS, false)
+        rhythm(bar_text)
             .unwrap()
             .iter()
             .map(|element| (element.start_ticks, element.length_ticks))
@@ -575,7 +860,7 @@ mod tests {
     }
 
     fn error_of(bar_text: &str) -> String {
-        parse_bar(bar_text, 1, FOUR_FOUR_BAR_TICKS, false).unwrap_err()
+        rhythm(bar_text).unwrap_err()
     }
 
     #[test]
@@ -634,8 +919,7 @@ mod tests {
 
     #[test]
     fn marks_and_ties_are_read() {
-        let elements: Vec<BarElement> =
-            parse_bar("q> q>>' e_ e^~ q", 1, FOUR_FOUR_BAR_TICKS, false).unwrap();
+        let elements: Vec<BarElement> = rhythm("q> q>>' e_ e^~ q").unwrap();
         assert_eq!(elements[0].marks.accent(), AccentLevel::Accent);
         assert_eq!(elements[1].marks.accent(), AccentLevel::Strong);
         assert!(elements[1].marks.staccato());
@@ -674,17 +958,25 @@ mod tests {
     }
 
     fn contents_of(bar_text: &str) -> Vec<Option<String>> {
-        parse_bar(bar_text, 1, FOUR_FOUR_BAR_TICKS, true)
+        song(bar_text)
             .unwrap()
             .into_iter()
             .map(|element: BarElement| element.contents_text)
             .collect()
     }
 
+    fn song_starts_and_lengths(bar_text: &str) -> Vec<(u64, u64)> {
+        song(bar_text)
+            .unwrap()
+            .iter()
+            .map(|element| (element.start_ticks, element.length_ticks))
+            .collect()
+    }
+
     #[test]
-    fn contents_follow_a_colon_and_may_hold_spaces_in_brackets_or_quotes() {
+    fn a_song_element_writes_what_it_plays_first_and_may_hold_spaces_in_brackets_or_quotes() {
         assert_eq!(
-            contents_of("q:ii7 q:C2 q:[D3 F3 A3] q:ii7[F3 A3 C4]"),
+            contents_of("ii7:q C2 [D3 F3 A3] ii7[F3 A3 C4]"),
             vec![
                 Some("ii7".to_string()),
                 Some("C2".to_string()),
@@ -693,18 +985,123 @@ mod tests {
             ]
         );
         assert_eq!(
-            contents_of("w:\"Start SQ-1\""),
+            contents_of("\"Start SQ-1\":w"),
             vec![Some("\"Start SQ-1\"".to_string())]
-        );
-        assert_eq!(
-            contents_of("q:I q q q"),
-            vec![Some("I".to_string()), None, None, None]
         );
     }
 
     #[test]
+    fn a_slash_plays_the_same_again_and_a_rest_plays_nothing() {
+        let elements: Vec<BarElement> = song("I:q / r /").unwrap();
+        let contents: Vec<Option<String>> = elements
+            .iter()
+            .map(|element: &BarElement| element.contents_text.clone())
+            .collect();
+        assert_eq!(contents, vec![Some("I".to_string()), None, None, None]);
+        assert_eq!(elements[1].kind, ElementKind::Sounding);
+        assert_eq!(elements[2].kind, ElementKind::Rest);
+        assert_eq!(elements[3].kind, ElementKind::Sounding);
+    }
+
+    #[test]
+    fn a_length_left_off_is_the_one_before_it_dots_included() {
+        // Four sixteenths, two dotted eighths, an eighth and a quarter: the
+        // lengths written once, at each change.
+        assert_eq!(
+            song_starts_and_lengths("Eb4:sx D4 Eb4 F4 G4:e. A4 B4:e C5:q"),
+            vec![
+                (0, 1260),
+                (1260, 1260),
+                (2520, 1260),
+                (3780, 1260),
+                (5040, 3780),
+                (8820, 3780),
+                (12_600, 2520),
+                (15_120, 5040),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_colon_may_be_left_off_after_a_pitch_and_marks_follow_directly() {
+        assert_eq!(
+            song_starts_and_lengths("Eb4sx D4 Eb4e~ Eb4sx F4 Eb4 D4 C4e D4~ D4 C4"),
+            song_starts_and_lengths("Eb4:sx D4 Eb4:e~ Eb4:sx F4 Eb4 D4 C4:e D4~ D4 C4")
+        );
+        let elements: Vec<BarElement> = song("C5:q> D5~ D5' /^").unwrap();
+        assert_eq!(elements[0].marks.accent(), AccentLevel::Accent);
+        assert!(elements[1].tied_to_next);
+        assert!(elements[2].marks.staccato());
+        assert!(elements[3].marks.fermata());
+        // The colon may also be written with no length after it.
+        assert_eq!(
+            song_starts_and_lengths("C4:q D4:~ D4: E4:>"),
+            song_starts_and_lengths("C4:q D4~ D4 E4>")
+        );
+    }
+
+    #[test]
+    fn a_rest_writes_r_and_takes_a_length_like_a_note() {
+        // An eighth rest, four sixteenths, and a rest of the rest of the bar
+        // (a dotted half is too long; a half and an eighth rest fill it).
+        assert_eq!(
+            song_starts_and_lengths("r:e C3:sx D3 Eb3 D3 r:h r:e"),
+            vec![
+                (0, 2520),
+                (2520, 1260),
+                (3780, 1260),
+                (5040, 1260),
+                (6300, 1260),
+                (7560, 10_080),
+                (17_640, 2520),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_length_carries_across_barlines_but_starts_afresh_each_line() {
+        let mut carry: LengthCarry = LengthCarry::start_of_line();
+        let bars: Vec<Vec<BarElement>> = parse_bars(
+            "| C4:h D4 | E4 F4 |",
+            0,
+            FOUR_FOUR_BAR_TICKS,
+            BarNotation::SongLine,
+            &mut carry,
+        )
+        .unwrap();
+        assert_eq!(bars[1][0].length_ticks, 10_080);
+        let error: String = song("C4 D4:q E4 F4").unwrap_err();
+        assert!(
+            error.contains("\"C4\" has no length, and nothing before it in this line gives one. Write it, e.g. C4:q"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn after_a_group_the_written_length_carries_not_the_squeezed_one() {
+        // trp (C4:q D4 E4) fills a half; F4 and G4 are plain quarters.
+        assert_eq!(
+            song_starts_and_lengths("trp (C4:q D4 E4) F4 G4"),
+            vec![
+                (0, 3360),
+                (3360, 3360),
+                (6720, 3360),
+                (10_080, 5040),
+                (15_120, 5040)
+            ]
+        );
+    }
+
+    #[test]
+    fn the_old_order_is_refused_with_the_new_spelling() {
+        let error: String = song("q:C4 q q q").unwrap_err();
+        assert!(error.contains("writes what it plays first"), "{error}");
+        assert!(error.contains("C4:q"), "{error}");
+    }
+
+    #[test]
     fn contents_work_inside_a_group() {
-        let contents: Vec<Option<String>> = contents_of("trp (q:C2 q:E2 q:G2) h");
+        let contents: Vec<Option<String>> = contents_of("trp (C2:q E2 G2) C3:h");
         assert_eq!(contents.len(), 4);
         assert_eq!(contents[2], Some("G2".to_string()));
     }
@@ -716,9 +1113,30 @@ mod tests {
 
     #[test]
     fn broken_contents_say_what_to_type() {
-        let error_for = |text: &str| parse_bar(text, 1, FOUR_FOUR_BAR_TICKS, true).unwrap_err();
-        assert!(error_for("q: q q q").contains("nothing after ':'"));
-        assert!(error_for("q:[C3 E3 q q q").contains("missing its closing ]"));
-        assert!(error_for("w:\"Start").contains("missing its closing"));
+        assert!(
+            song(":q C2 C2 C2")
+                .unwrap_err()
+                .contains("does not say what it plays")
+        );
+        assert!(
+            song("[C3 E3:q / / /")
+                .unwrap_err()
+                .contains("missing its closing ]")
+        );
+        assert!(
+            song("\"Start:w")
+                .unwrap_err()
+                .contains("missing its closing")
+        );
+        assert!(
+            song("C:q D4 E4 F4")
+                .unwrap_err()
+                .contains("needs its octave")
+        );
+        assert!(
+            song("C4:qz D4 E4 F4")
+                .unwrap_err()
+                .contains("'z' is not expected")
+        );
     }
 }

@@ -1,18 +1,18 @@
-//! One line of a song section: `line "Keys"  | q:I q q q | qr h:ii7 q:V7 |`
-//! becomes a vocabulary `Line` for its track (Song Notation, sections 3, 4
-//! and 5). A line may go on over several text lines: a text line starting
+//! One line of a song section: `line "Keys"  | I:q / / / | r ii7:h V7:q |`
+//! becomes a vocabulary `Line` for its track, in its role (Song Notation,
+//! sections 3, 4 and 5). A line may go on over several text lines: a text line starting
 //! with `|` adds its bars to the line above.
 
 use vocabulary::rhythm_pattern::{ElementKind, RhythmElement, RhythmPatternError};
 use vocabulary::score_length::ScoreLength;
 use vocabulary::song::{
-    ElementContents, Line, LineElement, SongError, Track, TrackKind, VoiceKind,
+    ElementContents, Line, LineElement, LineRole, SongError, Track, TrackKind, VoiceKind,
 };
 use vocabulary::time_signature::TimeSignature;
 
 use crate::contents_text::parse_voice_contents;
 use crate::length_words::describe_place;
-use crate::rhythm_bar::{BarElement, parse_bars};
+use crate::rhythm_bar::{BarElement, BarNotation, LengthCarry, parse_bars};
 
 /// One text line holding bars of a song line: the `line "Keys" | … |` line
 /// itself, or a line that continues it, `| … |`.
@@ -30,7 +30,8 @@ pub struct LineError {
 }
 
 /// Reads the bars of one line, from all its text lines in order, and checks
-/// them against the track. Bars are numbered along the whole line.
+/// them against the track and the line's role. Bars are numbered along the
+/// whole line, and a length left off carries along it.
 ///
 /// # Errors
 ///
@@ -39,6 +40,7 @@ pub struct LineError {
 /// the whole line is placed at `line_number`, where the line starts.
 pub fn build_line(
     track: &Track,
+    role: LineRole,
     line_number: usize,
     parts: &[BarsText],
     time_signature: TimeSignature,
@@ -47,14 +49,19 @@ pub fn build_line(
     let mut bars: Vec<Vec<BarElement>> = Vec::new();
     // The file line each bar is written on, by bar index.
     let mut bar_line_numbers: Vec<usize> = Vec::new();
+    let mut carry: LengthCarry = LengthCarry::start_of_line();
     for part in parts {
-        let part_bars: Vec<Vec<BarElement>> =
-            parse_bars(part.text, bars.len(), bar_length_ticks, true).map_err(|message| {
-                LineError {
-                    line_number: part.line_number,
-                    message,
-                }
-            })?;
+        let part_bars: Vec<Vec<BarElement>> = parse_bars(
+            part.text,
+            bars.len(),
+            bar_length_ticks,
+            BarNotation::SongLine,
+            &mut carry,
+        )
+        .map_err(|message| LineError {
+            line_number: part.line_number,
+            message,
+        })?;
         bar_line_numbers.extend(std::iter::repeat_n(part.line_number, part_bars.len()));
         bars.extend(part_bars);
     }
@@ -63,7 +70,7 @@ pub fn build_line(
             line_number,
             message: String::from(
                 "this line has no bars. Write them after the name or on the lines below, \
-                 e.g. | q:I q q q |",
+                 e.g. | I:q / / / |",
             ),
         });
     }
@@ -80,8 +87,8 @@ pub fn build_line(
             .unwrap_or(line_number)
     };
     let mut elements: Vec<LineElement> = Vec::new();
-    // The contents of the last sounding element, carried to the elements
-    // that write none (Song Notation, section 4). Voices only.
+    // The contents of the last sounding element, for a `/` (Song Notation,
+    // section 4). Voices only.
     let mut carried: Option<ElementContents> = None;
     for (bar_index, bar) in bars.iter().enumerate() {
         // bar index × ticks/bar → ticks since the start of the line; a line
@@ -114,7 +121,7 @@ pub fn build_line(
         line_number,
         message: String::from("this line has too many bars. Split the section"),
     })?;
-    Line::new(track, time_signature, bar_count, elements).map_err(|error| LineError {
+    Line::new(track, role, time_signature, bar_count, elements).map_err(|error| LineError {
         line_number: error_start_ticks(&error).map_or(line_number, line_at),
         message: describe_song_error(&error, time_signature),
     })
@@ -134,18 +141,15 @@ fn error_start_ticks(error: &SongError) -> Option<u64> {
 }
 
 /// What one element carries, by the kind of track; `carried` is updated.
+/// A sounding element with no contents is a `/`.
 fn contents_of(
     track: &Track,
     placed: &BarElement,
     carried: &mut Option<ElementContents>,
 ) -> Result<Option<ElementContents>, String> {
     if placed.kind == ElementKind::Rest {
-        return match &placed.contents_text {
-            None => Ok(None),
-            Some(text) => Err(format!(
-                "a rest carries nothing. Take :{text} off, or write a note instead of the rest"
-            )),
-        };
+        // The bar parser gives a rest no contents: `r` is all it writes.
+        return Ok(None);
     }
     match (track.kind(), &placed.contents_text) {
         (TrackKind::Voice { voice, .. }, Some(text)) => {
@@ -156,12 +160,12 @@ fn contents_of(
         (TrackKind::Voice { voice, .. }, None) => carried.clone().map(Some).ok_or_else(|| {
             match voice {
                 VoiceKind::Poly => {
-                    "the first note of a line must say what it plays: write a colon \
-                    and a chord or notes, e.g. q:I or q:[C3 E3 G3]"
+                    "a / plays the chord or notes before it, and none comes before it in \
+                    this line. Write what it plays, e.g. I:q or [C3 E3 G3]:q"
                 }
                 VoiceKind::Mono => {
-                    "the first note of a line must say what it plays: write a colon \
-                    and a note, e.g. q:C2"
+                    "a / plays the note before it, and none comes before it in this line. \
+                    Write the note, e.g. C2:q"
                 }
             }
             .to_string()
@@ -172,11 +176,15 @@ fn contents_of(
         {
             Some(name) => Ok(Some(ElementContents::Cue(name.to_string()))),
             None => Err(format!(
-                "a cue is placed by its name in quotes. Write :\"{text}\" if that is the cue's name"
+                "a cue is placed by its name in quotes. Write \"{text}\":w if that is the \
+                 cue's name"
             )),
         },
+        (TrackKind::CueControl { .. }, None) => Err(String::from(
+            "a / cannot stand on a cue track. Name each cue, e.g. \"Start SQ-1\":w",
+        )),
         // A clock track with anything is refused later, for the whole line.
-        (TrackKind::CueControl { .. }, None) | (TrackKind::ClockAndTransport, _) => Ok(None),
+        (TrackKind::ClockAndTransport, _) => Ok(None),
     }
 }
 
@@ -188,8 +196,8 @@ fn describe_song_error(error: &SongError, time_signature: TimeSignature) -> Stri
             track_name,
             start_ticks,
         } => format!(
-            "{}: track \"{track_name}\" needs this note to say what it plays. Write a colon and \
-             what it plays, e.g. q:C2",
+            "{}: track \"{track_name}\" needs this note to say what it plays. Write it \
+             before the length, e.g. C2:q",
             describe_place(*start_ticks, time_signature)
         ),
         SongError::ContentsNotAllowed {
@@ -201,7 +209,7 @@ fn describe_song_error(error: &SongError, time_signature: TimeSignature) -> Stri
             describe_place(*start_ticks, time_signature)
         ),
         SongError::ContentsOnRest { start_ticks } => format!(
-            "{}: a rest carries nothing. Take the part after the colon off",
+            "{}: a rest plays nothing. Write r, or a note instead of the rest",
             describe_place(*start_ticks, time_signature)
         ),
         SongError::Rhythm(RhythmPatternError::TieWithoutNote { start_ticks, .. }) => format!(
@@ -221,6 +229,10 @@ mod tests {
         TimeSignature::new(4, 4).unwrap()
     }
 
+    fn first_layer() -> LineRole {
+        LineRole::VoiceLayer(vocabulary::song::VoiceLayerNumber::FIRST)
+    }
+
     /// The bars all on the `line` line itself, line 1 of the file.
     fn one(text: &str) -> Vec<BarsText<'_>> {
         vec![BarsText {
@@ -237,6 +249,7 @@ mod tests {
                 clef: Clef::Grand,
                 lead: true,
                 home_octave: None,
+                voice_layer_names: Vec::new(),
             },
         )
         .unwrap()
@@ -250,17 +263,19 @@ mod tests {
                 clef: Clef::Bass,
                 lead: false,
                 home_octave: None,
+                voice_layer_names: Vec::new(),
             },
         )
         .unwrap()
     }
 
     #[test]
-    fn an_element_with_nothing_carries_the_previous_contents() {
+    fn a_slash_plays_the_previous_contents() {
         let line: Line = build_line(
             &bass(),
+            first_layer(),
             1,
-            &one("| q:C2 q q q | qr h:D2 q:G2 |"),
+            &one("| C2:q / / / | r D2:h G2:q |"),
             four_four(),
         )
         .unwrap();
@@ -275,25 +290,40 @@ mod tests {
     }
 
     #[test]
-    fn the_first_note_of_a_line_must_say_what_it_plays() {
-        let error: String = build_line(&keys(), 1, &one("| q q q q |"), four_four())
-            .unwrap_err()
-            .message;
-        assert!(error.starts_with("bar 1 beat 1: the first note of a line"));
+    fn a_slash_with_nothing_before_it_is_refused() {
+        let error: String = build_line(
+            &keys(),
+            first_layer(),
+            1,
+            &one("| /:q / / / |"),
+            four_four(),
+        )
+        .unwrap_err()
+        .message;
+        assert!(
+            error.starts_with("bar 1 beat 1: a / plays the chord"),
+            "{error}"
+        );
     }
 
     #[test]
     fn a_chord_on_a_mono_voice_is_explained_at_its_place() {
-        let error: String = build_line(&bass(), 1, &one("| q:C2 q q q:ii7 |"), four_four())
-            .unwrap_err()
-            .message;
+        let error: String = build_line(
+            &bass(),
+            first_layer(),
+            1,
+            &one("| C2:q / / ii7 |"),
+            four_four(),
+        )
+        .unwrap_err()
+        .message;
         assert!(error.starts_with("bar 1 beat 4:"));
         assert!(error.contains("one note"));
     }
 
     #[test]
     fn a_short_bar_is_explained_in_note_values() {
-        let error: String = build_line(&keys(), 1, &one("| q:I q q |"), four_four())
+        let error: String = build_line(&keys(), first_layer(), 1, &one("| I:q / / |"), four_four())
             .unwrap_err()
             .message;
         assert!(error.contains("bar 1 is short by a quarter note"));
@@ -304,14 +334,14 @@ mod tests {
         let parts: [BarsText; 2] = [
             BarsText {
                 line_number: 20,
-                text: "| q:C2 q q q | h:G2 h |",
+                text: "| C2:q / / / | G2:h / |",
             },
             BarsText {
                 line_number: 21,
-                text: "| w:A2 | w |",
+                text: "| A2:w | / |",
             },
         ];
-        let line: Line = build_line(&bass(), 20, &parts, four_four()).unwrap();
+        let line: Line = build_line(&bass(), first_layer(), 20, &parts, four_four()).unwrap();
         assert_eq!(line.bar_count(), 4);
         // The last whole note carries A2 from the bar before, across the parts.
         assert!(line.elements().last().unwrap().contents().is_some());
@@ -323,14 +353,15 @@ mod tests {
         let short: [BarsText; 2] = [
             BarsText {
                 line_number: 20,
-                text: "| q:C2 q q q | w |",
+                text: "| C2:q / / / | /:w |",
             },
             BarsText {
                 line_number: 21,
-                text: "| q q q |",
+                text: "| /:q / / |",
             },
         ];
-        let error: LineError = build_line(&bass(), 20, &short, four_four()).unwrap_err();
+        let error: LineError =
+            build_line(&bass(), first_layer(), 20, &short, four_four()).unwrap_err();
         assert_eq!(error.line_number, 21);
         assert!(
             error.message.starts_with("bar 3 is short"),
@@ -341,14 +372,15 @@ mod tests {
         let chord: [BarsText; 2] = [
             BarsText {
                 line_number: 20,
-                text: "| q:C2 q q q | w |",
+                text: "| C2:q / / / | /:w |",
             },
             BarsText {
                 line_number: 21,
-                text: "| q q:ii7 h |",
+                text: "| /:q ii7 /:h |",
             },
         ];
-        let error: LineError = build_line(&bass(), 20, &chord, four_four()).unwrap_err();
+        let error: LineError =
+            build_line(&bass(), first_layer(), 20, &chord, four_four()).unwrap_err();
         assert_eq!(error.line_number, 21);
         assert!(
             error.message.starts_with("bar 3 beat 2:"),
@@ -362,21 +394,73 @@ mod tests {
         let parts: [BarsText; 2] = [
             BarsText {
                 line_number: 5,
-                text: "| h:C2 h~ |",
+                text: "| C2:h /~ |",
             },
             BarsText {
                 line_number: 6,
-                text: "| h h |",
+                text: "| / / |",
             },
         ];
-        let line: Line = build_line(&bass(), 5, &parts, four_four()).unwrap();
+        let line: Line = build_line(&bass(), first_layer(), 5, &parts, four_four()).unwrap();
         assert_eq!(line.bar_count(), 2);
     }
 
     #[test]
     fn a_line_with_no_bars_says_where_to_write_them() {
-        let error: LineError = build_line(&bass(), 7, &[], four_four()).unwrap_err();
+        let error: LineError = build_line(&bass(), first_layer(), 7, &[], four_four()).unwrap_err();
         assert_eq!(error.line_number, 7);
         assert!(error.message.starts_with("this line has no bars"));
+    }
+
+    #[test]
+    fn a_chord_with_its_length_run_on_is_told_to_add_the_colon() {
+        let error: String =
+            build_line(&keys(), first_layer(), 1, &one("| Iq / / / |"), four_four())
+                .unwrap_err()
+                .message;
+        assert!(
+            error.contains(
+                "\"Iq\" is not a chord. A chord needs a colon before its length: write I:q"
+            ),
+            "{error}"
+        );
+        let dotted: String = build_line(
+            &keys(),
+            first_layer(),
+            1,
+            &one("| ii7h. V7:q |"),
+            four_four(),
+        )
+        .unwrap_err()
+        .message;
+        assert!(dotted.contains("write ii7:h."), "{dotted}");
+    }
+
+    #[test]
+    fn the_length_carries_across_the_text_lines_of_a_line() {
+        let parts: [BarsText; 2] = [
+            BarsText {
+                line_number: 3,
+                text: "| C2:h G2 |",
+            },
+            BarsText {
+                line_number: 4,
+                text: "| A2 F2 |",
+            },
+        ];
+        let line: Line = build_line(&bass(), first_layer(), 3, &parts, four_four()).unwrap();
+        assert_eq!(line.elements()[3].element().length().ticks(), 10_080);
+    }
+
+    #[test]
+    fn a_second_voice_layer_is_a_line_of_its_own() {
+        let second: LineRole =
+            LineRole::VoiceLayer(vocabulary::song::VoiceLayerNumber::new(2).unwrap());
+        let line: Line = build_line(&keys(), second, 1, &one("| r:h A4 |"), four_four()).unwrap();
+        assert_eq!(line.role(), second);
+        let error: String = build_line(&bass(), second, 1, &one("| C2:w |"), four_four())
+            .unwrap_err()
+            .message;
+        assert!(error.contains("only voice layer 1"), "{error}");
     }
 }

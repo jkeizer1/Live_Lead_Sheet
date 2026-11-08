@@ -1,5 +1,6 @@
 //! The song file: `song "Name"`, its `track` blocks, and its `section`
-//! blocks with a `line` for each track (Song Notation, section 5).
+//! blocks with a `line` for each track, or for each voice layer of a track
+//! (Song Notation, section 5).
 //!
 //! A file with any mistake does not load, not even partly (EFS-6.3): the
 //! result is the song or all the mistakes found, in line order.
@@ -10,8 +11,8 @@ use vocabulary::midi_values::{
 };
 use vocabulary::score_length::ScoreLength;
 use vocabulary::song::{
-    Clef, CueDefinition, CueDestination, CueMessage, Line, Section, Song, Track, TrackKind,
-    VoiceKind,
+    Clef, CueDefinition, CueDestination, CueMessage, Line, LineRole, Section, Song, Track,
+    TrackKind, VoiceKind, VoiceLayerName, VoiceLayerNumber,
 };
 use vocabulary::tempo::{Tempo, TempoError};
 use vocabulary::time_signature::TimeSignature;
@@ -30,6 +31,7 @@ struct OpenTrack {
     lead: bool,
     home_octave: Option<i8>,
     cues: Vec<CueDefinition>,
+    voice_layer_names: Vec<VoiceLayerName>,
     /// How many mistakes were reported when the block began; more by its
     /// end means it was reported on and is not checked again.
     errors_at_start: usize,
@@ -40,6 +42,8 @@ struct OpenTrack {
 /// start with `|`.
 struct RawLine {
     track_name: String,
+    /// `voice_layer n` when written after the track's name.
+    voice_layer: Option<VoiceLayerNumber>,
     line_number: usize,
     parts: Vec<RawBarsText>,
 }
@@ -219,6 +223,7 @@ impl SongReader<'_> {
             lead: false,
             home_octave: None,
             cues: Vec::new(),
+            voice_layer_names: Vec::new(),
             errors_at_start: self.errors.len(),
         });
         Ok(())
@@ -252,11 +257,13 @@ impl SongReader<'_> {
                 ));
             }
             track.cues.push(cue);
+        } else if let Some(rest) = keyword_rest(line, "voice_layer") {
+            track.voice_layer_names.push(parse_voice_layer_name(rest)?);
         } else {
             let _ = line_number;
             return Err(format!(
                 "\"{line}\" is not understood in a track. Expected type, clef, lead, \
-                 home_octave or cue"
+                 home_octave, voice_layer or cue"
             ));
         }
         Ok(())
@@ -329,9 +336,17 @@ impl SongReader<'_> {
             let Some((track_name, bars_text)) = quoted_prefix(rest) else {
                 section.continuing_line = false;
                 return Err(String::from(
-                    "write the track's name in quotes, then the bars, e.g. line \"Keys\" | q:I q q q |",
+                    "write the track's name in quotes, then the bars, e.g. line \"Keys\" | I:q / / / |",
                 ));
             };
+            let (voice_layer, bars_text): (Option<VoiceLayerNumber>, &str) =
+                match read_voice_layer(bars_text) {
+                    Ok(read) => read,
+                    Err(message) => {
+                        section.continuing_line = false;
+                        return Err(message);
+                    }
+                };
             // The bars may all be on the lines below, so a bare name is fine.
             let parts: Vec<RawBarsText> = if bars_text.trim().is_empty() {
                 Vec::new()
@@ -343,6 +358,7 @@ impl SongReader<'_> {
             };
             section.lines.push(RawLine {
                 track_name: track_name.to_string(),
+                voice_layer,
                 line_number,
                 parts,
             });
@@ -467,7 +483,17 @@ impl SongReader<'_> {
                     text: &part.text,
                 })
                 .collect();
-            match build_line(track, raw.line_number, &parts, time_signature) {
+            // A line names its voice layer, or is layer 1; a cue control
+            // track's line places its cues. A role that does not suit the
+            // track is refused by the line, with a message.
+            let role: LineRole = match (raw.voice_layer, track.kind()) {
+                (Some(number), _) => LineRole::VoiceLayer(number),
+                (None, TrackKind::CueControl { .. }) => LineRole::CuePlacement,
+                (None, TrackKind::Voice { .. } | TrackKind::ClockAndTransport) => {
+                    LineRole::VoiceLayer(VoiceLayerNumber::FIRST)
+                }
+            };
+            match build_line(track, role, raw.line_number, &parts, time_signature) {
                 Ok(line) => lines.push(line),
                 Err(error) => {
                     self.report(
@@ -553,9 +579,11 @@ fn build_track(open: &OpenTrack) -> Result<Track, String> {
                 clef,
                 lead: open.lead,
                 home_octave: open.home_octave,
+                voice_layer_names: open.voice_layer_names.clone(),
             }
         }
         _ if open.clef.is_some() => return Err(voice_only("clef")),
+        _ if !open.voice_layer_names.is_empty() => return Err(voice_only("voice_layer")),
         _ if open.lead => return Err(voice_only("lead")),
         _ if open.home_octave.is_some() => return Err(voice_only("home_octave")),
         "clock_and_transport" => TrackKind::ClockAndTransport,
@@ -583,6 +611,51 @@ fn build_track(open: &OpenTrack) -> Result<Track, String> {
         ));
     }
     Track::new(&open.name, kind).map_err(|error| error.to_string())
+}
+
+/// After a line's track name: `voice_layer 2` and what follows it, or the
+/// text as it is when no voice layer is written.
+fn read_voice_layer(after_name: &str) -> Result<(Option<VoiceLayerNumber>, &str), String> {
+    let Some(rest) = keyword_rest(after_name.trim(), "voice_layer") else {
+        if after_name.trim().is_empty() || after_name.trim_start().starts_with('|') {
+            return Ok((None, after_name));
+        }
+        return Err(format!(
+            "\"{}\" after the track's name is not understood. Write voice_layer and its \
+             number, or the bars, e.g. line \"Keys\" voice_layer 2 | C4:q D4 E4 F4 |",
+            after_name.trim()
+        ));
+    };
+    // Nothing after voice_layer reads as an empty number, which the next
+    // step reports as not a number: no value is invented.
+    let number_text: &str = rest.split_whitespace().next().unwrap_or("");
+    let number: VoiceLayerNumber = voice_layer_number(number_text)?;
+    Ok((Some(number), rest[number_text.len()..].trim_start()))
+}
+
+/// `2` → voice layer 2.
+fn voice_layer_number(text: &str) -> Result<VoiceLayerNumber, String> {
+    let number: u8 = text
+        .parse::<u8>()
+        .map_err(|_| format!("\"{text}\" is not a voice layer number. Write e.g. voice_layer 2"))?;
+    VoiceLayerNumber::new(number).map_err(|error| error.to_string())
+}
+
+/// In a track block, `voice_layer 2 "Inner"`: a name for layer 2.
+fn parse_voice_layer_name(rest: &str) -> Result<VoiceLayerName, String> {
+    let usage = || {
+        String::from(
+            "in a track, voice_layer gives a layer a name: write its number and the name in \
+             quotes, e.g. voice_layer 2 \"Inner\"",
+        )
+    };
+    let (number_text, after_number): (&str, &str) =
+        rest.split_once(char::is_whitespace).ok_or_else(usage)?;
+    let number: VoiceLayerNumber = voice_layer_number(number_text)?;
+    match quoted_prefix(after_number) {
+        Some((name, "")) => VoiceLayerName::new(number, name).map_err(|error| error.to_string()),
+        _ => Err(usage()),
+    }
 }
 
 /// `"Start SQ-1"  destination "SQ-1"  start` and the other cue forms.
@@ -808,7 +881,7 @@ mod tests {
             .iter()
             .find(|line| line.track_name() == "Keys")
             .unwrap();
-        // I q q q: four elements, all the I chord.
+        // I:q / / /: four elements, all the I chord.
         let first_four: Vec<String> = keys.elements()[..4]
             .iter()
             .map(|element| match element.contents() {
@@ -821,7 +894,7 @@ mod tests {
 
     #[test]
     fn a_line_for_an_undeclared_track_names_the_track() {
-        let errors: Vec<String> = errors_of(&song_with("  line \"Drums\"  | q q q q |\n"));
+        let errors: Vec<String> = errors_of(&song_with("  line \"Drums\"  | C4:q D4 E4 F4 |\n"));
         assert_eq!(errors.len(), 1);
         assert!(errors[0].contains("test.song line 13:"));
         assert!(errors[0].contains("\"Drums\" is not a track of the song"));
@@ -830,7 +903,7 @@ mod tests {
     #[test]
     fn a_chord_on_the_bass_is_refused_with_the_place() {
         let errors: Vec<String> = errors_of(&song_with(
-            "  line \"Keys\"  | q:I q q q |\n  line \"Bass\"  | q:C2 q q q:V7 |\n",
+            "  line \"Keys\"  | I:q / / / |\n  line \"Bass\"  | C2:q / / V7 |\n",
         ));
         assert_eq!(errors.len(), 1);
         assert!(errors[0].contains("bar 1 beat 4:"), "{}", errors[0]);
@@ -839,7 +912,7 @@ mod tests {
     #[test]
     fn lines_of_different_length_are_reported_at_the_section() {
         let errors: Vec<String> = errors_of(&song_with(
-            "  line \"Keys\"  | q:I q q q |\n  line \"Bass\"  | q:C2 q q q | q q q q |\n",
+            "  line \"Keys\"  | I:q / / / |\n  line \"Bass\"  | C2:q / / / | / / / / |\n",
         ));
         assert!(errors[0].contains("same number of bars"), "{}", errors[0]);
     }
@@ -847,7 +920,7 @@ mod tests {
     #[test]
     fn a_song_without_a_lead_or_clock_is_refused() {
         let text: &str = "song \"T\"\ntrack \"Keys\"\n  type poly_voice\n  clef treble\n\
-                          section \"A\"\n  key C major  meter 4/4  tempo 120 beats/min\n  line \"Keys\" | q:I q q q |\n";
+                          section \"A\"\n  key C major  meter 4/4  tempo 120 beats/min\n  line \"Keys\" | I:q / / / |\n";
         let errors: Vec<String> = errors_of(text);
         assert!(errors[0].contains("clock and transport"), "{}", errors[0]);
     }
@@ -874,7 +947,7 @@ mod tests {
     fn chords_in_a_section_without_a_key_are_refused() {
         let text: &str = "song \"T\"\ntrack \"Clock\"\n  type clock_and_transport\n\
                           track \"Keys\"\n  type poly_voice\n  clef treble\n  lead\n\
-                          section \"A\"\n  meter 4/4  tempo 120 beats/min\n  line \"Keys\" | q:I q q q |\n";
+                          section \"A\"\n  meter 4/4  tempo 120 beats/min\n  line \"Keys\" | I:q / / / |\n";
         let errors: Vec<String> = errors_of(text);
         assert!(errors[0].contains("has chords but no key"), "{}", errors[0]);
     }
@@ -883,7 +956,7 @@ mod tests {
     fn a_cue_not_defined_is_refused() {
         let text: &str = "song \"T\"\ntrack \"Clock\"\n  type clock_and_transport\n\
                           track \"Cues\"\n  type cue_control\n  cue \"Go\" destination \"X\" start\n\
-                          section \"A\"\n  meter 4/4  tempo 120 beats/min\n  line \"Cues\" | w:\"Stop\" |\n";
+                          section \"A\"\n  meter 4/4  tempo 120 beats/min\n  line \"Cues\" | \"Stop\":w |\n";
         let errors: Vec<String> = errors_of(text);
         assert!(errors[0].contains("no cue named \"Stop\""), "{}", errors[0]);
     }
@@ -915,9 +988,9 @@ mod tests {
         assert_eq!(
             tempos_of(&two_sections(
                 "meter 4/4  tempo 120 beats/min",
-                "w:I",
+                "I:w",
                 "meter 6/8  tempo 60 beats/min",
-                "h.:I"
+                "I:h."
             )),
             vec![120_000, 90_000]
         );
@@ -925,9 +998,9 @@ mod tests {
         assert_eq!(
             tempos_of(&two_sections(
                 "meter 3/8  tempo 30 beats/min",
-                "q.:I",
+                "I:q.",
                 "meter 9/8  tempo 60 beats/min",
-                "h.:I q.:I"
+                "I:h. /:q."
             )),
             vec![15_000, 90_000]
         );
@@ -939,9 +1012,9 @@ mod tests {
         assert_eq!(
             tempos_of(&two_sections(
                 "tempo 120 beats/min  meter 4/4",
-                "w:I",
+                "I:w",
                 "tempo 2 beats/s  meter 6/8",
-                "h.:I"
+                "I:h."
             )),
             vec![120_000, 180_000]
         );
@@ -954,9 +1027,9 @@ mod tests {
         assert_eq!(
             tempos_of(&two_sections(
                 "meter 4/4  tempo 120 beats/min",
-                "w:I",
+                "I:w",
                 "meter 6/8",
-                "h.:I"
+                "I:h."
             )),
             vec![120_000, 120_000]
         );
@@ -1013,11 +1086,11 @@ mod tests {
         // Lines 13 to 16: the Keys line over two text lines with a comment
         // between, the Bass line written under its bare name.
         let text: String = song_with(
-            "  line \"Keys\"  | w:I | w:V |\n\
+            "  line \"Keys\"  | I:w | V |\n\
              # the turnaround\n\
-             \x20              | w:vi | w:IV |\n\
+             \x20              | vi | IV |\n\
              \x20 line \"Bass\"\n\
-             \x20   | w:C2 | w:G2 | w:A2 | w:F2 |\n",
+             \x20   | C2:w | G2 | A2 | F2 |\n",
         );
         assert_eq!(bar_counts_of(&text), vec![4]);
     }
@@ -1026,8 +1099,8 @@ mod tests {
     fn a_mistake_in_a_continuation_names_its_own_text_line() {
         // Bar 3, on line 14, is short; the message counts bars along the line.
         let errors: Vec<String> = errors_of(&song_with(
-            "  line \"Keys\"  | w:I | w:V |\n\
-             \x20              | h:vi | w:IV |\n",
+            "  line \"Keys\"  | I:w | V |\n\
+             \x20              | vi:h | IV:w |\n",
         ));
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert!(
@@ -1040,7 +1113,7 @@ mod tests {
     #[test]
     fn bars_not_under_a_line_are_refused() {
         // Before any line in the section (line 13).
-        let errors: Vec<String> = errors_of(&song_with("  | w:I |\n"));
+        let errors: Vec<String> = errors_of(&song_with("  | I:w |\n"));
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert!(
             errors[0].starts_with("test.song line 13: bars with no line above them"),
@@ -1049,7 +1122,7 @@ mod tests {
         );
         // After a setting (line 14), which ends the line above it.
         let errors: Vec<String> = errors_of(&song_with(
-            "  line \"Keys\"  | w:I |\n  repeat 2\n  | w:V |\n",
+            "  line \"Keys\"  | I:w |\n  repeat 2\n  | V:w |\n",
         ));
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert!(
@@ -1062,10 +1135,101 @@ mod tests {
     #[test]
     fn joined_lines_of_different_lengths_are_reported() {
         let errors: Vec<String> = errors_of(&song_with(
-            "  line \"Keys\"  | w:I | w:V |\n\
-             \x20              | w:vi |\n\
-             \x20 line \"Bass\"  | w:C2 | w:G2 |\n",
+            "  line \"Keys\"  | I:w | V |\n\
+             \x20              | vi |\n\
+             \x20 line \"Bass\"  | C2:w | G2 |\n",
         ));
         assert_eq!(errors.len(), 1, "{errors:?}");
+    }
+
+    #[test]
+    fn voice_layers_are_lines_of_their_own_on_one_track() {
+        let song: Song = parse_song(
+            "test.song",
+            &song_with(
+                "  line \"Keys\"  voice_layer 1  | G4:q G4 F4 Eb4 |\n\
+                 \x20 line \"Keys\"  voice_layer 2  | Eb4:sx D4 Eb4:e~ Eb4:sx F4 Eb4 D4 C4:e D4~ D4 C4 |\n\
+                 \x20 line \"Keys\"  voice_layer 3\n\
+                 \x20   | r:h A3~ |\n\
+                 \x20   | A3 r |\n\
+                 \x20 line \"Bass\"  | C3:w | / |\n",
+            )
+            .replace("| G4:q G4 F4 Eb4 |", "| G4:q G4 F4 Eb4 | C5:w |")
+            .replace("D4~ D4 C4 |\n", "D4~ D4 C4 | C4:w |\n"),
+        )
+        .unwrap();
+        let roles: Vec<String> = song.sections()[0]
+            .lines()
+            .iter()
+            .map(|line: &Line| format!("{} {}", line.track_name(), line.role()))
+            .collect();
+        assert_eq!(
+            roles,
+            vec![
+                "Keys voice layer 1",
+                "Keys voice layer 2",
+                "Keys voice layer 3",
+                "Bass voice layer 1",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_line_without_voice_layer_is_layer_one_and_two_such_lines_are_refused() {
+        let errors: Vec<String> = errors_of(&song_with(
+            "  line \"Keys\"  | I:w |\n  line \"Keys\"  voice_layer 1  | V:w |\n",
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(
+            errors[0].contains("two lines for \"Keys\" voice layer 1"),
+            "{}",
+            errors[0]
+        );
+    }
+
+    #[test]
+    fn voice_layer_mistakes_say_what_to_write() {
+        let errors: Vec<String> =
+            errors_of(&song_with("  line \"Keys\"  voice_layer two  | I:w |\n"));
+        assert!(
+            errors[0].contains("\"two\" is not a voice layer number"),
+            "{}",
+            errors[0]
+        );
+        let errors: Vec<String> = errors_of(&song_with("  line \"Keys\"  layer 2  | I:w |\n"));
+        assert!(
+            errors[0].contains("after the track's name is not understood"),
+            "{}",
+            errors[0]
+        );
+        let errors: Vec<String> =
+            errors_of(&song_with("  line \"Bass\"  voice_layer 2  | C2:w |\n"));
+        assert!(errors[0].contains("only voice layer 1"), "{}", errors[0]);
+        let errors: Vec<String> =
+            errors_of(&song_with("  line \"Keys\"  voice_layer 0  | I:w |\n"));
+        assert!(errors[0].contains("counted from 1"), "{}", errors[0]);
+    }
+
+    #[test]
+    fn a_voice_layer_may_be_named_in_its_track() {
+        let text: String = song_with("  line \"Keys\"  voice_layer 2  | C4:w |\n").replace(
+            "  clef grand\n  lead\n",
+            "  clef grand\n  lead\n  voice_layer 2 \"Inner\"\n",
+        );
+        let song: Song = parse_song("test.song", &text).unwrap();
+        let keys: &Track = &song.tracks()[1];
+        let two: VoiceLayerNumber = VoiceLayerNumber::new(2).unwrap();
+        let three: VoiceLayerNumber = VoiceLayerNumber::new(3).unwrap();
+        assert_eq!(keys.voice_layer_display_name(two), "Inner");
+        assert_eq!(keys.voice_layer_display_name(three), "3");
+        let unnamed: Vec<String> = errors_of(&song_with("  line \"Keys\"  | I:w |\n").replace(
+            "  clef grand\n  lead\n",
+            "  clef grand\n  lead\n  voice_layer 2\n",
+        ));
+        assert!(
+            unnamed[0].contains("voice_layer 2 \"Inner\""),
+            "{}",
+            unnamed[0]
+        );
     }
 }

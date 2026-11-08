@@ -1,6 +1,6 @@
 # Live Lead Sheet — Experience Functional Specification
 
-Revision 16 — 7 Nov 2026 (EFS-1.3: the counter shows beats, as the rudiments define them; "count" replaced by beat and pulse)
+Revision 17 — 8 Nov 2026 (EFS-2.6: the beat pulse example in the song notation's new order, Song Notation Revision 15)
 
 Builds on the Concept Brief, Revision 13, Architecture D-10 and D-11, and
 Song Notation, Revision 9. Covers
@@ -172,7 +172,7 @@ reset by phrase cues (EFS-4).
 **EFS-2.6 Beat pulse.** A beat pulse is an ordinary mono voice (EFS-3.3)
 that plays one fixed note on the elements of its rhythm, for clock
 dividers and devices that follow notes better than MIDI clock. The song
-writes the pitch and the accents like any voice (`| q>:C4 q q q |`);
+writes the pitch and the accents like any voice (`| C4:q> / / / |`);
 port, channel and velocities are set by the musician in the studio
 configuration (EFS-6.6), where an accent mark has its own velocity — 127
 and 64 in the usual setup. Where the accent falls is written in the

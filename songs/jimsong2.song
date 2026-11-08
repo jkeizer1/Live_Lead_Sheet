@@ -22,20 +22,20 @@ track "Bass"
 
 section "Count-in"  count-in repeat 2
   meter 3/8  tempo 100 beats/min
-  line "Beat"  | e>:C5  e:C2 e |
+  line "Beat"  | C5:e>  C2 /   |
 
 section "Gate test"  repeat 300
   key C major  meter 3/8  tempo 100 beats/min
 #                  Phrase 1                                                                                         
-  line "Harmony"  | q.:I            | e:IV   e   e:IV    |  q:vii°  e                         |
-                  | e.:I e.:V       | e:IV       q:IV    |  q:vii°  e                         |
-                  | e.:I e.:V       | e.:IV7     e.:IV   |  q:vii°  e                         |    
+  line "Harmony"  | I:q.            | IV:e   /   IV      |  vii°:q  /:e                         |
+                  | I:e. V          | IV:e       IV:q    |  vii°  /:e                         |
+                  | I:e. V          | IV7     IV         |  vii°:q  /:e                         |    
         
-  line "Bass"     | e>:C2 e:E2 e:G2 | e>:F2  e:A2  e:C3  |  e:G2    e:D2 e:B2                  |
-                  | e>:C2 e:E2 e:G2 | e>:F1  e:A2  e:C3  |  e:G3    e:D2 e:B2                  |
-                  | e>:C2 e:E2 e:G2 | e>:F1  e:A2  e:C4  |  e:G2    e:D2 e:B2                  |
+  line "Bass"     | C2:e> E2 G2     | F2>  A2  C3        |  G2    D2 B2                        |
+                  | C2> E2 G2       | F1>  A2  C3        |  G3    D2 B2                        |
+                  | C2> E2 G2       | F1>  A2  C4        |  G2    D2 B2                        |
 
-  line "Beat"     | e>:C6 e:B3 e    | e>:F6 e:A3 e:C2    |  sx:C6 sxr sx>:C5 sxr sx:C4 sx:C5   | 
-                  | e>:C6 e:B3 e    | e>:C6 e:B3 e:C2    |  sx:C6 sxr sx>:C5 sxr sx:C4 sx:C5   |
-                  | e>:C6 e:B3 e    | e>:C6 e:B3 e:C2    |  sx:C6 sxr sx>:C5 sxr sx:C4 sx:C5   |
+  line "Beat"     | C6:e> B3 /      | F6> A3 C2          |  C6:sx r C5> r C4 C5                | 
+                  | C6:e> B3 /      | C6> B3 C2          |  C6:sx r C5> r C4 C5                |
+                  | C6:e> B3 /      | C6> B3 C2          |  C6:sx r C5> r C4 C5                |
 
