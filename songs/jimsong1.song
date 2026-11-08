@@ -1,8 +1,7 @@
-# Bass gate test for the Live Lead Sheet: only the Bass, with a rest after
-# every note, so no note starts where the previous one ended. Play it with
-# Demo.studio. If every note gets its gate here, the missing gates in
-# Demo.song come from notes that touch.
-song "jimssong1 - bass tests"
+# ALL NT
+# NT Preset Nov7
+
+song "Nov7 General Testing"
 
 track "Clock"
   type clock_and_transport
@@ -20,8 +19,9 @@ track "Bass"
   type mono_voice
   clef bass
 
-section "Gate test"  repeat 100
-  key C major  meter 3/8  tempo 30 beats/min
-  line "Harmony"  | e:I e e                | e:V  e  er            | 
-  line "Bass"     | e:C2 e e               | e:C2 e e   |
-  line "Beat"     | sx:C4 sxr  sx sxr  sx sxr    | sx>:C4 sxr  sx sxr sx sxr  |
+section "Gate test"  repeat 300
+  key C major  meter 3/8  tempo 180 beats/min
+  line "Harmony"  | e:I e e:V7                       | e:IV           sx:iidim  sxr        e:ii     | 
+  line "Bass"     | sx:C2 sx:G2 e:E2 sxr sx:C4       | sx:F2 sx:A3    e:B3         sx:B2 sxr    |
+# line "Beat"     | sx>:C5 sxr  sx:B3 sxr  sx sx:C4  | sx>:C5 sxr     sx:B3 sx     sx sx:C6 |
+  line "Beat"     | sx>:C6 sxr  sx:B3 sxr  sx sxr    | sx>:C5 sxr     er           sx:C8 sxr|

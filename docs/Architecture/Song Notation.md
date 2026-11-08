@@ -1,6 +1,6 @@
 # Live Lead Sheet — Song Notation
 
-Revision 13 — 7 Nov 2026 (tempo written in beats; compound meters above 12 refused; "count" replaced by beat and pulse)
+Revision 14 — 7 Nov 2026 (a line may go on over several text lines; tempo written in beats; compound meters above 12 refused; "count" replaced by beat and pulse)
 
 **Status: draft for trial.** *Decided* marks what Jim has decided;
 everything else is a proposal to try with a working player. The questions
@@ -383,6 +383,24 @@ short section. The initial tempo is the first section's.
   `section`; a `line` names a track already declared. Settings (`key`,
   `meter`, `tempo`, `repeat`, `count-in`) may stand on the section line or
   on lines after it, in any order.
+- **A long line goes on over several text lines.** A text line that starts
+  with `|` adds its bars to the `line` directly above it, as bars do in a
+  rhythm (section 3). Comment lines may stand between; a setting ends the
+  line, so bars after a setting, or before any `line`, are refused with a
+  message. The track's name may stand alone, with all its bars below:
+
+  ```
+  line "Keys"  | h:I h | h:V h | h:vi h | w:IV |
+  # second phrase
+               | h:I h | h:V h | w:I    | w    |
+  line "Bass"
+    | q:C2 q q q | q:G2 q q q | q:A2 q q q | q:F2 q q q |
+    | q:C2 q q q | q:G2 q q q | w:C2       | w          |
+  ```
+
+  Bars are numbered along the whole line, and a message names the text
+  line the bar is on: `line 34: line "Keys": bar 7 is short by a quarter
+  note`. *Decided (Jim, 7 Nov 2026).*
 
 ### Cues, in rhythm notation
 

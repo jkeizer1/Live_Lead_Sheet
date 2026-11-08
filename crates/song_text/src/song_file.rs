@@ -18,7 +18,7 @@ use vocabulary::time_signature::TimeSignature;
 
 use crate::contents_text::parse_key;
 use crate::parse_error::ParseError;
-use crate::song_line::build_line;
+use crate::song_line::{BarsText, build_line};
 use crate::text_line::{Word, keyword_rest, parse_meter, quoted_prefix, without_comment, words};
 
 /// A track block while it is being read.
@@ -36,10 +36,18 @@ struct OpenTrack {
 }
 
 /// A line of a section as written, built once the section's meter is known.
+/// Its bars may be on the `line` line and on the text lines after it that
+/// start with `|`.
 struct RawLine {
     track_name: String,
     line_number: usize,
-    bars_text: String,
+    parts: Vec<RawBarsText>,
+}
+
+/// One text line of a line's bars, as written.
+struct RawBarsText {
+    line_number: usize,
+    text: String,
 }
 
 /// A section block while it is being read.
@@ -52,6 +60,9 @@ struct OpenSection {
     time_signature: Option<TimeSignature>,
     tempo: Option<WrittenTempo>,
     lines: Vec<RawLine>,
+    /// True right after a `line` or its continuation: a text line starting
+    /// with `|` then adds bars to that line.
+    continuing_line: bool,
     errors_at_start: usize,
 }
 
@@ -302,6 +313,7 @@ impl SongReader<'_> {
             time_signature: None,
             tempo: None,
             lines: Vec::new(),
+            continuing_line: false,
             errors_at_start: self.errors.len(),
         };
         let result: Result<(), String> = read_settings(&mut section, settings);
@@ -315,17 +327,43 @@ impl SongReader<'_> {
         };
         if let Some(rest) = keyword_rest(line, "line") {
             let Some((track_name, bars_text)) = quoted_prefix(rest) else {
+                section.continuing_line = false;
                 return Err(String::from(
                     "write the track's name in quotes, then the bars, e.g. line \"Keys\" | q:I q q q |",
                 ));
             };
+            // The bars may all be on the lines below, so a bare name is fine.
+            let parts: Vec<RawBarsText> = if bars_text.trim().is_empty() {
+                Vec::new()
+            } else {
+                vec![RawBarsText {
+                    line_number,
+                    text: bars_text.to_string(),
+                }]
+            };
             section.lines.push(RawLine {
                 track_name: track_name.to_string(),
                 line_number,
-                bars_text: bars_text.to_string(),
+                parts,
             });
+            section.continuing_line = true;
             Ok(())
+        } else if line.starts_with('|') {
+            match section.lines.last_mut() {
+                Some(raw) if section.continuing_line => {
+                    raw.parts.push(RawBarsText {
+                        line_number,
+                        text: line.to_string(),
+                    });
+                    Ok(())
+                }
+                _ => Err(String::from(
+                    "bars with no line above them. Put them right under the line they continue, \
+                     or start them with line \"Name\"",
+                )),
+            }
         } else {
+            section.continuing_line = false;
             read_settings(section, line)
         }
     }
@@ -421,12 +459,20 @@ impl SongReader<'_> {
                 );
                 continue;
             };
-            match build_line(track, &raw.bars_text, time_signature) {
+            let parts: Vec<BarsText> = raw
+                .parts
+                .iter()
+                .map(|part: &RawBarsText| BarsText {
+                    line_number: part.line_number,
+                    text: &part.text,
+                })
+                .collect();
+            match build_line(track, raw.line_number, &parts, time_signature) {
                 Ok(line) => lines.push(line),
-                Err(message) => {
+                Err(error) => {
                     self.report(
-                        raw.line_number,
-                        format!("line \"{}\": {message}", raw.track_name),
+                        error.line_number,
+                        format!("line \"{}\": {}", raw.track_name, error.message),
                     );
                 }
             }
@@ -951,5 +997,75 @@ mod tests {
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert!(errors[0].starts_with("test.song line 12:"), "{}", errors[0]);
         assert!(errors[0].contains("15/8 is not read yet"), "{}", errors[0]);
+    }
+
+    fn bar_counts_of(text: &str) -> Vec<u32> {
+        parse_song("test.song", text)
+            .unwrap()
+            .sections()
+            .iter()
+            .map(Section::bar_count)
+            .collect()
+    }
+
+    #[test]
+    fn a_line_goes_on_over_the_text_lines_below_it() {
+        // Lines 13 to 16: the Keys line over two text lines with a comment
+        // between, the Bass line written under its bare name.
+        let text: String = song_with(
+            "  line \"Keys\"  | w:I | w:V |\n\
+             # the turnaround\n\
+             \x20              | w:vi | w:IV |\n\
+             \x20 line \"Bass\"\n\
+             \x20   | w:C2 | w:G2 | w:A2 | w:F2 |\n",
+        );
+        assert_eq!(bar_counts_of(&text), vec![4]);
+    }
+
+    #[test]
+    fn a_mistake_in_a_continuation_names_its_own_text_line() {
+        // Bar 3, on line 14, is short; the message counts bars along the line.
+        let errors: Vec<String> = errors_of(&song_with(
+            "  line \"Keys\"  | w:I | w:V |\n\
+             \x20              | h:vi | w:IV |\n",
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(
+            errors[0].starts_with("test.song line 14: line \"Keys\": bar 3 is short"),
+            "{}",
+            errors[0]
+        );
+    }
+
+    #[test]
+    fn bars_not_under_a_line_are_refused() {
+        // Before any line in the section (line 13).
+        let errors: Vec<String> = errors_of(&song_with("  | w:I |\n"));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(
+            errors[0].starts_with("test.song line 13: bars with no line above them"),
+            "{}",
+            errors[0]
+        );
+        // After a setting (line 14), which ends the line above it.
+        let errors: Vec<String> = errors_of(&song_with(
+            "  line \"Keys\"  | w:I |\n  repeat 2\n  | w:V |\n",
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(
+            errors[0].starts_with("test.song line 15: bars with no line above them"),
+            "{}",
+            errors[0]
+        );
+    }
+
+    #[test]
+    fn joined_lines_of_different_lengths_are_reported() {
+        let errors: Vec<String> = errors_of(&song_with(
+            "  line \"Keys\"  | w:I | w:V |\n\
+             \x20              | w:vi |\n\
+             \x20 line \"Bass\"  | w:C2 | w:G2 |\n",
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
     }
 }

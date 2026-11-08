@@ -1,0 +1,37 @@
+# ALL NT
+# NT Preset Nov7
+
+song "Nov7 General Testing"
+
+track "Clock"
+  type clock_and_transport
+
+track "Harmony"
+  type poly_voice
+  clef grand
+  lead
+
+track "Beat"
+  type mono_voice
+  clef treble
+
+track "Bass"
+  type mono_voice
+  clef bass
+
+#section "Count-in"  count-in
+#  meter 4/4  tempo 140 beats/min
+#  line "Beat"  | q>:C4 q q q |
+
+section "Gate test"  repeat 300
+  key C major  meter 3/8  tempo 120 beats/min
+#                 Phrase 1                                                                                         
+  line "Harmony"  | q.:I         | e:IV           q:V      |  q:vii°  e:V                         |
+                  | e.:I e.:V    | e:IV           q:V      |  q:vii°  e:[D2 F3 B2]                |  
+       
+  line "Bass"     | e:C2 e er    | sx>:F1 sx:A1   e.:G2 sx |  q:B2    e:C2                        |
+                  | e:C2 e er    | sx>:F1 sx:A1   e.:G2 sx |  q:B2    e:B2                        |
+
+  line "Beat"     | e>:C6 e:B3 e | e>:C5 e:B3 e            |  sx:C8 sx:C6 sx:C5 sx:C6 sx:C4 sx:C7 |
+                  | e>:C6 e:B3 e | e>:C5 e:B3 e            |  sx:C8 sx:C6 sx:C5 sx:C6 sx:C4 sx:C7 |
+
