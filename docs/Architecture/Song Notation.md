@@ -1,6 +1,6 @@
 # Live Lead Sheet — Song Notation
 
-Revision 15 — 8 Nov 2026 (song lines write what an element plays first, then its length; a length left off carries; `/`; voice layers; rests written in full)
+Revision 16 — 8 Nov 2026 (when `#` starts a comment, so sharps are safe, Q22)
 
 **Status: draft for trial.** *Decided* marks what Jim has decided;
 everything else is a proposal to try with a working player. The questions
@@ -78,8 +78,13 @@ can start from the chords' roots. Its result is written into the song.
 
 ## 2. Rules shared by all files
 
-- **Plain text, line by line.** A `#` starts a comment to the end of the
-  line. Indentation is for the reader.
+- **Plain text, line by line.** Indentation is for the reader. A line
+  whose first character, after indentation, is `#` is a comment, and the
+  whole line is left out. After content, `---` starts a comment to the end
+  of the line (`| r |  --- fires on each pass`), except inside a quoted
+  name. Any other `#` is a sharp (`F#3`, `C#4:q`, `#iv°`, `key F# major`),
+  never a comment; a sharp in the wrong place is reported with where a
+  sharp goes. *Decided (Jim, 8 Nov 2026).*
 - **Blocks.** A file holds blocks opened by a keyword and a quoted name:
   `rhythm "Charleston"`, `progression "12-bar blues"`, `song "Demo"`,
   `studio "Jim's studio"`. A library file holds only `rhythm` blocks or
@@ -350,7 +355,7 @@ section "Verse"  repeat 2
   line "Beat"  | C4:q> / / / | /> / / / |
   line "Keys"  | I:q / / / | r ii7:h V7:q |
   line "Bass"  | C2:q / / / | r D2:h G2:q |
-  line "Cues"  | "Start SQ-1":w | r |    # fires on each pass: passes are not designed (EFS-4.4)
+  line "Cues"  | "Start SQ-1":w | r |   --- fires on each pass: passes are not designed (EFS-4.4)
 ```
 
 ### Tracks and their types
@@ -813,10 +818,10 @@ the recommendation that will be used unless Jim says otherwise:
 - **Q21.** A bar repeat, `%`: the previous bar of the line again. It meets
   ties into the bar and the carried length; to be settled with the
   editor's slash and repeat display. *Deferred (8 Nov 2026).*
-- **Q22.** `#` is both the comment sign (section 2) and the sharp (`F#2`):
-  a sharp outside quotes starts a comment, so `C#4:q` loses the rest of
-  its line. Found on 8 Nov 2026 writing BWV 610. One remedy: a comment
-  starts at `#` only at the start of a line or after a space. *Open.*
+- **Q22.** `#` is both the comment sign and the sharp. *Settled (Jim,
+  8 Nov 2026):* a comment is a whole line starting with `#`, or the rest
+  of a line after `---`; every other `#` is a sharp (section 2). Found writing BWV 610, whose sharps were cut
+  off.
 
 - **Q19.** Driving a queued device such as the Korg SQ-1 (Jim, 5 Nov 2026;
   *required, not yet designed*). A cue that only starts it

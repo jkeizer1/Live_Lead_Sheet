@@ -31,8 +31,8 @@ section "Count-in"  count-in
 section "Verse"  repeat 1
   key C major  meter 4/4  tempo 140 beats/min
   line "Beat"  | C4:q> / /> /           | / / / /             | C4 / / /       | / / / / |
-#                CM                        GM                 Am                 FM
-  line "Keys"  | I:h /                  | V  /                |  VI /          | IV:w   |
+#                C                         G                  Am                 F
+  line "Keys"  | I:h /                  | V  /                |  vi /          | IV:w   |
   line "Bass"  | C2:h r:q G2            | G2 B2 D2 G2         | A2 C2 E2:h     | F3:q> A2 C3> E2:e B3       |
   line "Cues"  | "Start SQ-1":w         | r                   |  r             |  r  |
 
@@ -40,8 +40,8 @@ section "Verse"  repeat 1
 section "Verse"  repeat 2
   key C major  meter 4/4  tempo 140 beats/min
   line "Beat"  | C4:q> / /> /           | / / / /             |
-#                GM                       Am                 
-  line "Keys"  | V:h /                  | VI  /               | 
+#                G                        Am
+  line "Keys"  | V:h /                  | vi  /               | 
   line "Bass"  | G2:h  B2               | A2  /               |
   line "Cues"  | "Start SQ-1":w         | r                   |
 #################
@@ -49,8 +49,8 @@ section "Verse"  repeat 2
 section "Verse"  repeat 1
   key C major  meter 4/4  tempo 140 beats/min
   line "Beat"  | C4:q> / /> /           | / / / /             | C4 / / /       | / / / / |
-#                CM                        GM                 Am                 FM
-  line "Keys"  | I:h /                  | V  /                |  VI /          | IV:w   |
+#                C                         G                  Am                 F
+  line "Keys"  | I:h /                  | V  /                |  vi /          | IV:w   |
   line "Bass"  | C2:h r:q G2            | G2 B2 D2 G2         | A2 C2 E2:h     | F3:q> A2 C3> E2:e B3       |
   line "Cues"  | "Start SQ-1":w         | r                   |  r             |  r  |
 

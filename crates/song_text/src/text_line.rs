@@ -66,19 +66,31 @@ pub fn quoted_prefix(text: &str) -> Option<(&str, &str)> {
     }
 }
 
-/// Drops a `#` comment, unless the `#` is inside a quoted name ("F#").
+/// Drops comments (Song Notation, section 2). A line whose first
+/// character, after indentation, is `#` is a comment as a whole. After
+/// content, `---` starts a comment to the end of the line, except inside a
+/// quoted name. A `#` anywhere but first is a sharp (`F#3`, `C#4:q`,
+/// `#iv°`, `key F# major`), never a comment.
 #[must_use]
 pub fn without_comment(line: &str) -> &str {
+    if line.trim_start().starts_with('#') {
+        return "";
+    }
     let mut inside_quotes: bool = false;
     for (position, character) in line.char_indices() {
         match character {
             '"' => inside_quotes = !inside_quotes,
-            '#' if !inside_quotes => return &line[..position],
+            '-' if !inside_quotes && line[position..].starts_with(END_OF_LINE_COMMENT) => {
+                return &line[..position];
+            }
             _ => {}
         }
     }
     line
 }
+
+/// Starts a comment after content on a line.
+pub const END_OF_LINE_COMMENT: &str = "---";
 
 /// Splits a line into words and quoted names: `cue "Start SQ-1" start`.
 ///
@@ -144,7 +156,37 @@ mod tests {
     }
 
     #[test]
-    fn a_hash_inside_quotes_is_not_a_comment() {
-        assert_eq!(without_comment("key \"F#\" # note"), "key \"F#\" ");
+    fn a_comment_is_a_whole_line_starting_with_a_hash() {
+        assert_eq!(without_comment("# C – G – Am – F"), "");
+        assert_eq!(without_comment("  #################"), "");
+        assert_eq!(without_comment("#                C"), "");
+    }
+
+    #[test]
+    fn a_hash_after_content_is_a_sharp() {
+        assert_eq!(
+            without_comment("| F#3:q C#4 G#2 A3 |"),
+            "| F#3:q C#4 G#2 A3 |"
+        );
+        assert_eq!(without_comment("| #iv°:h I |"), "| #iv°:h I |");
+        assert_eq!(without_comment("  key F# major"), "  key F# major");
+        // Not a comment: it stays, and the parser reports it.
+        assert_eq!(without_comment("| r |  # note"), "| r |  # note");
+    }
+
+    #[test]
+    fn three_hyphens_start_a_comment_after_content() {
+        assert_eq!(
+            without_comment("  line \"Cues\"  | \"Start SQ-1\":w | r |  --- fires each pass"),
+            "  line \"Cues\"  | \"Start SQ-1\":w | r |  "
+        );
+        assert_eq!(without_comment("  key F# major---bright"), "  key F# major");
+        // Inside a quoted name they are part of the name.
+        assert_eq!(
+            without_comment("  cue \"A---B\" destination \"X\" start"),
+            "  cue \"A---B\" destination \"X\" start"
+        );
+        // A negative octave is one hyphen, not a comment.
+        assert_eq!(without_comment("| C-1:w |"), "| C-1:w |");
     }
 }

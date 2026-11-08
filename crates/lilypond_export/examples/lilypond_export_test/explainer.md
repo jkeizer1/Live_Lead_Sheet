@@ -1,6 +1,6 @@
 # lilypond_export_test
 
-Revision 1 — 8 Nov 2026
+Revision 2 — 8 Nov 2026 (findings: Demo corrected, BWV 610 with its sharps)
 
 ## What it proves
 
@@ -59,16 +59,18 @@ version 2.24, which the file is written for). The PDF is
 workspace; not yet run on Jim's machine):
 
 - All five songs in `songs/` engrave with no LilyPond warning.
-- `songs/Demo.song`: the Keys line writes `VI`, an upper case numeral,
-  which is A major (A C♯ E); the comment above the section says the
-  progression is C – G – Am – F. The page shows the C♯; the player sends
-  it too. If A minor is meant, the chord is `vi`. Not changed.
-- BWV 610 (a scratch copy in E♭ major with F♯ written G♭, since minor keys
-  and the `#` sign are still open questions in Song Notation) engraves
-  with the chorale and the alto on the upper staff, stems up and down,
-  the tenor on the lower staff and the pedal on its own, and matches the
-  Mutopia edition bar for bar apart from those two workarounds.
+- `songs/Demo.song`: the Keys line wrote `VI`, an upper case numeral,
+  which is A major (A C♯ E), where the comment above the section says the
+  progression is C – G – Am – F. The page showed the C♯, and the player
+  sent it. Jim corrected it to `vi` (A minor) the same day.
+- BWV 610 (a scratch copy in E♭ major, since minor keys are still an open
+  question in Song Notation, Q12) engraves with the chorale and the alto
+  on the upper staff, stems up and down, the tenor on the lower staff and
+  the pedal on its own, and matches the Mutopia edition bar for bar apart
+  from the key. Its F sharps read correctly once `#` stopped starting a
+  comment in the middle of a bar (Song Notation, Q22).
 
 ## Revisions
 
 - 8 Nov 2026, revision 1: first version.
+- 8 Nov 2026, revision 2: findings updated after Demo's `vi` and the comment rule.

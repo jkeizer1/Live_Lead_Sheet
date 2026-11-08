@@ -483,6 +483,7 @@ fn parse_song_element(
     match cursor.peek() {
         None | Some(')') => {}
         Some(character) if character.is_whitespace() => {}
+        Some('#') => return Err(misplaced_sharp(&element_text)),
         Some(character) => {
             return Err(format!(
                 "'{character}' is not expected in \"{element_text}\". Write what it plays, \
@@ -575,6 +576,15 @@ fn parse_song_contents(cursor: &mut Cursor, element_text: &str) -> Result<Writte
             text.push_str(&octave);
             Ok(WrittenContents::Text(text))
         }
+        // A sharp before a chord numeral is part of the chord (#iv°); a
+        // sharp anywhere else in front of an element is misplaced.
+        Some('#')
+            if !cursor
+                .peek_second()
+                .is_some_and(|after: char| "IiVv".contains(after)) =>
+        {
+            Err(misplaced_sharp(element_text))
+        }
         Some(':' | '>' | '\'' | '_' | '^' | '~') | None => Err(format!(
             "\"{element_text}\" does not say what it plays. Write a note, chord, r or / \
              first, e.g. C4:q"
@@ -613,6 +623,14 @@ fn chord_with_length_run_on(name: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// A `#` is always a sharp; one in the wrong place is told where it goes.
+fn misplaced_sharp(element_text: &str) -> String {
+    format!(
+        "\"{element_text}\": a # is a sharp. Write it right after the note's letter, e.g. \
+         C#4, or before a chord numeral, e.g. #iv°"
+    )
 }
 
 /// `"Start SQ-1"`, quotes included.
@@ -1090,6 +1108,19 @@ mod tests {
                 (15_120, 5040)
             ]
         );
+    }
+
+    #[test]
+    fn a_misplaced_sharp_is_told_where_a_sharp_goes() {
+        for bar in ["r:h # C4", "C4#:w", "#C4:w"] {
+            let error: String = song(bar).unwrap_err();
+            assert!(
+                error.contains("a # is a sharp. Write it right after the note's letter, e.g. C#4"),
+                "{bar}: {error}"
+            );
+        }
+        assert!(song("C#4:w").is_ok());
+        assert!(song("#iv°:w").is_ok());
     }
 
     #[test]

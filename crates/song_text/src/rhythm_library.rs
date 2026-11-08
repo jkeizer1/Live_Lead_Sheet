@@ -311,7 +311,7 @@ rhythm "Backbeat"
     #[test]
     fn a_hash_inside_a_name_is_not_a_comment() {
         let text: &str =
-            "rhythm \"F# shuffle\"  # a comment\n  group \"Swing\"\n  meter 4/4\n  | w |\n";
+            "# a comment\nrhythm \"F# shuffle\"\n  group \"Swing\"\n  meter 4/4\n  | w |\n";
         let entries: Vec<RhythmLibraryEntry> = parse_rhythm_library("hash.library", text).unwrap();
         assert_eq!(entries[0].pattern().name(), "F# shuffle");
     }

@@ -3,9 +3,8 @@
 # The manuals are one track with three voice layers (the chorale, and the
 # two inner voices of the right and left hands); the pedal is its own track.
 #
-# Does not load yet, for two reasons outside this notation change:
-# minor keys are not designed (key C minor is refused), and the F sharps in
-# bars 4, 10, 11, 12 and 13 are cut off by the comment sign.
+# Does not load yet: minor keys are not designed, and key C minor is
+# refused (Song Notation, Q12).
 song "Jesu, meine Freude"
 
 track "Clock"
