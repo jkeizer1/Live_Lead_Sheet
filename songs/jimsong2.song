@@ -1,5 +1,6 @@
 # ALL NT
 # NT Preset Nov7
+# Router Nov7
 
 song "Nov7 General Testing"
 
@@ -19,19 +20,22 @@ track "Bass"
   type mono_voice
   clef bass
 
-#section "Count-in"  count-in
-#  meter 4/4  tempo 140 beats/min
-#  line "Beat"  | q>:C4 q q q |
+section "Count-in"  count-in repeat 2
+  meter 3/8  tempo 100 beats/min
+  line "Beat"  | e>:C5  e:C2 e |
 
 section "Gate test"  repeat 300
-  key C major  meter 3/8  tempo 120 beats/min
-#                 Phrase 1                                                                                         
-  line "Harmony"  | q.:I         | e:IV           q:V      |  q:vii°  e:V                         |
-                  | e.:I e.:V    | e:IV           q:V      |  q:vii°  e:[D2 F3 B2]                |  
-       
-  line "Bass"     | e:C2 e er    | sx>:F1 sx:A1   e.:G2 sx |  q:B2    e:C2                        |
-                  | e:C2 e er    | sx>:F1 sx:A1   e.:G2 sx |  q:B2    e:B2                        |
+  key C major  meter 3/8  tempo 100 beats/min
+#                  Phrase 1                                                                                         
+  line "Harmony"  | q.:I            | e:IV   e   e:IV    |  q:vii°  e                         |
+                  | e.:I e.:V       | e:IV       q:IV    |  q:vii°  e                         |
+                  | e.:I e.:V       | e.:IV7     e.:IV   |  q:vii°  e                         |    
+        
+  line "Bass"     | e>:C2 e:E2 e:G2 | e>:F2  e:A2  e:C3  |  e:G2    e:D2 e:B2                  |
+                  | e>:C2 e:E2 e:G2 | e>:F1  e:A2  e:C3  |  e:G3    e:D2 e:B2                  |
+                  | e>:C2 e:E2 e:G2 | e>:F1  e:A2  e:C4  |  e:G2    e:D2 e:B2                  |
 
-  line "Beat"     | e>:C6 e:B3 e | e>:C5 e:B3 e            |  sx:C8 sx:C6 sx:C5 sx:C6 sx:C4 sx:C7 |
-                  | e>:C6 e:B3 e | e>:C5 e:B3 e            |  sx:C8 sx:C6 sx:C5 sx:C6 sx:C4 sx:C7 |
+  line "Beat"     | e>:C6 e:B3 e    | e>:F6 e:A3 e:C2    |  sx:C6 sxr sx>:C5 sxr sx:C4 sx:C5   | 
+                  | e>:C6 e:B3 e    | e>:C6 e:B3 e:C2    |  sx:C6 sxr sx>:C5 sxr sx:C4 sx:C5   |
+                  | e>:C6 e:B3 e    | e>:C6 e:B3 e:C2    |  sx:C6 sxr sx>:C5 sxr sx:C4 sx:C5   |
 

@@ -1,6 +1,6 @@
 # Live Lead Sheet — Architecture
 
-Revision 21 — 7 Nov 2026 (terms: beat and pulse as in the rudiments; a MIDI clock pulse is a clock pulse)
+Revision 22 — 8 Nov 2026 (Next: Jim's notes to revisit)
 
 Builds on the Concept Brief (Revision 13), the Experience Functional
 Specification (Revision 13) and Song Notation (Revision 9). Sets the
@@ -657,3 +657,35 @@ ear.
   simpler songs, with the same fit check showing where a dense song no
   longer fits. Views showing tracks beyond the lead bring their own
   layout problems.
+
+**Noted, to revisit (Jim, 8 Nov 2026).** From Jim's notebook, roughly
+stated; each needs its own design step.
+
+- *Tempo carry, the other way round.* When the meter changes and no
+  tempo is written, the beat carries on and the notes follow the new
+  meter: 4/4 at 120 beats/min then 6/8 plays 120 dotted-quarter beats a
+  minute, which feels faster. This reverses the 7 Nov decision (the note
+  speed carried); in a typical score the meter changes often and the
+  beat carries on. Song Notation and Musical Time and Clock to state the
+  intent, not the arithmetic, which belongs in the code.
+- *Ledger lines.* The rule that the music stays on the staff (Song
+  Notation, section 4) will be troublesome: notes placed by hand, such as
+  on a bass line, already need ledger lines on the screen. The
+  requirement for clefs (EFS-1.5b) allows ledger lines or an 8va/8vb
+  line; the two documents disagree. A complex one to sort.
+- *Swing.* The player swings the timing of the MIDI notes it sends (off-
+  beat notes played late by a set amount); followers swing by their own
+  settings.
+- *Octave notation.* 8va / 8vb (and 15ma / 15mb) in the notation and on
+  the staff.
+- *Ties across repeats.* A note tied, or touching, across the end of a
+  section into its next pass, and later across the join of a forever
+  repeat.
+- *Bar repeat.* `%` for a copy of the bar before, to save typing.
+- *Slash notation in the text file.*
+- *Dynamics.* Marks below a normal reference as well as above it:
+  pp, p, mp, mf, f, ff; crescendo and decrescendo; and how a mark maps to
+  a velocity: in even steps, or along a curve that sounds even.
+- *`repeat forever`* for the last section (needs the player to replay a
+  pass, and a key to stop the song).
+- *The open questions* in Song Notation, section 9.

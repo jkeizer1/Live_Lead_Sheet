@@ -14,18 +14,18 @@ track "Clock"
 track "Harmony"
   port "HarmonyP"  channel 1
   octave_offset -2 octaves
-  velocity normal 50  accent 60  strong 20
+  velocity normal 40  accent 50  strong 20
   retrigger_gap 50 ms
 
 track "Bass"
   port "BassP"  channel 3
   octave_offset  1 octaves
-  velocity normal 80  accent 115
+  velocity normal 90  accent 115
   retrigger_gap 2 ms
 
 track "Beat"
   port "BeatP"  channel 2
-  velocity normal 90  accent 127
+  velocity normal 115  accent 127
   octave_offset 0 octaves
 
 
