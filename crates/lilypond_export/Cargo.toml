@@ -1,0 +1,16 @@
+[package]
+name = "lilypond_export"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+vocabulary = { path = "../vocabulary" }
+note_spelling = { path = "../note_spelling" }
+
+[dev-dependencies]
+# The tests and lilypond_export_test read songs in the song notation.
+song_text = { path = "../song_text" }
+
+[lints]
+workspace = true

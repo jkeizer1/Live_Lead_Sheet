@@ -3,6 +3,8 @@ resolver = "3"
 members = [
     "crates/vocabulary",
     "crates/song_text",
+    "crates/note_spelling",
+    "crates/lilypond_export",
     "crates/player",
     "crates/render",
     "crates/alsa_output",

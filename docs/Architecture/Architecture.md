@@ -1,6 +1,6 @@
 # Live Lead Sheet — Architecture
 
-Revision 22 — 8 Nov 2026 (Next: Jim's notes to revisit)
+Revision 23 — 8 Nov 2026 (crates note_spelling and lilypond_export; a LilyPond view of a song)
 
 Builds on the Concept Brief (Revision 13), the Experience Functional
 Specification (Revision 13) and Song Notation (Revision 9). Sets the
@@ -162,6 +162,7 @@ Documents leave through their own adapter:
 
 ```
 Song catalog ─▶ MusicXML export ─▶ file for notation software
+Song catalog ─▶ LilyPond export ─▶ file for the lilypond program (sheet music)
 ```
 
 Every capability reports failures to the **warnings** region (A-8).
@@ -227,6 +228,8 @@ the same dark, soft-contrast style.
 |---|---|
 | vocabulary | the musical language (A-1, A-2), including musical time (D-7) |
 | song_text | the parser and writer for song, studio configuration and library files (A-3, D-11); no external crate |
+| note_spelling | from the vocabulary's ticks back to written notes, once for every converter that writes notation: note values and dots, triplets, a chord's notes as written pitches; no external crate |
+| lilypond_export | the LilyPond view of a song (A-3), for reading songs as sheet music; writes text for the `lilypond` program, which is installed separately; no external crate |
 | player | reading the clock, publishing (A-5 – A-7) |
 | render | layout (vocabulary → instance records) and GPU drawing |
 | alsa output | the MIDI output (A-3), and the clock it supplies (A-7, D-8) |

@@ -1,0 +1,18 @@
+[package]
+name = "note_spelling"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+vocabulary = { path = "../vocabulary" }
+# A chord's notes are the player's plain voicing, so what is drawn is what
+# is sent.
+player = { path = "../player" }
+
+[dev-dependencies]
+# The tests write their songs in the song notation.
+song_text = { path = "../song_text" }
+
+[lints]
+workspace = true
