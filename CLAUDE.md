@@ -67,6 +67,7 @@ code only in adapters), but do not build them.
 - **Document codes in chat.** Never rely on a code (EFS-n.m, A-n, D-n,
   "step 4") alone. Say in a few words what it requires or decides, and
   add the code only as a pointer. Jim has not memorized the documents.
+- **Before asking music theory questions, check rudiments online**. 
 - **Music in musical terms.** In chat, explain rhythm and harmony in
   bars, beats and note values ("a half note on beat 2"), not ticks or
   clock times. Ticks belong in the clock document and the code.
@@ -86,6 +87,13 @@ code only in adapters), but do not build them.
   `"=0.12.1"`); `Cargo.lock` is the exact pin and is committed. Crates use
   `{ workspace = true }`.
 - "Format with cargo fmt -p <crate>, never --all."
+- Don't re-organize documents without permission; example moving detail to an 
+  appendix without permission.  
+- Write with a human reader in mind; not a machine; not in lawyer style
+- Once an decision is settled avoid attempting to enumerate and resolve outlier cases 
+  unless they pose a risk (e.g. program crashes, disruptions to the player playing)
+- Perfection is the enemy of the good relative to documents; when Jim says to accept
+  a limitation -> accept it. 
 
 ## Coding rules
 

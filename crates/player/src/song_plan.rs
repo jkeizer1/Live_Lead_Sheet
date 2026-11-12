@@ -273,15 +273,16 @@ fn line_notes(
             written_ticks
         };
         let level: AccentLevel = element.marks().accent();
-        let velocity = output
-            .velocity
-            .and_then(|levels| levels.for_level(level))
-            .ok_or_else(|| PlanError::StudioDoesNotCover {
-                unmet: vec![UnmetNeed::NoVelocity {
-                    track_name: track.name().to_string(),
-                    level,
-                }],
-            })?;
+        let velocity =
+            output
+                .velocity
+                .for_level(level)
+                .ok_or_else(|| PlanError::StudioDoesNotCover {
+                    unmet: vec![UnmetNeed::NoVelocity {
+                        track_name: track.name().to_string(),
+                        level,
+                    }],
+                })?;
         let start_ticks: u64 = pass.start_ticks + element.start().ticks();
         for note in note_numbers(contents, key, home_octave, output, track)? {
             notes.push(TimedNote {

@@ -64,7 +64,7 @@ pub fn key(written: Key) -> String {
     format!("\\key {} {mode}", note_name(written.tonic()))
 }
 
-/// Accent `->`, strong accent (marcato) `-^`, staccato `-.`, fermata
+/// Accent `->`, marcato `-^`, staccato `-.`, fermata
 /// `\fermata`. Legato is a slur, written by the caller across notes.
 #[must_use]
 pub fn marks(written: ElementMarks) -> String {
@@ -72,7 +72,7 @@ pub fn marks(written: ElementMarks) -> String {
     match written.accent() {
         AccentLevel::Normal => {}
         AccentLevel::Accent => text.push_str("->"),
-        AccentLevel::Strong => text.push_str("-^"),
+        AccentLevel::Marcato => text.push_str("-^"),
     }
     if written.staccato() {
         text.push_str("-.");

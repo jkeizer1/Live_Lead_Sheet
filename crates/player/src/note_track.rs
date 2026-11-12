@@ -218,7 +218,7 @@ impl fmt::Display for NoteTrackError {
                 let word: &str = match level {
                     AccentLevel::Normal => "normal",
                     AccentLevel::Accent => "accent",
-                    AccentLevel::Strong => "strong",
+                    AccentLevel::Marcato => "marcato",
                 };
                 write!(
                     f,
@@ -382,19 +382,19 @@ mod tests {
 
     #[test]
     fn a_level_without_a_velocity_is_refused_with_the_track() {
-        let strong: ElementMarks = ElementMarks::new(AccentLevel::Strong, false, false, false);
+        let marcato: ElementMarks = ElementMarks::new(AccentLevel::Marcato, false, false, false);
         let rhythm: RhythmPattern = RhythmPattern::new(
             "Loud",
             four_four(),
             1,
-            vec![element(0, 20_160, ElementKind::Sounding, strong, false)],
+            vec![element(0, 20_160, ElementKind::Sounding, marcato, false)],
         )
         .unwrap();
         assert_eq!(
             track_of(&rhythm, 20_160).unwrap_err(),
             NoteTrackError::NoVelocityForLevel {
                 track_name: "Beat".to_string(),
-                level: AccentLevel::Strong
+                level: AccentLevel::Marcato
             }
         );
     }

@@ -325,6 +325,13 @@ changes the numerals.
 - Options: confirm as written; or change it.
 - Raised: 9 Nov 2026, this document, item 4.
 
+  - **Jim's response - per the chat YES it is decided
+  - NOTE: decisions like this one are made to set a basis for proceeding with code
+  -  Actual testing and experience is needed and future changes are possible
+     We need to start adopting accepted directions from CHAT without raising
+     every single topic again as an OPEN_DECISION causing revisiting and rehashing
+     of a topic over and over.
+
 **OPEN_QUESTION:** How is the song-level modes switch written?
 - Context: a song declares once whether mode markings are annotations
   (off) or declarations that move the numerals' starting point (on),
@@ -333,6 +340,12 @@ changes the numerals.
 - Options: to be proposed, in the style of `chord_numeral_standard`
   (a keyword and two values).
 - Raised: 9 Nov 2026, this document, item 4.
+
+  - **Jim's response**
+    - a song level mode switch makes no sense; a song may move between modes in sections
+    - my understanding is that this is only a matter of annotation; a general solution
+      instead is to offer the capability to place an annotation above the staff; this then
+      may be used for any purpose known now or not known now
 
 **OPEN_QUESTION:** How is a mode marking written in a section?
 - Context: a mode marking is set per section and changes only at a
@@ -344,6 +357,9 @@ changes the numerals.
   beside it (`key C major  mode D dorian`).
 - Raised: 9 Nov 2026, this document, item 4.
 
+  - **Jim's response**
+     As above, implement an annotation feature not a dedicated mode specific feature.
+
 **5. The libraries.** *Requirements (Jim, 9 Nov 2026):* the harmony
 (progression) libraries must support:
 
@@ -352,6 +368,7 @@ changes the numerals.
 - chords named by letter (`Am`, `E♭maj7`) as well as Roman numerals;
 - slash chords that give the bass note (`Am/G`: A minor over G), which
   are not the song line's `/` (the same again) or slash rhythms.
+
 
 **OPEN_QUESTION:** How is a chord with a given bass note written, so it
 cannot be read as a classical secondary chord?
@@ -366,16 +383,26 @@ cannot be read as a classical secondary chord?
   bass everywhere, with secondary chords written another way.
 - Raised: 9 Nov 2026, this document, item 5.
 
+  - **Jim's Response**
+  - However it is handled in practice since this issue must have been resolved;
+    my hunch is that there is one style adopted per score making it clear.
+    I do not know.  Let's go with Am/G notation and V/V and note the POP usage. 
+
 **OPEN_QUESTION:** How does a library entry state its chord numeral
 standard?
 - Context: each entry may use either standard (item 1), and a library
-  holds many entries.
+  holds many entries.  **JK WHAT IS ITEM "1" READ CLAUDE.MD and adhere to it.
 - Why it matters: an entry read with the wrong standard plays wrong
   chords with no error (item 1, "Where the two conflict").
 - Options: the same `chord_numeral_standard` line in each entry; or one
   line per library file, with entries of the other standard in another
   file.
 - Raised: 9 Nov 2026, this document, item 5.
+
+  - **Jim's Response**
+   - Each seperate entry a chord library just needs to be consistent; Roman Chords (IV) or Explicit chords (F)
+     - no mixing 
+     - no need to declare; the first encountered symbol sets the standard for the remainder of the chord library 
 
 ## Where the code changes, once decided
 

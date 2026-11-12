@@ -17,7 +17,7 @@ track "Beat"
 
 track "Keys"
   port "Harmony"  channel 1
-  velocity normal 70  accent 105  strong 120
+  velocity normal 70  accent 105  marcato 120
 
 track "Bass"
   port "Bass"  channel 2

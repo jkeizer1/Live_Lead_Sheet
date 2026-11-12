@@ -1,6 +1,6 @@
 # Live Lead Sheet — Song Notation
 
-Revision 18 — 9 Nov 2026 (open questions only in section 9, as OPEN_QUESTION blocks; no pointers to them in the text)
+Revision 19 — 11 Nov 2026 (Jim's answers of 11 Nov 2026 written into sections 1 to 8; sample sources, the dynamics line, repeat signs and Euclidean rhythms added; section 9 holds only what is still open)
 
 **Status: draft for trial.** *Decided* marks what Jim has decided;
 everything else is a proposal to try with a working player. Every open
@@ -76,6 +76,23 @@ can start from the chords' roots. Its result is written into the song.
   places the next note. Hidden rests, stem directions and other
   engraving choices are not in the song file; different engravers may
   draw the same song differently later.
+- **Coupled and uncoupled lines** (11 Nov 2026). In a modular
+  synthesizer, pitch, rhythm and loudness are separate streams; the
+  "note" that couples them comes from standard notation. A track's line
+  may be written coupled, as before (`I:q`), or uncoupled: a
+  `sample_source` line holds the chords or notes, and a rhythm line
+  beneath it holds only lengths and takes what it plays from the source
+  (section 5, "Sample sources and uncoupled lines"). Standard music must
+  work first; the uncoupled lines are what make this a modular sequencer
+  and not one more notation program.
+- **Phrase dynamics on their own line** (11 Nov 2026): `pp`, `p`, `mf`,
+  `f`, `ff` and the crescendo and diminuendo wedges, written in rhythm
+  notation and taken up by each sounding element (section 5, "Dynamics,
+  in rhythm notation"). Marks on single notes stay in the note line.
+- **Every source line has its own play head** (11 Nov 2026). At first
+  all play heads move together at the track's tempo. Separate play
+  heads, so a source can run at its own tempo, are part of this
+  program's first version and come before the GUI (section 8).
 
 ## 2. Rules shared by all files
 
@@ -107,7 +124,10 @@ can start from the chords' roots. Its result is written into the song.
   includes a plain text pane, so the file can be fixed, saved and
   reloaded without leaving the program. If a song that is playing is
   edited into error, the last good version keeps playing while the errors
-  are shown (proposed). Example:
+  are shown. This is Strudel's convention: a playing song is changed only
+  by a valid edit; the editor keeps allowing edits, and a correct edit is
+  then applied to the playing song. *Decided (Jim, 11 Nov 2026).*
+  Example:
 
   ```
   14:02:11 WARNING: demo.song is not valid; nothing was applied.
@@ -176,9 +196,18 @@ A bar must add up exactly. Charleston is 1½ + ½ + 2 = 4 quarters, a full
 - **Groups are functions, worked out into the score.** `trp` and `fit` are
   the first of a family: a function takes a set of elements and places
   them. The idea is borrowed from Strudel, which applies such functions
-  live. Here a function is evaluated once, when the song is written or
-  loaded, and the song keeps and plays the fixed result. More functions
-  can be added later without changing the player.
+  live. Functions are allowed in `.song` files (*decided, Jim,
+  11 Nov 2026*): a function stays in the file as it was typed, it is
+  worked out each time the file is loaded, and the player plays the
+  result. More functions can be added later, as features, without
+  changing the player.
+- **Euclidean rhythm.** `euclid(3,8)` spreads 3 hits as evenly as
+  possible over 8 steps; the two parameters are the hits and the steps.
+  The steps fill the bar, as `fitBar(...)` does: in a 4/4 bar the 8 steps
+  are eighth notes, and in a 3/4 bar the same 8 steps are fitted evenly
+  into the bar. A hit is a sounding element one step long, and the other
+  steps are rests. *Decided (Jim, 11 Nov 2026); not yet built.* The name
+  `euclid` is the one used in discussion.
 
 **Ties.** `~` joins an element to the one after it into a single note of
 the combined duration. It may stand before a barline (here in the rhythm
@@ -195,18 +224,42 @@ beat 1 of the next bar: one note an eighth plus a quarter long, a dotted
 quarter. The rhythm line draws the tie across the barline (EFS-1.5). A tie
 belongs to the rhythm, so every voice track can use it.
 
+- **`~` is the tie mark.** Strudel uses `~` for a rest; here a rest is
+  `r`. *Decided (Jim, 11 Nov 2026).*
+- **A tie may not lead out of the last bar** of the bar range a rhythm is
+  assigned to, of a section, or of a repeated group of bars. The loader
+  refuses the song with a message. Jim accepts this limitation so that
+  development can proceed; it is looked at again only if it proves to be
+  a problem. *Decided (Jim, 11 Nov 2026).*
+
 **Marks.** Written after the length (in the rhythm library, after the
 letter, the dots and `r`), and before a tie.
-They apply to a sounding element (a fermata may also stand on a rest). The
-spellings are proposed; what each does is the decision.
+They apply to a sounding element (a fermata may also stand on a rest). Each
+mark changes only the element it is written after. The spellings are
+decided (Jim, 11 Nov 2026). `>>` is called marcato, the term of standard
+rudiments ("strong" is not a musical term), and `<` and `<<` were added
+for soft notes.
 
 | Mark | Meaning | In the MIDI | On the staff |
 |---|---|---|---|
-| `>` | accent | note velocity is the device's *accent* level | accent sign |
-| `>>` | strong accent | the device's *strong* level | marcato sign |
+| `>` | accent | velocity above the track's normal velocity, or the track's `accent` velocity if the studio gives one | accent sign |
+| `>>` | marcato | velocity further above normal, or the track's `marcato` velocity if the studio gives one | marcato sign |
+| `<` | soft | velocity below the track's normal velocity | not decided |
+| `<<` | very soft | velocity further below normal | not decided |
 | `'` | staccato | sounds for half its written duration | dot |
-| `_` | legato: joined to the next note | no retrigger gap before the next note | slur |
+| `_` | legato: joined to the next note | the next note on is sent before this note's note off, so the two overlap; a mono receiver set to legato keeps its gate high | slur |
 | `^` | fermata | nothing in V1 | fermata sign |
+
+**How legato works in MIDI** (settled 11 Nov 2026). MIDI 1.0 has no
+message that changes the pitch of a sounding note; a note's pitch is
+fixed by its note on. Legato is therefore sent as a keyboard sends it
+when a second key is pressed while the first is held: the second note on
+first, then the first note off. Whether that makes a new gate is the
+receiving device's setting. A mono receiver set to legato keeps its gate
+high and only moves the pitch; set to retrigger, it drops the gate
+briefly. If a device cannot do legato from overlapping notes, that is
+the device's limitation. This is the opposite order to the 5 ms lead the
+player gives a note off before a touching note on.
 
 For a part a human plays (section 5, `musician_voice`) the marks are the
 usual interpretation marks, shown and not sent. A fermata never changes
@@ -247,16 +300,27 @@ sixteenth"), and the order LilyPond and ABC notation write it in.
 **What an element plays:**
 
 - **Poly voice** (a track that can play chords): a chord name in the
-  section's key (`ii7` in C major is D minor seventh), voiced plainly: in
-  close position, root position, with the root at or above the track's
-  home octave (section 5). Or notes: `[D3 F3 A3 C4]`. A chord name followed
-  by notes (`ii7[F3 A3 C4]`) is a chord with its own voicing, for example
-  without the root. The plain voicing is EFS-5.5; this spelling of a
-  changed voicing is proposed.
+  section's key (`ii7` in C major is D minor seventh), voiced plainly.
+  The plain voicing (EFS-5.5) is in root position, meaning the root is
+  the lowest note, and in close position, meaning the other notes are
+  stacked directly above the root within one octave. The root is placed
+  by the track's clef (section 5, "Tracks and their types"). Or notes:
+  `[D3 F3 A3 C4]`. A chord name followed by notes (`ii7[F3 A3 C4]`) is a
+  chord with its own voicing, for example without the root. A chord name
+  followed by an inversion, `ii7[1stInversion]`, `ii7[2ndInversion]` and
+  so on, is that inversion as standard music uses the term: the third is
+  the lowest note in the first inversion, the fifth in the second.
+  *Decided (Jim, 11 Nov 2026); inversions are not yet built.* How the
+  other notes sit above the lowest one is proposed: the notes that were
+  below it move up one octave.
 - **Mono voice** (a track that can play one note at a time): one note with
   its octave (`C2`, `F#2`, `Bb1`). Two sounding elements may not overlap.
 - **Cue control track:** a cue's name in quotes (`"Start SQ-1"`).
 - **A rest:** `r`.
+- **Nothing written:** `:q`, a length with nothing before the colon. This
+  is an element of an uncoupled rhythm line; it takes what it plays from
+  the track's `sample_source` line (section 5, "Sample sources and
+  uncoupled lines"). The colon is always written here.
 - **The same again:** `/` plays what the sounding element before it in
   the line played (a strum is several elements of one chord); rests in
   between do not count. A `/` takes its own length and marks: `/`, `/:e`,
@@ -374,7 +438,7 @@ and so what a receiving device must be able to do.
 | `clock_and_transport` | Timing Clock from Play to Stop, and Stop. Exactly one per song. Its output has a port but no channel, because Timing Clock, Start, Continue, Stop and Song Position Pointer carry no channel. | Yes |
 | `cue_control` | Phrase cues, placed in rhythm notation (below). | Yes |
 | `tempo_control` | Stepped and ramped tempo changes inside a section, in rhythm notation (below). | Later |
-| `musician_voice` | A part composed for a person to read and play, in the clef of that instrument. Sends no MIDI; drawn on its own staff, with marks as interpretation. | Later (the display is beyond V1's one staff) |
+| `musician_voice` | A part composed for a person to read and play, in the clef of that instrument. Sends no MIDI; drawn on its own staff, with marks as interpretation. | Later. It is written in the `.song` file and rendered; in the visual player it is a first-class track that can be focused and shown with a play head. The display details are settled with the UI (*decided, Jim, 11 Nov 2026*). |
 | `automation_control` | Continuous curves sent as controllers (a filter sweep, a crescendo on a VCA). | Later |
 
 **Every voice is the same on the wire:** a note-on with a velocity at the
@@ -409,11 +473,21 @@ Attributes of a voice track:
   the track's voice layers, e.g. `voice_layer 2 "Inner"`. A layer without
   a name is called by its number, and the editor shows the number until a
   name is given. Numbers and names may not repeat within a track.
-- `home_octave` — optional. The octave where a plain voicing puts the root
-  and where apply puts a bass line's roots. Without it, by clef: treble
-  4, alto 3, tenor 3, bass 2, grand 4.
-- `instrument` — for `musician_voice`: the instrument (Appendix C), which
-  sets the usual clef and the written transposition.
+- **Home octave.** The octave where a plain voicing puts the root and
+  where apply puts a bass line's roots comes from the clef: treble 4,
+  alto 3, tenor 3, bass 2, grand 4. There is no `home_octave` setting;
+  it was removed on 11 Nov 2026. *Decided (Jim, 11 Nov 2026).*
+- **Octave annotations.** `+8va` and `-8va` move what follows one octave
+  up or down from the clef's octave. One may be written at the start of
+  any bar, most often at the start of a section, on any track with notes
+  or chords, and it stays in effect until otherwise stated. The register
+  of a device is a different matter, set by `octave_offset` in the studio
+  configuration (section 6). *Decided (Jim, 11 Nov 2026); not yet built.*
+- `instrument` — for `musician_voice`: a label, typed freely at the
+  musician's discretion. The clef follows standard notation; Appendix C
+  gives examples only. The track states its own clef and written
+  transposition; that spelling is designed when `musician_voice` tracks
+  are built. *Decided (Jim, 11 Nov 2026).*
 
 **Pitch is stored as sounding pitch.** A `musician_voice` for a trumpet
 is stored as the concert pitch that sounds, and drawn a major second
@@ -452,7 +526,14 @@ track can then hold several lines of different roles.
 
 Two voice layers of one track may hold the same pitch at once (BWV 610
 does this seven times between its chorale and inner voices). On one MIDI
-channel the first note-off ends both. For now the notes are sent as written.
+channel a note is known only by its pitch, so the two cannot be told
+apart, and a note off for one would end both. The player therefore sends
+one note: a note on at the first start, no second note on when the other
+voice layer strikes the pitch while it sounds (the effect is legato,
+with no new gate), and the note off only when the longest of the notes
+has finished, ties honoured. A short note against a long note of the
+same pitch in another voice layer is a composer's error; the longest
+note has priority. *Decided (Jim, 11 Nov 2026); not yet built.*
 
 ### Sections
 
@@ -460,7 +541,9 @@ channel the first note-off ends both. For now the notes are sent as written.
 n`, and `key`, `meter` and `tempo` (or carrying on from the previous
 section). A key change, a time-signature change and a stepped tempo change
 all happen at a section boundary; a change that lasts a few bars is a
-short section. The initial tempo is the first section's.
+short section. The initial tempo is the first section's. The key
+signature is drawn on the staff the first time, and again everywhere the
+key changes, as standard notation requires (*decided, Jim, 11 Nov 2026*).
 
 - **Section length** is the number of bars in its lines. In V1 all lines
   in a section, voice layers included, have the same number of bars, and a track with no line in a
@@ -469,7 +552,17 @@ short section. The initial tempo is the first section's.
   the section) is deferred; if it is added, such a line must be marked as a
   cycle, so a line left short by mistake stays an error.
 - **Repeats** are written out in play order by the loader (EFS-1.6). A
-  section with no `repeat` plays once.
+  section with no `repeat` plays once. The number is the total number of
+  times the section plays: `repeat 2` plays it twice, `repeat 3` three
+  times.
+- **Repeat signs inside a section.** `|%` opens and `%|` closes a group
+  of bars that is played again, as the repeat signs of standard notation
+  do: `|% I:w | V %|` plays the two bars twice. A number after the
+  opening sign is the total number of times the bars play, counted as
+  for `repeat n`: `|%2` is twice and `|%3` three times; with no number
+  the bars play twice. *Decided (Jim, 11 Nov 2026); not yet built.* There
+  is no sign for "the previous bar again": `/` already plays the previous
+  note or chord again. A sign `..` was considered and dropped.
 - **Carrying on.** A section that omits `key`, `meter` or `tempo` carries
   on the one before. The first section must give `meter` and `tempo`
   (nothing is assumed). A section with chords needs a key, written or
@@ -477,7 +570,9 @@ short section. The initial tempo is the first section's.
   section only, one or two bars.
 - **Tempo counts beats**, as the meter defines them (`Musical Time and
   Clock.md`, sections 2 and 13): `tempo 120 beats/min` or `tempo 2
-  beats/s`, a whole number. No note value is written. In simple time a
+  beats/s`. The number may be fractional (`tempo 112.5 beats/min`) and is
+  held exactly, with no rounding (*decided, Jim, 11 Nov 2026*). No note
+  value is written. In simple time a
   beat is the lower figure's note; in compound time (6, 9 or 12 on top) it
   is three of them, a dotted note. So `meter 3/8  tempo 30 beats/min` is
   30 eighths a minute, and `meter 6/8  tempo 60 beats/min` is 60 dotted
@@ -498,6 +593,13 @@ short section. The initial tempo is the first section's.
   the song is read, with a message, until their beats are decided
   (`Musical Time and Clock.md`, section 2). Other figures above 12 (13/8)
   are simple time.
+- **Beat grouping.** A meter such as 7/8 or 5/4 may state how its bar is
+  grouped: `meter 7/8  grouping 2+2+3`, `meter 5/4  grouping 3+2`. The
+  grouping sets where the accents fall and how the notes are beamed. The
+  beat stays the lower figure's note (the eighth note in 7/8), so the
+  tempo and the counter are unchanged. With no grouping written, the beat
+  and the pulse are identical. *Decided (Jim, 11 Nov 2026); not yet
+  built.*
 - **Order in the file.** All `track` blocks come before the first
   `section`; a `line` names a track already declared. Settings (`key`,
   `meter`, `tempo`, `repeat`, `count-in`) may stand on the section line or
@@ -520,6 +622,107 @@ short section. The initial tempo is the first section's.
   Bars are numbered along the whole line, and a message names the text
   line the bar is on: `line 34: line "Keys": bar 7 is short by a quarter
   note`. *Decided (Jim, 7 Nov 2026).*
+
+### Sample sources and uncoupled lines
+
+*Decided (Jim, 11 Nov 2026); not yet built.*
+
+What a track plays and when it plays it can be written on two lines of
+the same track. Each track can be written coupled or uncoupled.
+
+- **Coupled line.** Each element says what it plays and for how long
+  (`I:q`, `C2:h`). This is the line described so far; it stays valid and
+  needs no source.
+- **Uncoupled lines.** A line marked `sample_source` holds chords or
+  notes with no lengths. A plain line beneath it is the rhythm: its
+  elements have a length and nothing before the colon (`:q`).
+
+```
+line "Keys"  sample_source  | I        | IV IV V     |
+line "Keys"                 | :h :q :q | :q :q :q :q |
+```
+
+- **The source shares each bar evenly.** In 4/4, `I` fills the first bar,
+  and `IV IV V` each last a third of the second bar, 1⅓ quarter notes.
+  Four chords in a 4/4 bar last a quarter note each; two chords in a 3/4
+  bar last a dotted quarter note each.
+- **The rhythm is the gate.** Every rhythm element sounds. When it
+  starts, it plays what the source holds at that moment, with a new
+  gate. In the example the four quarter notes of the second bar play IV,
+  IV, IV, V.
+- **Track and hold.** If the source changes while an element is still
+  sounding, the element changes to the new chord or note legato: the new
+  notes are sent before the old ones are released, with no new gate and
+  so no new envelope. With the rhythm `| :h :h |` over `| IV IV V |`, the
+  half note on beat 3 starts on the second IV and moves to V two thirds
+  of the way through beat 3. The resolving chord is heard. A chord is
+  never skipped while the track is sounding, because losing a resolving
+  chord would change how the progression is heard.
+- **During a rest the gate is closed.** A change of the source that falls
+  wholly inside a rest is not heard.
+- **Legato depends on the receiver.** A mono receiver set to legato keeps
+  its gate high. A poly receiver gives each new note its own voice and
+  envelope, so a change between chords with no notes in common is heard
+  with new attacks. That is the device's behaviour.
+- **Marked, not guessed.** A line is a source only when it says
+  `sample_source`. On any other line a note or chord without a length is
+  still an error, so that typing mistake is still caught.
+- **One play head at first.** The source and the rhythm move together,
+  bar for bar, at the track's tempo, so "what the source holds at that
+  moment" is the same bar and beat of the source. A source line later
+  gets its own play head and may run at its own tempo, keeping the
+  track's time signature.
+
+In modular terms the rhythm is the gate and the source is the voltage
+being tracked: a track and hold, whose input is the sample source.
+
+### Dynamics, in rhythm notation
+
+*Decided (Jim, 11 Nov 2026); not yet built.*
+
+Loudness over a phrase is written on a line of its own, marked
+`dynamics`. It is separate from the marks on single notes (section 3,
+"Rhythm notation", under "Marks"), which still change only the note they
+are written after: the backbeat `| q q> q q> |` is unchanged.
+
+```
+line "Keys"            | I:w | IV | V  | I  |
+line "Keys"  dynamics  | p:w | <  | f  | mf |
+```
+
+This reads: quiet, grow through the second bar, loud at the third,
+normal from the fourth.
+
+| Mark | Meaning |
+|---|---|
+| `pp` | pianissimo |
+| `p` | piano |
+| `mf` | mezzo-forte, the normal level: velocity 64, or the track's `velocity normal` if the studio gives one |
+| `f` | forte |
+| `ff` | fortissimo |
+| `<` | crescendo, growing through its element's length |
+| `>` | diminuendo, falling through its element's length |
+
+- **Written like the cue line.** Each mark is an element with a length,
+  and `r` is a stretch with no change. Lengths carry forward as on any
+  line. A crescendo over the second half of a bar is `| r:h <:h |`.
+- **A level holds until the next mark,** as in print. There is no "back
+  to normal" sign: the normal level is written, `mf`.
+- **A song with no dynamics line plays at `mf` throughout.**
+- **Each sounding element takes its loudness from the dynamics line** at
+  the moment it starts, as a rhythm takes its chord from a sample
+  source. Inside a wedge the level is part-way between the mark before
+  the wedge and the mark after it.
+- **`<` and `>` have two homes.** On a dynamics line they are the wedges.
+  After a note in a note line they are the marks for a single note.
+- **On the screen** the line is drawn above the staff, or its highest
+  ledger line, and below the chords. The player shows the letters in
+  italics and the wedges as elongated symbols.
+- **`mp`** (mezzo-piano) is left out until it is wanted.
+- **One play head at first.** The dynamics line moves with the track.
+  Like a sample source, it can later have its own play head and tempo,
+  for example a crescendo cycle of a different length to the harmony
+  beneath it.
 
 ### Cues, in rhythm notation
 
@@ -566,7 +769,9 @@ a slowing mid-phrase, a retard at the end after several bars at tempo).
 All devices follow, because they follow the clock. Ramps need a design in
 `Musical Time and Clock.md` first: its instants are computed from anchors
 with a constant tempo each, and a ramp is a continuously changing tempo.
-Until then, tempo changes are stepped, per section.
+Until then, tempo changes are stepped, per section. A gradually
+increasing or decreasing tempo is to be smooth, without jumps (*decided,
+Jim, 11 Nov 2026*).
 
 ### What the song does not say
 
@@ -602,7 +807,7 @@ track "Beat"
 
 track "Keys"
   port "Harmony"  channel 1
-  velocity normal 90  accent 105  strong 120
+  velocity normal 90  accent 105  marcato 120
 
 track "Bass"
   port "Bass"  channel 2
@@ -626,17 +831,33 @@ destination "SQ-1"
   Every track of the song that sends MIDI must have one, or the song does
   not load, with a message naming the track and the file. A cue control
   track has no block of its own: its cues go to destinations. A voice
-  track's block needs `velocity normal` and a velocity for each accent
-  mark its lines use. A block for a
+  track's block may give `velocity normal` and a velocity for each mark
+  its lines use (see `velocity` below). A block for a
   track the song lacks is ignored, so one configuration serves many songs.
 - **`octave_offset`** shifts every note sent, in octaves, to where this
   device places the pitch (the manufacturers disagree where C0 is, and an
   oscillator may sit in a different register). Omitted, it is 0 octaves, a
   harmless default: the note is sent as written.
 - **`velocity`** gives the MIDI velocity (1 to 127) for a normal note and
-  for each accent mark the song uses (`accent` for `>`, `strong` for
-  `>>`). `normal` is required; an accent level is required only when the
-  song uses that mark, and the message names the track.
+  for the marks the song uses. *Decided (Jim, 11 Nov 2026).* Built on
+  11 Nov 2026: `normal` is 64 when not written, the word for `>>` is
+  `marcato`, and `strong` is refused with a message saying to write
+  `marcato`. Not yet built: the relative levels, so a studio block must
+  still give an `accent` or `marcato` velocity when the song uses that
+  mark.
+  - `normal` is the track's normal level, which Jim called
+    `volume_normal`. When it is not written it is 64, the value the MIDI
+    1.0 specification gives for a mezzo-forte note.
+  - The marks `<<`, `<`, `>` and `>>` are relative to the normal level,
+    unless the block gives an absolute velocity for a mark (`accent` for
+    `>`, `marcato` for `>>`).
+  - **No loudness curve is applied.** The song and the player send
+    velocities. How a velocity becomes loudness is the receiving
+    device's job: the MIDI 1.0 specification leaves it to the receiver
+    and says the response should preferably be exponential. A device is
+    tuned to the incoming velocities; in the modular that is the choice
+    of a linear or an exponential VCA, by taste, and it is not the FH-2's
+    job. A device that sounds quiet at 64 gets a higher `normal` here.
 - **Device timing**, optional and omitted when not needed: `retrigger_gap`
   (a stopgap that raises the 5 ms lead of a note off before the next note
   on above its floor; Q11) and `settle_delay` (time for a quantizer's voltage to settle after
@@ -693,10 +914,9 @@ progression "ii-V"
   group.
 - **A progression** is its chords bar by bar, in Roman numerals following
   the naming of EFS-1.5a (`I7`, `IM7`, `ii7`, `vii°`, `bVII7`, `V7b9`). It
-  has no key and no timing. When a bar holds two chords, the second
-  carries an *intended place*: written without a position it is halfway
-  along the bar, and otherwise with `@` (Appendix A). The intended place
-  is only a hint to apply.
+  has no key, and it carries no rhythm or timing, only the sequence: the
+  chords in each bar, over one or more bars. The chords of a bar share
+  the bar evenly. *Decided (Jim, 11 Nov 2026).*
 - **A rhythm** is as in section 3, with its marks.
 
 **Apply** takes a progression, a rhythm, a bar range and a track, and
@@ -708,9 +928,9 @@ conveniences, and everything it writes can be changed by hand:
    later elements carry it on. For `| qr h q |` and the chord `ii7` the
    chord goes on the half note. The rhythm's marks are copied onto the
    elements.
-2. A later chord in the bar goes on the sounding element nearest its
-   intended place, taking the elements in order and never one already
-   used. A tie goes to the earlier element.
+2. Each later sounding element takes the chord in effect when it
+   starts, the bar's chords sharing the bar evenly (*decided, Jim,
+   11 Nov 2026*). A tie keeps the chord of the element it continues.
 3. A bass line starts with the root of the chord in effect at each
    element, in the track's home octave. It may then be changed to any
    note, including the root in another octave.
@@ -755,6 +975,41 @@ Each test has an example under `examples/<what>_test/` and its
 5. `retrigger_gap_test`, the spike of Q11, can run at any time.
 6. The editor, with its text pane, once these work from text.
 
+**Order of the work** (*decided, Jim, 11 Nov 2026*). Separate play heads
+are part of this program's first version, not a later version.
+
+1. Coupled `.song` files play from text. This is nearly there.
+2. `sample_source` and `dynamics` lines at the track's tempo, tested from
+   text files.
+3. Separate play heads, so a source line can run at its own tempo,
+   tested from text files.
+4. The GUI, which from the outset deals with several play heads.
+
+**Decided on 11 Nov 2026 and not yet in the code:**
+
+- `sample_source` lines, rhythm-only elements (`:q`) and track and hold.
+- The `dynamics` line.
+- The marks `<` and `<<`, and velocities for the marks that are relative
+  to the normal level.
+- Legato sent as overlapping notes; one note for the same pitch in two
+  voice layers.
+- `euclid(hits,steps)`.
+- Repeat signs `|%n ... %|`.
+- Octave annotations `+8va` and `-8va`; the `home_octave` setting
+  removed.
+- Inversions, `[1stInversion]` and so on.
+- `grouping` on a meter.
+
+**Built:**
+
+- The `trp` and `fit` groups (`crates/song_text/src/rhythm_bar.rs`).
+- A tie with no note after it, at the end of a rhythm pattern or of a
+  song line, is refused (`crates/vocabulary/src/rhythm_pattern.rs`). This
+  was already so before 11 Nov 2026.
+- `marcato` in place of `strong`, and `velocity normal` 64 when not
+  written (11 Nov 2026; `crates/song_text/src/studio_file.rs`,
+  `crates/player/src/studio_configuration.rs`).
+
 **Where the code lives.** The vocabulary crate holds the musical types
 (`RhythmPattern`, `VoiceLine`, `Song` and their parts). The studio
 configuration is not music, and A-1 keeps devices out of the vocabulary,
@@ -774,63 +1029,10 @@ its block is replaced by the decision, written into sections 1 to 8.
 
 Each block gives the question, its context, why it matters, the options
 (with the recommendation that will be used unless Jim says otherwise),
-and where and when it was raised. "Date not recorded" means the question
-is older than this layout and its first date was not written down.
+and where and when it was raised.
 
-**OPEN_QUESTION Q4:** Is `~` kept as the tie mark?
-- Context: `~` is the tie in printed notation and in LilyPond. In
-  Strudel's mini-notation (Appendix B) `~` is a rest. Our rest is `r`.
-- Why it matters: anyone coming from Strudel will read `~` as a rest.
-- Options: keep `~` for ties (recommended); or choose another tie sign.
-- Raised: section 9 of this document; date not recorded.
-
-**OPEN_QUESTION Q13:** What happens to a tie at the end of a range?
-- Context: a rhythm assigned to bars 1–12 whose last bar ends in a tie:
-  the tie has nothing to join.
-- Why it matters: without a rule the loader either guesses or fails.
-- Options: the note ends at the end of the range and the loader warns
-  (recommended); or the loader refuses the song with a message.
-- Raised: section 9 of this document; date not recorded.
-
-**OPEN_QUESTION Q14:** How is a chord's intended place inside a library
-bar written, and what is the default `home_octave` by clef?
-- Context: (a) a library progression may place a chord part-way through a
-  bar; Appendix A sets out the problem, and the draft spelling is `@2+e`
-  (beat 2, plus an eighth). (b) Without a `home_octave`, a track takes
-  one from its clef (section 5): treble 4, alto 3, tenor 3, bass 2,
-  grand 4.
-- Why it matters: (a) fixes where apply puts the chord; (b) fixes the
-  octave every plain voicing and bass root plays in.
-- Options: (a) `@2+e` as drafted, or another spelling; (b) the defaults
-  above, or other octaves.
-- Raised: section 9 of this document; date not recorded.
-
-**OPEN_QUESTION Q15:** How is a changed voicing written?
-- Context: section 4 proposes `ii7[F3 A3 C4]` (a chord name with its own
-  notes, for example without the root) and notes alone as
-  `[D3 F3 A3 C4]`. The plain voicing is EFS-5.5.
-- Why it matters: it is the spelling every voicing change uses.
-- Options: the spelling proposed (recommended, to be tried); or another.
-- Raised: section 9 of this document; date not recorded.
-
-**OPEN_QUESTION Q16:** What plays when a playing song is edited into
-error?
-- Context: section 2: a file with errors is not applied, and the errors
-  are shown.
-- Why it matters: the music must not stop mid-performance because of a
-  typing mistake.
-- Options: the last good version keeps playing while the errors are
-  shown (proposed); or playing stops.
-- Raised: section 9 of this document; date not recorded.
-
-**OPEN_QUESTION Q17:** How are the marks, cues and tempo marks spelled?
-- Context: what each mark does is decided. The spellings to try are `>`,
-  `>>`, `'`, `_`, `^` for the marks, and the quoted forms for cues and
-  tempo marks (`"ramp 60 beats/min"`, section 5).
-- Why it matters: they appear in every line that uses them.
-- Options: the spellings above, to be tried with a working player; or
-  others found better in use.
-- Raised: section 9 of this document; date not recorded.
+On 11 Nov 2026 Jim answered Q4, Q13 to Q17, Q20, Q21 and Q23 to Q27.
+Those decisions are now in sections 1 to 8, marked "11 Nov 2026".
 
 **OPEN_QUESTION Q19:** How does a song drive a queued device such as the
 Korg SQ-1? *Required, not yet designed.*
@@ -846,86 +1048,138 @@ Korg SQ-1? *Required, not yet designed.*
   tests.
 - Options: none proposed yet. The device knowledge, including the step
   resolutions, belongs in a device profile (EFS-4.6).
+- Status (Jim, 11 Nov 2026): left open so that development is not
+  stalled. Cue tracks lack enough definition to be implemented and will
+  be taken up as a whole. Limiting a cue to chosen passes of a repeated
+  section is part of that work.
 - Raised: Jim, 5 Nov 2026.
 
-**OPEN_QUESTION Q20:** What does the player do when two voice layers of
-one track hold the same pitch at once?
-- Context: section 5. On one MIDI channel the first note-off ends both
-  notes. BWV 610 does this seven times between its chorale and inner
-  voices.
-- Why it matters: the longer note is cut short.
-- Options: send as written (what happens now); merge them into one held
-  note; warn; or refuse. *Deferred (Jim, 8 Nov 2026).*
-- Raised: 8 Nov 2026, writing BWV 610.
+**OPEN_QUESTION Q28:** How does a source line run at its own tempo?
+- Context: Jim decided on 11 Nov 2026 that every source line (a
+  `sample_source` line, a `dynamics` line) has its own play head. By
+  default it moves at the track's tempo. A source line may have its own
+  tempo while keeping the track's time signature, so only the position
+  of its play head differs. Its tempo could also rise or fall gradually,
+  and tempo marks could apply to it. This is step 3 of the order of the
+  work in section 8, "Build order, tests and where the code lives".
+- Why it matters: a source that drifts against the rhythm changes which
+  chord or level each rhythm element meets, which is the variation Jim
+  is after. The player needs rules before it can be built.
+- To decide:
+  - how the line states its tempo, for example
+    `line "Keys"  sample_source  tempo 90 beats/min`;
+  - what the play head does when it reaches the end of the section's
+    bars (return to the section's first bar is the obvious candidate);
+  - what it does when the section repeats or the next section starts:
+    start again, or carry on from where it is;
+  - how a gradual change of its tempo is written.
+- Options: none chosen. Jim will choose after hearing step 2 on real
+  devices; these rules are easier to choose by ear than on paper.
+- Raised: Jim, 11 Nov 2026.
 
-**OPEN_QUESTION Q21:** How does a bar repeat, `%`, work?
-- Context: `%` would mean "the previous bar of the line again". It meets
-  ties into the bar and the carried length (section 3).
-- Why it matters: a repeated bar that starts with a tied note, or after
-  a changed length, must play predictably.
-- Options: to be settled with the editor's slash and repeat display.
-  *Deferred (8 Nov 2026).*
-- Raised: 8 Nov 2026.
+**OPEN_QUESTION Q29:** Which velocities do the levels and the marks send,
+and how do they combine?
+- Context: decided on 11 Nov 2026: the normal level `mf` is velocity 64,
+  or the track's `velocity normal`; the levels `pp`, `p`, `f`, `ff` of a
+  dynamics line and the marks `<<`, `<`, `>`, `>>` on single notes are
+  placed around it, evenly spaced by default; a track's studio block may
+  give absolute velocities. Not decided: the numbers, how the studio
+  block spells a velocity for `pp`, `p`, `f` and `ff`, and what a mark
+  on a single note does while a level other than `mf` is in force (a
+  `>` on a note during `p`).
+- Why it matters: the dynamics line cannot be built without it.
+- Options:
+  - (a) A mark on a note is a step up or down from the level in force.
+    Proposed default velocities: `pp` 16, `p` 40, `mf` 64, `f` 88,
+    `ff` 112 (24 apart); `<` and `>` move a note 12 down or up, `<<`
+    and `>>` 24, kept within 1 to 127.
+  - (b) A mark on a note is an absolute velocity and overrides the level
+    in force.
+- Recommendation, used unless Jim says otherwise: (a). An accent in
+  print means louder than the notes around it.
+- Raised: Claude, 11 Nov 2026.
 
-**OPEN_QUESTION Q23:** Which group functions come after `trp` and `fit`?
-- Context: section 3: a group is a function that takes a set of elements
-  and places them; it is worked out once, when the song is loaded, and
-  the song keeps the result. The idea is borrowed from Strudel.
-- Why it matters: each function is new notation and new loader code.
-- Options: none chosen; candidates come from Strudel's functions
-  (Appendix B).
-- Raised: section 3 of this document; date not recorded. Labelled
-  9 Nov 2026.
+**OPEN_QUESTION Q30:** What do the soft marks `<` and `<<` on a single
+note draw on the staff, and what are they called?
+- Context: `>` draws the accent sign and `>>` the marcato sign. Jim
+  decided on 11 Nov 2026 that `<` and `<<` make a single note softer.
+  Standard rudiments has no articulation sign for one soft note.
+  Percussion notation has a matching pair, called anti-accents: a note
+  head in parentheses is significantly softer than the notes around it
+  (the ghost note), and a note head in square brackets is much softer.
+- Why it matters: the mark must read correctly on the staff and on an
+  exported score, and the studio file needs a word for each level, as
+  `accent` and `marcato` are the words for `>` and `>>`.
+- Options:
+  - (a) `<` draws the note head in parentheses and `<<` in square
+    brackets; the studio words are `soft` and `very_soft`.
+  - (b) Nothing is drawn; the marks only change the velocity.
+- Recommendation, used unless Jim says otherwise: (a).
+- Raised: Claude, 11 Nov 2026.
 
-**OPEN_QUESTION Q24:** May a tempo be a number that is not whole
-(`112.5 beats/min`)?
-- Context: section 5, tempo. Tempos are written in beats per minute of
-  the section's meter.
-- Why it matters: a ritardando or a tempo taken from a recording may not
-  land on a whole number.
-- Options: whole numbers only; or decimals (to a stated precision).
-- Raised: section 5 of this document; date not recorded. Labelled
-  9 Nov 2026.
+**OPEN_QUESTION Q31:** How is the return to the clef's octave written
+after `+8va` or `-8va`?
+- Context: Jim decided on 11 Nov 2026 that an octave annotation stays in
+  effect "until otherwise stated". The way to state otherwise has no
+  spelling yet. In print the word `loco` ("in place") cancels an octave
+  sign.
+- Why it matters: without it a passage cannot return to its written
+  octave inside a section.
+- Options:
+  - (a) `loco`, as in print.
+  - (b) The opposite annotation cancels: `-8va` after `+8va` returns to
+    the clef's octave.
+- Recommendation, used unless Jim says otherwise: (a).
+- Raised: Claude, 11 Nov 2026.
 
-**OPEN_QUESTION Q25:** How are the features not designed yet to be
-designed?
-- Context: the song file has no notation yet for:
+**OPEN_QUESTION Q32:** Where may `euclid(hits,steps)` be written, and
+what does a hit play in a song line?
+- Context: Jim decided on 11 Nov 2026 to build Euclidean rhythms with
+  the usual two parameters, the steps filling the bar. In a rhythm
+  library entry a hit is simply a sounding element. In a song line a
+  sounding element also needs something to play. The name `euclid` was
+  used in discussion and has not been confirmed.
+- Why it matters: it fixes the spelling and what the loader accepts.
+- Options:
+  - (a) In rhythm library entries and in uncoupled rhythm lines, where
+    each hit takes what it plays from the track's `sample_source` line.
+  - (b) Also in coupled lines, with what the hits play written first,
+    for example `C2:euclid(3,8)`.
+- Recommendation, used unless Jim says otherwise: (a), with the name
+  `euclid`.
+- Raised: Claude, 11 Nov 2026.
 
-  - Voicing changes beyond the spelling in section 4
-  - Key changes between sections
-  - Limiting a cue to chosen passes
-  - Beat grouping for 5/4 and 7/8
-  - Navigation marks
-  - Soft (ghost) notes
-  - Pressure and pitch bend
-  - The display of `musician_voice` staves
+**OPEN_QUESTION Q33:** What does apply write, now that there are sample
+sources?
+- Context: section 7, "The libraries (`.library`), and apply". Apply
+  takes a progression and a rhythm and writes a coupled line, one chord
+  on each element. Since 11 Nov 2026 a progression carries no timing and
+  a track can be written uncoupled: the progression's bars are already a
+  `sample_source` line, and the rhythm is already a rhythm line, with
+  nothing to place. In a coupled line an element carries one chord, so a
+  chord that begins part-way through a held element has no place there;
+  rule 4 of apply reports chords that could not be placed.
+- Why it matters: it decides what `apply_test` builds.
+- Options:
+  - (a) Apply writes coupled lines, as now.
+  - (b) Apply writes a `sample_source` line and a rhythm line.
+  - (c) The musician chooses each time.
+- Recommendation: none; this needs Jim.
+- Raised: Claude, 11 Nov 2026.
 
-- Why it matters: each needs its own notation before a song can use it.
-- Options: each becomes its own OPEN_QUESTION when its design starts.
-- Raised: section 5 of this document; date not recorded. Labelled
-  9 Nov 2026.
+### Deferred (Jim, 11 Nov 2026)
 
-**OPEN_QUESTION Q26:** Is the transposition table in Appendix C right?
-- Context: Appendix C gives, for `musician_voice` instruments, the clef
-  and the interval of the sounding pitch from the written pitch, from
-  common practice.
-- Why it matters: a wrong interval prints a part in the wrong key for
-  the player.
-- Options: check against a named reference before the table is put into
-  code.
-- Raised: Appendix C of this document; date not recorded. Labelled
-  9 Nov 2026.
+These are decisions to wait, not open questions. Each becomes its own
+OPEN_QUESTION when its design starts.
 
-**OPEN_QUESTION Q27:** Why does the Disting NT lose a touching note off
-and note on, and do other devices?
-- Context: sending the note off at least 5 ms before a touching note on
-  fixed the symptom (5 Nov 2026). The cause is not proven; the NT's MIDI handling runs every 0.5 ms, yet
-  1500 µs still lost 17 notes in 480.
-- Why it matters: if the cause is known, the 5 ms lead may be made
-  smaller or limited to the devices that need it.
-- Options: leave as is; or test further, with the NT and with other
-  devices.
-- Raised: 5 Nov 2026. Labelled 9 Nov 2026.
+- **Navigation marks** (D.C., coda and the like): a deferred capability.
+- **Pressure and pitch bend:** deferred. They need a focused discussion
+  of control tracks, cue tracks and continuous-value tracks.
+- **More functions** from Strudel (repeat a step, play a group faster,
+  weights): can be added later as features. `/` and the `fit` functions
+  cover them for now.
+- **The Disting NT losing a touching note off and note on** (was Q27):
+  long closed. It is reopened only if the problem occurs again.
 
 ### Settled here, to be moved into sections 1 to 8
 
@@ -945,34 +1199,10 @@ and note on, and do other devices?
 
 ## Appendix A — A chord's intended place inside a library bar
 
-Four ways to write the same place. `A` is the draft.
-
-| Where the chord is meant to start | A: pulse + note value | B: spoken counting | C: offset by note values | D: lengths as weights |
-|---|---|---|---|---|
-| 4/4, pulse 3 | `vi7@3` | `vi7@3` | `vi7@+h` | `I@2 vi7@2` |
-| 4/4, the "and" of 2 | `vi7@2+e` | `vi7@2&` | `vi7@+q.` | `I@3 vi7@5` |
-| 4/4, the "e" of 2 (a sixteenth in) | `vi7@2+sx` | `vi7@2e` | `vi7@+q+sx` | `I@5 vi7@11` |
-| 4/4, a triplet eighth into pulse 2 | `vi7@2+trp e` | no standard form | `vi7@+q+trp e` | `I@4 vi7@8` |
-| 6/8, pulse 4 (beat 2) | `vi7@4` | `vi7@4` | `vi7@+q.` | `I@3 vi7@3` |
-
-- **A** numbers the pulses and uses the same letters as the rhythm
-  notation, so there is one rule for every case. It read like the counter
-  while the counter showed pulses; since 7 Nov 2026 the counter shows
-  beats (6/8: `Beat: 2`), so in compound meters A's `@4` and the counter's
-  beat 2 name the same place differently.
-- **B** is how players say it, and the fastest to type. It covers only
-  eighths and sixteenths, it has no form for triplets, and its "e" for a
-  sixteenth would clash with the letter `e` for an eighth. In 6/8 the pulse
-  is itself an eighth, so "&" would mean something else there.
-- **C** needs no pulse numbers, only the distance from the bar's start. With
-  letters it can no longer be mistaken for A (`@2` is pulse 2, `@+h` is a
-  half note later).
-- **D** is the Strudel way (Appendix B): it never says where a change is,
-  only how long each chord stays in effect, as a ratio. The weights add up
-  to the grid the writer chose (8 eighths, 12 triplet eighths).
-
-Suggested: A as the one exact rule, and `&` accepted as a shorthand for
-`+e`. B's other syllables, C and D set aside.
+Withdrawn on 11 Nov 2026. A progression carries no rhythm or timing
+(section 7, "The libraries (`.library`), and apply"), so there is no
+intended place to write, and the `@` spelling is not used. Git keeps the
+earlier text.
 
 ## Appendix B — What Strudel's mini-notation offers
 
@@ -987,7 +1217,7 @@ language for live coding; it has no bars.
 | Unequal lengths | `@` weight: `a@3 b` is 3 to 1 | Dotted values, ties, and the proportions inside a `fit` | Printed-music spelling, which the rhythm line draws |
 | Rest | `~` | `r` (`r:q`) | `~` is a tie here |
 | Repeat | `*2` plays a group twice as fast; `!` repeats a step | A rhythm repeats over a bar range | Same need, different tools |
-| Euclidean rhythms | `bd(3,8)` spreads 3 hits over 8 steps | None | A candidate for pulse bursts later (EFS-4.7) |
+| Euclidean rhythms | `bd(3,8)` spreads 3 hits over 8 steps | `euclid(3,8)`, the steps filling the bar | Adopted (Jim, 11 Nov 2026) |
 | Chords | Symbols like `Am7`, with `voicing()` choosing notes that move least | Chord names carried by elements, voiced plainly unless the musician changes them (A-9, EFS-5.5) | Do not adopt automatic voicing |
 | Exactness of time | Not stated on the pages read | Whole ticks | Ours |
 
@@ -1002,7 +1232,11 @@ rely on its timing statements.
 ## Appendix C — Instruments, clefs and transposition
 
 For `musician_voice` tracks (later). From common practice. "Sounds" is the
-interval of the sounding pitch from the written pitch.
+interval of the sounding pitch from the written pitch. These rows are
+examples only (*Jim, 11 Nov 2026*): the clefs come from standard
+notation, and an instrument's label is typed freely by the musician.
+Claude found no error in the table on 11 Nov 2026, but did not check it
+against a named reference.
 
 | Instrument | Usual clef | Sounds |
 |---|---|---|

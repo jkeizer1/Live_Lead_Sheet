@@ -13,13 +13,15 @@ use vocabulary::midi_values::{MidiChannel, Velocity};
 use vocabulary::rhythm_pattern::AccentLevel;
 use vocabulary::song::{CueDestination, CueMessage, ElementContents, Song, Track, TrackKind};
 
-/// The velocity each accent level sends. A level is present only when the
-/// configuration gives it; `normal` is always there.
+/// The velocity each accent level sends. `normal` is always there: it is
+/// `Velocity::MEZZO_FORTE` (64) when the configuration writes none. The
+/// accent (`>`) and marcato (`>>`) levels are present only when the
+/// configuration gives them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VelocityLevels {
     normal: Velocity,
     accent: Option<Velocity>,
-    strong: Option<Velocity>,
+    marcato: Option<Velocity>,
 }
 
 impl VelocityLevels {
@@ -27,12 +29,12 @@ impl VelocityLevels {
     pub const fn new(
         normal: Velocity,
         accent: Option<Velocity>,
-        strong: Option<Velocity>,
+        marcato: Option<Velocity>,
     ) -> VelocityLevels {
         VelocityLevels {
             normal,
             accent,
-            strong,
+            marcato,
         }
     }
 
@@ -47,7 +49,7 @@ impl VelocityLevels {
         match level {
             AccentLevel::Normal => Some(self.normal),
             AccentLevel::Accent => self.accent,
-            AccentLevel::Strong => self.strong,
+            AccentLevel::Marcato => self.marcato,
         }
     }
 }
@@ -60,7 +62,9 @@ pub struct TrackOutput {
     /// Absent for the clock and transport track: Timing Clock, Start,
     /// Continue and Stop carry no channel.
     pub channel: Option<MidiChannel>,
-    pub velocity: Option<VelocityLevels>,
+    /// The track's velocities. A track that sends no notes (the clock and
+    /// transport track) carries them unused.
+    pub velocity: VelocityLevels,
     /// Shifts every note sent, in octaves; 0 octaves when omitted, which
     /// sends the note as written.
     pub octave_offset_octaves: i8,
@@ -235,15 +239,8 @@ impl StudioConfiguration {
         used: &[AccentLevel],
         unmet: &mut Vec<UnmetNeed>,
     ) {
-        let Some(levels) = output.velocity else {
-            unmet.push(UnmetNeed::NoVelocity {
-                track_name: track_name.to_string(),
-                level: AccentLevel::Normal,
-            });
-            return;
-        };
         for level in used {
-            if levels.for_level(*level).is_none() {
+            if output.velocity.for_level(*level).is_none() {
                 unmet.push(UnmetNeed::NoVelocity {
                     track_name: track_name.to_string(),
                     level: *level,
@@ -357,7 +354,7 @@ impl fmt::Display for UnmetNeed {
                 let word: &str = match level {
                     AccentLevel::Normal => "normal",
                     AccentLevel::Accent => "accent",
-                    AccentLevel::Strong => "strong",
+                    AccentLevel::Marcato => "marcato",
                 };
                 write!(
                     f,
@@ -430,7 +427,7 @@ mod tests {
             track_name: track_name.to_string(),
             port_name: port_name.to_string(),
             channel: channel.map(|number| MidiChannel::new(number).unwrap()),
-            velocity: Some(VelocityLevels::new(velocity(90), Some(velocity(105)), None)),
+            velocity: VelocityLevels::new(velocity(90), Some(velocity(105)), None),
             octave_offset_octaves: 0,
             retrigger_gap: Duration::ZERO,
             settle_delay: Duration::ZERO,
@@ -470,6 +467,6 @@ mod tests {
         let levels: VelocityLevels = VelocityLevels::new(velocity(90), Some(velocity(105)), None);
         assert_eq!(levels.for_level(AccentLevel::Normal), Some(velocity(90)));
         assert_eq!(levels.for_level(AccentLevel::Accent), Some(velocity(105)));
-        assert_eq!(levels.for_level(AccentLevel::Strong), None);
+        assert_eq!(levels.for_level(AccentLevel::Marcato), None);
     }
 }

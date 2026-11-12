@@ -427,7 +427,7 @@ fn describe_marks(line_element: &LineElement) -> String {
     match marks.accent() {
         AccentLevel::Normal => {}
         AccentLevel::Accent => text.push_str(", accent"),
-        AccentLevel::Strong => text.push_str(", strong accent"),
+        AccentLevel::Marcato => text.push_str(", marcato"),
     }
     if marks.staccato() {
         text.push_str(", staccato");

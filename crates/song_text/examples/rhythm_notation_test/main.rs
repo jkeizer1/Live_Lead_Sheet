@@ -192,7 +192,7 @@ fn describe_element(element: &RhythmElement, time_signature: TimeSignature) -> S
     match marks.accent() {
         AccentLevel::Normal => {}
         AccentLevel::Accent => notes.push("accent"),
-        AccentLevel::Strong => notes.push("strong accent"),
+        AccentLevel::Marcato => notes.push("marcato"),
     }
     if marks.staccato() {
         notes.push("staccato");

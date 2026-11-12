@@ -30,7 +30,7 @@ struct OpenBlock {
     channel: Option<MidiChannel>,
     normal: Option<Velocity>,
     accent: Option<Velocity>,
-    strong: Option<Velocity>,
+    marcato: Option<Velocity>,
     octave_offset_octaves: Option<i8>,
     retrigger_gap: Option<Duration>,
     settle_delay: Option<Duration>,
@@ -148,7 +148,7 @@ impl StudioReader<'_> {
             channel: None,
             normal: None,
             accent: None,
-            strong: None,
+            marcato: None,
             octave_offset_octaves: None,
             retrigger_gap: None,
             settle_delay: None,
@@ -187,10 +187,7 @@ impl StudioReader<'_> {
                     channel: block.channel,
                 });
             }
-            BlockKind::Track => match build_track_output(&block, port_name) {
-                Ok(output) => self.tracks.push(output),
-                Err(message) => self.report(block.line_number, message),
-            },
+            BlockKind::Track => self.tracks.push(build_track_output(&block, port_name)),
         }
     }
 
@@ -223,7 +220,7 @@ impl StudioReader<'_> {
 fn destination_takes_only_port_and_channel(block: &OpenBlock) -> Result<(), String> {
     if block.normal.is_some()
         || block.accent.is_some()
-        || block.strong.is_some()
+        || block.marcato.is_some()
         || block.octave_offset_octaves.is_some()
         || block.retrigger_gap.is_some()
         || block.settle_delay.is_some()
@@ -236,19 +233,15 @@ fn destination_takes_only_port_and_channel(block: &OpenBlock) -> Result<(), Stri
     Ok(())
 }
 
-fn build_track_output(block: &OpenBlock, port_name: String) -> Result<TrackOutput, String> {
-    let velocity: Option<VelocityLevels> = match (block.normal, block.accent, block.strong) {
-        (Some(normal), accent, strong) => Some(VelocityLevels::new(normal, accent, strong)),
-        (None, None, None) => None,
-        (None, _, _) => {
-            return Err(format!(
-                "track \"{}\" gives accent velocities but no normal one. Add velocity normal 90 \
-                 (1 to 127)",
-                block.name
-            ));
-        }
-    };
-    Ok(TrackOutput {
+fn build_track_output(block: &OpenBlock, port_name: String) -> TrackOutput {
+    // Omitted: a normal note is sent at 64, the MIDI 1.0 specification's
+    // mezzo-forte (Jim, 11 Nov 2026; Song Notation, section 6).
+    let velocity: VelocityLevels = VelocityLevels::new(
+        block.normal.unwrap_or(Velocity::MEZZO_FORTE),
+        block.accent,
+        block.marcato,
+    );
+    TrackOutput {
         track_name: block.name.clone(),
         port_name,
         channel: block.channel,
@@ -258,7 +251,7 @@ fn build_track_output(block: &OpenBlock, port_name: String) -> Result<TrackOutpu
         octave_offset_octaves: block.octave_offset_octaves.unwrap_or(0),
         retrigger_gap: block.retrigger_gap.unwrap_or(Duration::ZERO),
         settle_delay: block.settle_delay.unwrap_or(Duration::ZERO),
-    })
+    }
 }
 
 /// Reads `port "X"  channel 1`, `velocity normal 90  accent 105`,
@@ -333,7 +326,7 @@ fn read_channel<'a>(block: &mut OpenBlock, after: &'a [Word]) -> Result<&'a [Wor
     Ok(rest)
 }
 
-/// `velocity normal 90  accent 105  strong 120`: levels follow one another
+/// `velocity normal 90  accent 105  marcato 120`: levels follow one another
 /// until a word that is not a level.
 fn read_velocity<'a>(block: &mut OpenBlock, after: &'a [Word]) -> Result<&'a [Word], String> {
     let mut remaining: &[Word] = after;
@@ -342,7 +335,12 @@ fn read_velocity<'a>(block: &mut OpenBlock, after: &'a [Word]) -> Result<&'a [Wo
         let slot: &mut Option<Velocity> = match level.text.as_str() {
             "normal" => &mut block.normal,
             "accent" => &mut block.accent,
-            "strong" => &mut block.strong,
+            "marcato" => &mut block.marcato,
+            "strong" => {
+                return Err(String::from(
+                    "\"strong\" is now written marcato, e.g. velocity normal 90  marcato 120",
+                ));
+            }
             _ => break,
         };
         let value: u8 = number.text.parse::<u8>().map_err(|_| {
@@ -419,7 +417,6 @@ mod tests {
         assert_eq!(bass.retrigger_gap, Duration::from_ms(2));
         assert_eq!(
             bass.velocity
-                .unwrap()
                 .for_level(AccentLevel::Accent)
                 .unwrap()
                 .value(),
@@ -459,11 +456,25 @@ mod tests {
     }
 
     #[test]
-    fn accent_velocities_need_a_normal_one() {
+    fn a_track_without_a_normal_velocity_plays_at_64() {
+        let studio: StudioConfiguration = parse_studio(
+            "s.studio",
+            "studio \"S\"\nport \"P\"\ntrack \"A\"\n  port \"P\"  channel 1\n  velocity accent 100\n\
+             track \"B\"\n  port \"P\"  channel 2\n",
+        )
+        .unwrap();
+        for track_name in ["A", "B"] {
+            let normal: Velocity = studio.output_of(track_name).unwrap().velocity.normal();
+            assert_eq!(normal.value(), 64, "track {track_name}");
+        }
+    }
+
+    #[test]
+    fn strong_is_now_written_marcato() {
         let errors: Vec<String> = errors_of(
-            "studio \"S\"\nport \"P\"\ntrack \"A\"\n  port \"P\"  channel 1\n  velocity accent 100\n",
+            "studio \"S\"\nport \"P\"\ntrack \"A\"\n  port \"P\"  channel 1\n  velocity normal 90  strong 120\n",
         );
-        assert!(errors[0].contains("no normal one"), "{}", errors[0]);
+        assert!(errors[0].contains("written marcato"), "{}", errors[0]);
     }
 
     #[test]
@@ -520,6 +531,6 @@ mod tests {
             .map(ToString::to_string)
             .collect();
         assert_eq!(unmet.len(), 1, "{unmet:?}");
-        assert!(unmet[0].contains("strong notes on \"Bass\""));
+        assert!(unmet[0].contains("marcato notes on \"Bass\""));
     }
 }

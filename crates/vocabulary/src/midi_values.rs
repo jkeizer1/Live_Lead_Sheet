@@ -68,6 +68,12 @@ pub struct Velocity {
 }
 
 impl Velocity {
+    /// The velocity of a normal note when a studio configuration gives
+    /// none: 64, which the MIDI 1.0 specification names as a mezzo-forte
+    /// note and as the value for a device without velocity sensing (Jim,
+    /// 11 Nov 2026).
+    pub const MEZZO_FORTE: Velocity = Velocity { velocity: 64 };
+
     /// # Errors
     ///
     /// When `velocity` is 0 or above 127.

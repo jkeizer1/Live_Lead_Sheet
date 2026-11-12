@@ -20,8 +20,8 @@ pub enum AccentLevel {
     Normal,
     /// `>`
     Accent,
-    /// `>>`
-    Strong,
+    /// `>>`, marcato.
+    Marcato,
 }
 
 /// The marks an element carries (Song Notation, section 3).

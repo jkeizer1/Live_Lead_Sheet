@@ -737,7 +737,7 @@ fn parse_marks(cursor: &mut Cursor) -> Result<ElementMarks, String> {
                 cursor.next();
                 let this_level: AccentLevel = if cursor.peek() == Some('>') {
                     cursor.next();
-                    AccentLevel::Strong
+                    AccentLevel::Marcato
                 } else {
                     AccentLevel::Accent
                 };
@@ -939,7 +939,7 @@ mod tests {
     fn marks_and_ties_are_read() {
         let elements: Vec<BarElement> = rhythm("q> q>>' e_ e^~ q").unwrap();
         assert_eq!(elements[0].marks.accent(), AccentLevel::Accent);
-        assert_eq!(elements[1].marks.accent(), AccentLevel::Strong);
+        assert_eq!(elements[1].marks.accent(), AccentLevel::Marcato);
         assert!(elements[1].marks.staccato());
         assert!(elements[2].marks.legato());
         assert!(elements[3].marks.fermata());
