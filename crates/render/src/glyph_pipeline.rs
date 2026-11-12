@@ -5,8 +5,8 @@ use crate::error::RenderError;
 use crate::glyph_atlas::GlyphAtlas;
 use crate::glyph_instance::{BYTES_PER_INSTANCE, GlyphInstance};
 
-/// Most glyphs one frame may hold. Eight bars of notes, chord symbols and
-/// the wheel's labels need a few hundred.
+/// Most glyphs one frame may hold. Eight bars of notes and chord symbols
+/// need a few hundred.
 const MAX_GLYPHS: usize = 8192;
 
 /// Size of the viewport uniform: two f32 for the size, two f32 padding.

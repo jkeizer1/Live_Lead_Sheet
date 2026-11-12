@@ -10,8 +10,6 @@ use crate::glyph_pipeline::GlyphPipeline;
 use crate::line_instance::LineInstance;
 use crate::line_pipeline::LinePipeline;
 use crate::theme;
-use crate::wheel_instance::WheelInstance;
-use crate::wheel_pipeline::WheelPipeline;
 
 pub struct Renderer {
     surface: wgpu::Surface<'static>,
@@ -19,7 +17,6 @@ pub struct Renderer {
     queue: wgpu::Queue,
     configuration: wgpu::SurfaceConfiguration,
     line_pipeline: LinePipeline,
-    wheel_pipeline: WheelPipeline,
     glyph_pipeline: GlyphPipeline,
     adapter_summary: String,
 }
@@ -78,7 +75,6 @@ impl Renderer {
             configuration.present_mode
         );
         let line_pipeline: LinePipeline = LinePipeline::new(&device, configuration.format);
-        let wheel_pipeline: WheelPipeline = WheelPipeline::new(&device, configuration.format);
         let glyph_pipeline: GlyphPipeline =
             GlyphPipeline::new(&device, &queue, configuration.format, atlas);
         Ok(Renderer {
@@ -87,7 +83,6 @@ impl Renderer {
             queue,
             configuration,
             line_pipeline,
-            wheel_pipeline,
             glyph_pipeline,
             adapter_summary,
         })
@@ -110,7 +105,7 @@ impl Renderer {
         self.surface.configure(&self.device, &self.configuration);
     }
 
-    /// Draws one frame: the background, the wheel, the lines, then the
+    /// Draws one frame: the background, the lines, then the
     /// glyphs on top.
     ///
     /// # Errors
@@ -122,7 +117,6 @@ impl Renderer {
         &mut self,
         lines: &[LineInstance],
         glyphs: &[GlyphInstance],
-        wheel: &WheelInstance,
     ) -> Result<(), RenderError> {
         // Window sizes are far below 2^24, so the conversion to f32 is exact.
         #[allow(clippy::cast_precision_loss)]
@@ -130,8 +124,6 @@ impl Renderer {
             self.configuration.width as f32,
             self.configuration.height as f32,
         );
-        self.wheel_pipeline
-            .prepare(&self.queue, width_pixels, height_pixels, wheel);
         self.glyph_pipeline
             .prepare(&self.queue, width_pixels, height_pixels, glyphs)?;
         self.line_pipeline.prepare(
@@ -189,7 +181,6 @@ impl Renderer {
                     })],
                     ..wgpu::RenderPassDescriptor::default()
                 });
-            self.wheel_pipeline.draw(&mut pass);
             self.line_pipeline.draw(&mut pass);
             self.glyph_pipeline.draw(&mut pass);
         }

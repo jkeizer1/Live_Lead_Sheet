@@ -533,7 +533,7 @@ fn parse_rhythm_element(cursor: &mut Cursor) -> Result<WrittenElement, String> {
         Some(character) => {
             return Err(format!(
                 "'{character}' is not expected here. After a note value come r and dots, \
-                 then marks (> >> ' _ ^), then ~ for a tie"
+                 then marks (> >> < << ' _ ^), then ~ for a tie"
             ));
         }
     }
@@ -597,7 +597,7 @@ fn parse_song_element(
         Some(character) => {
             return Err(format!(
                 "'{character}' is not expected in \"{element_text}\". Write what it plays, \
-                 then its length, then marks (> >> ' _ ^), then ~ for a tie, e.g. C4:q>~"
+                 then its length, then marks (> >> < << ' _ ^), then ~ for a tie, e.g. C4:q>~"
             ));
         }
     }
@@ -706,7 +706,7 @@ fn parse_song_contents(cursor: &mut Cursor, element_text: &str) -> Result<Writte
         )),
         Some(_) => {
             let name: String = cursor.take_while(|character: &char| {
-                !character.is_whitespace() && !":[)>'_^~".contains(*character)
+                !character.is_whitespace() && !":[)><'_^~".contains(*character)
             });
             if let Some(advice) = chord_with_length_run_on(&name) {
                 return Err(advice);
@@ -840,7 +840,8 @@ fn parse_note_value(cursor: &mut Cursor) -> Result<u64, String> {
     }
 }
 
-/// `>` `>>` `'` `_` `^`, each at most once, and only one accent level.
+/// `>` `>>` `<` `<<` `'` `_` `^`, each at most once, and only one of the
+/// four that change the level (`>`, `>>`, `<`, `<<`).
 fn parse_marks(cursor: &mut Cursor) -> Result<ElementMarks, String> {
     let mut accent: AccentLevel = AccentLevel::Normal;
     let mut staccato: bool = false;
@@ -848,17 +849,21 @@ fn parse_marks(cursor: &mut Cursor) -> Result<ElementMarks, String> {
     let mut fermata: bool = false;
     loop {
         match cursor.peek() {
-            Some('>') => {
+            Some(first @ ('>' | '<')) => {
                 cursor.next();
-                let this_level: AccentLevel = if cursor.peek() == Some('>') {
+                let doubled: bool = cursor.peek() == Some(first);
+                if doubled {
                     cursor.next();
-                    AccentLevel::Marcato
-                } else {
-                    AccentLevel::Accent
+                }
+                let this_level: AccentLevel = match (first, doubled) {
+                    ('>', false) => AccentLevel::Accent,
+                    ('>', true) => AccentLevel::Marcato,
+                    (_, false) => AccentLevel::Soft,
+                    (_, true) => AccentLevel::Softer,
                 };
                 if accent != AccentLevel::Normal {
                     return Err(String::from(
-                        "two accent marks on one element. Use > or >>, not both",
+                        "two level marks on one element. Use one of > >> < <<, not two",
                     ));
                 }
                 accent = this_level;
@@ -1060,6 +1065,14 @@ mod tests {
         assert!(elements[3].marks.fermata());
         assert!(elements[3].tied_to_next);
         assert!(!elements[4].tied_to_next);
+    }
+
+    #[test]
+    fn soft_and_softer_marks_are_read() {
+        let elements: Vec<BarElement> = rhythm("q< q<< q q").unwrap();
+        assert_eq!(elements[0].marks.accent(), AccentLevel::Soft);
+        assert_eq!(elements[1].marks.accent(), AccentLevel::Softer);
+        assert_eq!(elements[2].marks.accent(), AccentLevel::Normal);
     }
 
     #[test]

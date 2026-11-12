@@ -11,6 +11,3 @@ pub mod renderer;
 pub mod spike_music;
 pub mod strip_layout;
 pub mod theme;
-pub mod wheel_instance;
-pub mod wheel_layout;
-pub mod wheel_pipeline;

@@ -22,15 +22,7 @@ pub const BARLINE: [f32; 4] = [0.305, 0.333, 0.392, 1.0];
 /// Playhead: sRGB (214, 160, 90), a soft amber.
 pub const PLAYHEAD: [f32; 4] = [0.672, 0.350, 0.103, 1.0];
 
-/// Wheel wedge tints by function, soft and a little muted. sRGB (120, 160,
-/// 200), (124, 176, 136), (208, 140, 112) and, with colour off, a neutral
-/// (140, 146, 160), as linear light.
-pub const WHEEL_TONIC: [f32; 4] = [0.188, 0.352, 0.578, 1.0];
-pub const WHEEL_SUBDOMINANT: [f32; 4] = [0.202, 0.434, 0.246, 1.0];
-pub const WHEEL_DOMINANT: [f32; 4] = [0.631, 0.262, 0.162, 1.0];
-pub const WHEEL_NEUTRAL: [f32; 4] = [0.262, 0.287, 0.352, 1.0];
-
-/// Text (chord symbols, wheel labels): sRGB (206, 210, 218), light but not
+/// Text (chord symbols): sRGB (206, 210, 218), light but not
 /// white.
 pub const TEXT: [f32; 4] = [0.617, 0.644, 0.701, 1.0];
 
@@ -42,7 +34,3 @@ pub const NOTE: [f32; 4] = [0.434, 0.468, 0.539, 1.0];
 /// bright.
 pub const CONTROL_BORDER: [f32; 4] = [0.117, 0.133, 0.168, 1.0];
 pub const CONTROL_TEXT: [f32; 4] = [0.392, 0.423, 0.491, 1.0];
-
-/// The current wedge's numeral: the background colour, sRGB (24, 26, 30),
-/// dark on the bright fill, where light text would lose its contrast.
-pub const WHEEL_CURRENT_NUMERAL: [f32; 4] = [0.0091, 0.0103, 0.0130, 1.0];

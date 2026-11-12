@@ -18,11 +18,46 @@ track "Bass"
   type mono_voice
   clef bass
 
-section "Chords and bass from sources"  repeat 2
-  key C major  meter 4/4  tempo 120 beats/min
+track "Beat"
+  type mono_voice
+  clef treble
+
+section "Count-in"  count-in
+  meter 4/4  tempo 100 beats/min
+  line "Beat"  | C4:q> / / / |
+
+section "Chords and bass from sources"  repeat 1
+  key C major  meter 4/4  tempo 100 beats/min
+#  line "Keys"  sample_source  | I ii ii        | IV IV V        |
+#  line "Keys"                 | :h r:q r:q     | :h :h          |
+
+   line "Bass"  sample_source  | F2 F2 G2    | 
+   line "Bass"                 | :q :q :q :q | 
+   line "Beat"                 | C4:q>> / /> /  |
+
+
+section "relief" repeat 1
+   line "Beat"                 | C4:q>> / /> /  |
+
+section "Bass from sources B"  repeat 8
+   line "Bass"  sample_source  | C2 D2 E2 F2 E2 D2 C2 D2 E2 F2 G2                      | F2 E2 G2 B2 C3 |
+   line "Bass"                 | :q :sx>> :sx<< :sx<< :sx<< :h                         | :q :q :h       |
+   line "Beat"                 | C4:q>> / /> /       | C4:q>> / /> /   |
+
+#section "relief" repeat 2
+#   line "Beat"                 | C4:q>> / /> /  |
+
+#section "Bass from sources"  repeat 4
+#   line "Bass" sample_source   | A2             | G2              |
+#   line "Bass"                 | :h :h          | :q r :h         |
+#   line "Beat"                 | C4:q>> / /> /  | C4:q>> / /> /   |
+
+#section "Listen 2 by Claude"  repeat 4
+#  key C major  meter 4/4  tempo 90 beats/min
   # Bar 2 shares its bar between IV, IV and V (a third of a bar each), so the
   # half note on beat 3 starts on the second IV and moves to V.
-  line "Keys"  sample_source  | I | IV IV V | vi | V |
-  line "Keys"                 | :h :q :q | :h :h | :q :q :q :q | :w |
-  line "Bass"  sample_source  | C2 | F2 F2 G2 | A2 | G2 |
-  line "Bass"                 | :q :q :q :q | :q :q :q :q | :h :h | :q r :h |
+
+#  line "Keys"  sample_source  | I        | IV IV V | vi          | V  |
+#  line "Keys"                 | :h :q :q | :h :h   | :q :q :q :q | :w |
+
+

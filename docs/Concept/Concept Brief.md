@@ -51,7 +51,8 @@ and the studio's clock dividers are ready before the music starts.
 - *Colour phrases* — short phrases (*e.g.* four bars) on their own staff,
   sent to another instrument at chosen points.
 
-One voice track is marked **lead**: its chords drive the key wheel.
+One voice track is marked **lead**: it is the harmony track, and the chord
+symbols show its chords.
 
 The usual small-studio case: the root clear on one mono voice, the
 harmony mostly from one poly voice, everything else adding colour.
@@ -150,24 +151,6 @@ lists the change as well.
 **Cues panel.** A side panel listing phrase cues as they approach,
 fire, and pass.
 
-**Key wheel.** One large, readable wheel for the song, showing the
-current section's key and following the lead track's chords:
-
-- Roman numerals inside the wedges, chord names just outside;
-- wedges ordered by the diatonic cycle of fifths (I – IV – vii° – iii –
-  vi – ii – V), so common progressions read as steady motion around the
-  ring;
-- in minor keys, a degree with two common chords (v and V, VII and
-  vii°) keeps one wedge, with the alternative as a second, smaller
-  label; the one actually playing lights up;
-- wedges subtly coloured by function — tonic, subdominant, dominant —
-  with an option to turn colour off;
-- the current chord's wedge brightened and outlined, the others dimmed.
-  The wheel shows only what is playing now; what comes next is read
-  from the staff;
-- a chord outside the key is shown in the centre, by name, rather than
-  forced onto a wedge.
-
 **Scaling.** How many bars fit across, and how many tracks fit down,
 depend on display size and resolution, not on a fixed limit. A simple song (chords and bass) is
 drawn large and well spaced; a dense one is drawn smaller, down to a
@@ -238,7 +221,7 @@ it to the library, so it can be led next time.
 
 All twelve major and minor keys. Minor keys cover the standard minor
 forms (natural, harmonic, melodic), so their usual chords — *e.g.* both
-v and V, VII and vii° — belong on the wheel.
+v and V, VII and vii° — are all available.
 
 Alternative tunings and temperaments (Pythagorean, Tartini–Vallotti,
 microtonal scales) are not in V1, but the design must leave a place for

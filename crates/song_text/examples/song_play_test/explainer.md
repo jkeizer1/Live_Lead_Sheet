@@ -1,6 +1,6 @@
 # song_play_test
 
-Revision 4 — 7 Nov 2026 ("count" replaced by beat)
+Revision 5 — 12 Nov 2026 (what to hear brought into line with Demo.song and Demo.studio)
 
 ## What it proves
 
@@ -18,17 +18,20 @@ the end on the studio's clock port.
 What to hear in the Demo:
 
 - **Count-in:** one bar of four beats on the `Beat` track (channel 15,
-  note C4 = 60), beat 1 at velocity 127 and the others at 64, then
-  nothing else.
-- **Keys** (channel 1): in C major, bar 1 four quarter notes of C major
-  (C4 E4 G4); bar 2 a quarter rest, D minor seventh (D4 F4 A4 C5) for a
-  half note on beat 2, G seventh (G4 B4 D5 F5) on beat 4.
-- **Bass** (channel 2): C2 four times, then a rest, D2 for a half note and
-  G2, each one octave lower on the wire because the studio gives the bass
-  `octave_offset -1 octaves` (sounding C1, D1, G1).
-- **Cues:** Start to the SQ-1 on each pass of the verse (its first bar).
-- **Beat** continues through the verse, beat 1 of every bar accented
-  (`>` in the song), as a mono voice like any other.
+  note C4 = 60). The studio gives the Beat track `velocity normal 80
+  accent 127`, so beat 1 (marked `>`) is velocity 127 and beats 2 to 4
+  are 80. Checked on a MIDI monitor, 11 Nov 2026.
+- **Beat** continues through the verses: beats 1 and 3 of the first bar
+  are marked `>` (127), the other beats are 80. Validated on MIDI Monitor and by ear, Nov 2026.
+- **Keys** (channel 1, normal 70): the harmony of the verses, written as
+  roman numerals in C major (I, V, vi, IV, and in the later verses V, vi
+  and vii°, ii), held for half notes (the IV for a whole note).
+  Checked on MIDI Monitor and by ear, Nov 2026.
+- **Bass** (channel 2, normal 100): the roots and passing notes written in
+  the song, each one octave higher on the wire because the studio gives
+  the bass `octave_offset 1 octaves`. `retrigger_gap 2 ms` applies.
+- **Cues:** none in the current Demo (the `Cues` track and the SQ-1
+  destination are commented out). Cues are marked as deferred in other documents.
 
 ## Not applied yet (the program says so before playing)
 
@@ -91,3 +94,5 @@ Bass note without its gate. Not yet heard with this change.
   check is still to be heard.
 - 7 Nov 2026, revision 4: "count" replaced by beat. The list "What to hear
   in the Demo" still describes the earlier Demo song, not the current one.
+- 12 Nov 2026, revision 5: "What to hear" rewritten for the current Demo;
+  count-in velocities are 127 and 80 (the studio's normal and accent).

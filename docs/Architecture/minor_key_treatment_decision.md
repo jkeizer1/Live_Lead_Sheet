@@ -36,8 +36,8 @@ C minor, and the LilyPond file is right:
 
 So the song needs `key C minor`, and minor keys must be supported.
 `key Eb major` plays BWV 610's notes correctly, since it has no chord
-numerals and notes are absolute pitches, but it misstates the key: the
-key wheel and any numerals would centre on E♭, making the tonic chord
+numerals and notes are absolute pitches, but it misstates the key: any
+numerals would centre on E♭, making the tonic chord
 `vi` instead of `i`. It is a stopgap, not the song's key.
 
 
@@ -195,7 +195,6 @@ different tables:
 | A root on a raised 6th or 7th (harmonic, melodic minor) | shown by the chord's quality, or a ♯ or ♮ before the numeral: `vii°` is B, `VII` is B♭ | written plainly: `vii°` is B, `vi°` is A | the root depends on the quality: a rule to write and test, and a mistyped case changes the root silently | nothing special |
 | Example: the Andalusian cadence (Cm B♭ A♭ G) | `i VII VI V` | `i bVII bVI V` | | |
 | Example: a minor blues (Cm7 Fm7 Cm7 A♭7 G7) | `i7 iv7 i7 VI7 V7` | `i7 iv7 i7 bVI7 V7` | library entries written this way | library entries written this way |
-| The key wheel's labels in C minor | `i ii° III iv v VI VII` | `i ii° bIII iv v bVI bVII` | | flats on three segments |
 | Where you meet it | harmony textbooks; analyses of Bach chorales | lead sheets, jazz, progression books, chord tools in software | matches what you read in classical analysis | matches lead sheets and progression books |
 
 *The same chords, both ways (C minor).*
@@ -240,9 +239,8 @@ major's signature (C minor: three flats). Affected: the LilyPond view
 (`\key c \minor`), note spelling's choice of flats or sharps for chord
 notes, and later the renderer.
 
-**3. The key wheel (EFS-3.7).** *Decided (Jim, 9 Nov 2026): dropped.*
-The EFS (EFS-3.7) and the Concept Brief still describe it and are to be
-updated.
+**3. The key wheel.** *Decided (Jim, 9 Nov 2026): dropped.* No document
+describes it any more (11 Nov 2026).
 
 **4. Modes.** How a change of mode is shown in a song, and whether it
 changes the numerals.
@@ -408,8 +406,7 @@ standard?
 
 `key.rs` (`Mode`), `contents_text.rs` (`parse_key`), `voicing.rs` (degree
 roots in minor), `note_spelling` (chord-note spelling, flats or sharps),
-`lilypond_export` (`\key … \minor`), the key wheel in `render`, and the
-progression library format.
+`lilypond_export` (`\key … \minor`), and the progression library format.
 
 ## Revisions
 

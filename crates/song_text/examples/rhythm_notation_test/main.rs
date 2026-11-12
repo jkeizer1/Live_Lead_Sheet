@@ -193,6 +193,8 @@ fn describe_element(element: &RhythmElement, time_signature: TimeSignature) -> S
         AccentLevel::Normal => {}
         AccentLevel::Accent => notes.push("accent"),
         AccentLevel::Marcato => notes.push("marcato"),
+        AccentLevel::Soft => notes.push("softer note"),
+        AccentLevel::Softer => notes.push("still softer note"),
     }
     if marks.staccato() {
         notes.push("staccato");

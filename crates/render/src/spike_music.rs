@@ -17,7 +17,6 @@ use crate::strip_layout::{
     snapped_center_pixels, vertical_line, whole_thickness_pixels,
 };
 use crate::theme;
-use crate::wheel_instance::WheelDegree;
 
 const G_CLEF: char = '\u{E050}';
 const PERCUSSION_CLEF: char = '\u{E069}';
@@ -210,17 +209,15 @@ const fn sharp(staff_step: i8) -> VoicingNote {
     }
 }
 
-/// A chord of the spike, with its place on the wheel.
+/// A chord of the spike.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SpikeChord {
     /// Named as EFS-1.5a sets out.
     pub symbol: &'static str,
-    /// Its degree in C major; `None` outside the key.
-    pub degree: Option<WheelDegree>,
 }
 
-const fn chord(symbol: &'static str, degree: Option<WheelDegree>) -> SpikeChord {
-    SpikeChord { symbol, degree }
+const fn chord(symbol: &'static str) -> SpikeChord {
+    SpikeChord { symbol }
 }
 
 /// A chord change: where in its bar it falls, the chord, and its voicing.
@@ -244,15 +241,15 @@ const fn change(
     }
 }
 
-const C: SpikeChord = chord("C", Some(WheelDegree::One));
-const CM7: SpikeChord = chord("CM7", Some(WheelDegree::One));
-const AM7: SpikeChord = chord("Am7", Some(WheelDegree::Six));
-const DM7: SpikeChord = chord("Dm7", Some(WheelDegree::Two));
-const G7: SpikeChord = chord("G7", Some(WheelDegree::Five));
-const EM: SpikeChord = chord("Em", Some(WheelDegree::Three));
-const F_SHARP_M7_FLAT_5: SpikeChord = chord("F♯m7♭5", None);
-const B7: SpikeChord = chord("B7", None);
-const A7: SpikeChord = chord("A7", None);
+const C: SpikeChord = chord("C");
+const CM7: SpikeChord = chord("CM7");
+const AM7: SpikeChord = chord("Am7");
+const DM7: SpikeChord = chord("Dm7");
+const G7: SpikeChord = chord("G7");
+const EM: SpikeChord = chord("Em");
+const F_SHARP_M7_FLAT_5: SpikeChord = chord("F♯m7♭5");
+const B7: SpikeChord = chord("B7");
+const A7: SpikeChord = chord("A7");
 
 /// Close-position voicings.
 const C_VOICING: &[VoicingNote] = &[tone(-2), tone(0), tone(2)]; // C4 E4 G4
@@ -269,8 +266,7 @@ const A7_VOICING: &[VoicingNote] = &[tone(3), sharp(5), tone(7), tone(9)]; // A4
 /// once: one chord per beat (bar 0), two sharp-laden chords a half note
 /// apart (bar 2), a change on the off-beat (bar 3), two per bar (bar 7).
 /// Each change falls on a note of `SPIKE_RHYTHM`, so no note crosses one.
-/// F♯m7♭5, B7 and A7 lie outside the key: the wheel names them in its
-/// centre.
+/// F♯m7♭5, B7 and A7 lie outside the key.
 const SPIKE_CHANGES: [&[ChordChange]; BARS_IN_STRIP as usize] = [
     &[
         change(0, C, C_VOICING),
@@ -1015,7 +1011,7 @@ mod tests {
     }
 
     #[test]
-    fn the_wheel_follows_changes_inside_a_bar() {
+    fn the_chord_follows_changes_inside_a_bar() {
         // Bar 0 changes every beat: 64 eighths in the strip, so beat 2
         // (eighth 2) is at 2 ÷ 64.
         let symbol_at = |eighths: f32| chord_at(eighths / 64.0).map(|chord| chord.symbol);

@@ -251,7 +251,7 @@ pub enum TrackKind {
     Voice {
         voice: VoiceKind,
         clef: Clef,
-        /// Its chords drive the chord symbols and the key wheel (EFS-3.7).
+        /// The song's harmony track: the chord symbols show its chords.
         lead: bool,
         home_octave: Option<i8>,
         /// Names given to some of its voice layers; a layer without one is
@@ -923,7 +923,7 @@ impl fmt::Display for SongError {
             SongError::LeadTracks { found } => write!(
                 f,
                 "{found} voice tracks are marked lead. Exactly 1 must be: write lead \
-                 under the voice track whose chords drive the key wheel"
+                 under the voice track that is the song's harmony track"
             ),
             SongError::NoSections => write!(f, "the song has no sections. Add a section"),
             SongError::CountInNotFirst { section_name } => write!(

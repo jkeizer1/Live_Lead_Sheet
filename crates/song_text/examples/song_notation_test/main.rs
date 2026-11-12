@@ -268,7 +268,7 @@ fn describe_track(track: &Track) -> String {
                 VoiceKind::Mono => "mono voice (one note at a time)",
             };
             let lead_text: &str = if *lead {
-                ", lead: its chords drive the key wheel"
+                ", lead: the harmony track, whose chords the chord symbols show"
             } else {
                 ""
             };
@@ -464,6 +464,8 @@ fn describe_marks(line_element: &LineElement) -> String {
         AccentLevel::Normal => {}
         AccentLevel::Accent => text.push_str(", accent"),
         AccentLevel::Marcato => text.push_str(", marcato"),
+        AccentLevel::Soft => text.push_str(", softer note"),
+        AccentLevel::Softer => text.push_str(", still softer note"),
     }
     if marks.staccato() {
         text.push_str(", staccato");

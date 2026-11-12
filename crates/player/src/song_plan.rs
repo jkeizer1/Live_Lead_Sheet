@@ -11,10 +11,11 @@ use std::fmt;
 use vocabulary::control_track::ControlTrack;
 use vocabulary::key::Key;
 use vocabulary::midi_values::NoteNumber;
+use vocabulary::midi_values::Velocity;
 use vocabulary::phrase_cue::{
     ChannelMessage, ControlCueMessage, OutputPortName, PhraseCue, PhraseCueError, TransportMessage,
 };
-use vocabulary::rhythm_pattern::{AccentLevel, ElementKind};
+use vocabulary::rhythm_pattern::ElementKind;
 use vocabulary::score_length::ScoreLength;
 use vocabulary::score_position::ScorePosition;
 use vocabulary::song::{
@@ -286,17 +287,7 @@ fn line_notes(
         } else {
             written_ticks
         };
-        let level: AccentLevel = element.marks().accent();
-        let velocity =
-            output
-                .velocity
-                .for_level(level)
-                .ok_or_else(|| PlanError::StudioDoesNotCover {
-                    unmet: vec![UnmetNeed::NoVelocity {
-                        track_name: track.name().to_string(),
-                        level,
-                    }],
-                })?;
+        let velocity: Velocity = output.velocity.for_level(element.marks().accent());
         // Ticks from the start of the line, then from the start of the song.
         let line_start_ticks: u64 = element.start().ticks();
         let stretches: Vec<(u64, u64, &ElementContents)> =

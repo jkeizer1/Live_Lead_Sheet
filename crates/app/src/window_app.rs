@@ -10,10 +10,8 @@ use render::glyph_atlas::GlyphAtlas;
 use render::glyph_instance::GlyphInstance;
 use render::line_instance::LineInstance;
 use render::renderer::Renderer;
-use render::spike_music::{SpikeChord, chord_at, spike_music};
+use render::spike_music::spike_music;
 use render::strip_layout::{BARS_IN_STRIP, StripGeometry, staff_control_label, strip_lines};
-use render::wheel_instance::WheelInstance;
-use render::wheel_layout::{wheel_labels, wheel_layout};
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalPosition;
 use winit::dpi::PhysicalSize;
@@ -65,8 +63,6 @@ struct OpenWindow {
     atlas: GlyphAtlas,
     /// When the playhead was at the start of the strip.
     started_at: Instant,
-    /// Wheel tinted by function; the C key switches it off and on.
-    color_by_function: bool,
     /// The part's pitch staff: shown by default; its control hides it and
     /// shows it again (EFS-1.5).
     pitch_staff_shown: bool,
@@ -109,7 +105,6 @@ impl WindowApp {
             window,
             atlas,
             started_at: Instant::now(),
-            color_by_function: true,
             pitch_staff_shown: true,
             cursor: None,
         })
@@ -146,18 +141,6 @@ impl ApplicationHandler for WindowApp {
                     },
                 ..
             } => event_loop.exit(),
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        logical_key: Key::Character(ref character),
-                        state: ElementState::Pressed,
-                        repeat: false,
-                        ..
-                    },
-                ..
-            } if character.eq_ignore_ascii_case("c") => {
-                open_window.color_by_function = !open_window.color_by_function;
-            }
             WindowEvent::CursorMoved { position, .. } => {
                 open_window.cursor = Some(position);
             }
@@ -195,9 +178,6 @@ fn draw(open_window: &mut OpenWindow) -> Result<(), RenderError> {
     let strip_seconds: f32 = SPIKE_SECONDS_PER_BAR * f32::from(BARS_IN_STRIP);
     // The playhead wraps to the first bar after the last.
     let playhead_fraction: f32 = (elapsed_seconds / strip_seconds).fract();
-    // The wheel shows the chord playing now (EFS-1.10); before the first
-    // change none plays.
-    let current_chord: Option<SpikeChord> = chord_at(playhead_fraction);
 
     let geometry: StripGeometry =
         StripGeometry::new(width_pixels, height_pixels, open_window.pitch_staff_shown);
@@ -205,25 +185,7 @@ fn draw(open_window: &mut OpenWindow) -> Result<(), RenderError> {
     let mut glyphs: Vec<GlyphInstance> = Vec::new();
     spike_music(&geometry, &open_window.atlas, &mut lines, &mut glyphs)?;
     staff_control_label(&geometry, &open_window.atlas, &mut glyphs)?;
-    let wheel: WheelInstance = wheel_layout(
-        width_pixels,
-        height_pixels,
-        current_chord.and_then(|chord| chord.degree),
-        open_window.color_by_function,
-    );
-    // A chord outside the key has no wedge; the centre names it.
-    let outside_key_chord: Option<&str> = match current_chord {
-        Some(SpikeChord {
-            symbol,
-            degree: None,
-        }) => Some(symbol),
-        Some(SpikeChord {
-            degree: Some(_), ..
-        })
-        | None => None,
-    };
-    wheel_labels(&wheel, &open_window.atlas, outside_key_chord, &mut glyphs)?;
-    open_window.renderer.draw_frame(&lines, &glyphs, &wheel)
+    open_window.renderer.draw_frame(&lines, &glyphs)
 }
 
 /// Whether the pointer is on the staff control, laid out as it is drawn now.

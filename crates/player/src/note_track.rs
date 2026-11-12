@@ -13,7 +13,7 @@ use std::fmt;
 use vocabulary::duration::Duration;
 use vocabulary::midi_values::{MidiChannel, NoteNumber, Velocity};
 use vocabulary::phrase_cue::OutputPortName;
-use vocabulary::rhythm_pattern::{AccentLevel, ElementKind, RhythmPattern};
+use vocabulary::rhythm_pattern::{ElementKind, RhythmPattern};
 use vocabulary::score_length::ScoreLength;
 
 use crate::studio_configuration::VelocityLevels;
@@ -150,14 +150,7 @@ impl NoteTrack {
                 } else {
                     written_ticks
                 };
-                let level: AccentLevel = element.marks().accent();
-                let velocity: Velocity =
-                    levels
-                        .for_level(level)
-                        .ok_or_else(|| NoteTrackError::NoVelocityForLevel {
-                            track_name: track_name.to_string(),
-                            level,
-                        })?;
+                let velocity: Velocity = levels.for_level(element.marks().accent());
                 notes.push(TimedNote {
                     start_ticks,
                     length_ticks: sounding_ticks.min(stretch_length.ticks() - start_ticks),
@@ -201,10 +194,6 @@ pub enum NoteTrackError {
         track_name: String,
         start_ticks: u64,
     },
-    NoVelocityForLevel {
-        track_name: String,
-        level: AccentLevel,
-    },
     StretchTooLong,
 }
 
@@ -221,18 +210,6 @@ impl fmt::Display for NoteTrackError {
                 f,
                 "track {track_name:?}: the note at {start_ticks} ticks has no length"
             ),
-            NoteTrackError::NoVelocityForLevel { track_name, level } => {
-                let word: &str = match level {
-                    AccentLevel::Normal => "normal",
-                    AccentLevel::Accent => "accent",
-                    AccentLevel::Marcato => "marcato",
-                };
-                write!(
-                    f,
-                    "track {track_name:?}: the rhythm has {word} notes and no {word} velocity is \
-                     given. Give a velocity for it"
-                )
-            }
             NoteTrackError::StretchTooLong => {
                 write!(
                     f,
@@ -248,7 +225,7 @@ impl std::error::Error for NoteTrackError {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vocabulary::rhythm_pattern::{ElementMarks, RhythmElement};
+    use vocabulary::rhythm_pattern::{AccentLevel, ElementMarks, RhythmElement};
     use vocabulary::time_signature::TimeSignature;
 
     fn four_four() -> TimeSignature {
@@ -388,21 +365,56 @@ mod tests {
     }
 
     #[test]
-    fn a_level_without_a_velocity_is_refused_with_the_track() {
-        let marcato: ElementMarks = ElementMarks::new(AccentLevel::Marcato, false, false, false);
+    fn a_mark_without_a_studio_velocity_is_relative_to_normal() {
+        // levels(): normal 64, accent 127 (absolute), no marcato. Marcato is
+        // 3/4 of the way from 64 to 127 (111), and the soft marks are 3/8 and
+        // 3/4 of the way from 64 down to 1 (40 and 17).
+        let marked = |level: AccentLevel| ElementMarks::new(level, false, false, false);
         let rhythm: RhythmPattern = RhythmPattern::new(
-            "Loud",
+            "Levels",
             four_four(),
             1,
-            vec![element(0, 20_160, ElementKind::Sounding, marcato, false)],
+            vec![
+                element(
+                    0,
+                    5040,
+                    ElementKind::Sounding,
+                    marked(AccentLevel::Accent),
+                    false,
+                ),
+                element(
+                    5040,
+                    5040,
+                    ElementKind::Sounding,
+                    marked(AccentLevel::Marcato),
+                    false,
+                ),
+                element(
+                    10_080,
+                    5040,
+                    ElementKind::Sounding,
+                    marked(AccentLevel::Soft),
+                    false,
+                ),
+                element(
+                    15_120,
+                    5040,
+                    ElementKind::Sounding,
+                    marked(AccentLevel::Softer),
+                    false,
+                ),
+            ],
         )
         .unwrap();
+        let track: NoteTrack = track_of(&rhythm, 20_160).unwrap();
         assert_eq!(
-            track_of(&rhythm, 20_160).unwrap_err(),
-            NoteTrackError::NoVelocityForLevel {
-                track_name: "Beat".to_string(),
-                level: AccentLevel::Marcato
-            }
+            starts_lengths_velocities(&track),
+            vec![
+                (0, 5040, 127),
+                (5040, 5040, 111),
+                (10_080, 5040, 40),
+                (15_120, 5040, 17),
+            ]
         );
     }
 }

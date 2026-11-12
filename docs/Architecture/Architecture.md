@@ -207,12 +207,11 @@ Direct3D 12 later), without Vulkan's boilerplate. All GPU code lives in
 the render crate.
 
 **Rendering.** The CPU sends small arrays of instance records each frame;
-three shaders draw everything:
+two shaders draw everything:
 
 - *glyph shader* — noteheads, clefs, accidentals, rests and chord-symbol
   text, from a signed-distance-field atlas (crisp at any size);
-- *line shader* — staff lines, barlines, stems, beams, playhead;
-- *wheel shader* — the key wheel's sectors, computed per pixel.
+- *line shader* — staff lines, barlines, stems, beams, playhead.
 
 The atlas is built once, offline, from the music font (Bravura) and a
 text font, and committed as an image plus a glyph table. The program
@@ -537,7 +536,7 @@ the song tied it to one studio.
 - **Pitch** is stored as the staff pitch in the track's clef; the
   octave offset in the configuration corrects the device (musician voices,
   later, store sounding pitch and draw transposed).
-- **Marks** (accent, strong accent, staccato, legato, fermata) are written
+- **Marks** (accent, Marcato (meaning: strong accent), staccato, legato, fermata) are written
   on elements; how hard an accent plays is the configuration's. A fermata
   never changes the clock in V1.
 - **Cues and tempo marks are rhythm lines**, so authors count note values,
@@ -553,7 +552,7 @@ velocity per track in the song; a track-wide *no root* setting (a
 voicing without the root is written note by note, and the editor can do
 it for a whole line); bar numbers for cues (hard to calculate through
 repeats); an independent play position per track (one bar position is
-what the counter, cues, key wheel and strip all rely on).
+what the counter, cues and strip all rely on).
 
 ## Development environment
 
@@ -591,9 +590,8 @@ first and set aside (D-9).
 **Done so far (spike steps 1–4b).** The workspace and its strict lints;
 musical time (D-7: `ScorePosition`, `ScoreLength`, `Instant`,
 `Duration`); the ALSA output with the clock measurements (D-8); the
-window, the three shaders and the glyph atlas; one voice track's strip with
-chord symbols, slash rhythm line, hideable pitch staff, and a wheel that
-follows the chords. The playhead still runs on the computer's own clock,
+window, the two shaders and the glyph atlas; one voice track's strip with
+chord symbols, slash rhythm line, hideable pitch staff. The playhead still runs on the computer's own clock,
 not the queue's.
 
 **1. ALSA output for D-10.** Declare `queue_clock.rs` (the screen's
@@ -632,7 +630,7 @@ downbeat checks above, and the direct `aconnect` path.
 **3. Spike step 5: timing and drawing together.** A sending thread in
 `app` sending Timing Clock (24 clock pulses/q) and the control track, stamped
 up to 50 ms ahead, instants computed from an anchor (section 6);
-the playhead and wheel driven by the queue's real time instead of the
+the playhead driven by the queue's real time instead of the
 computer's clock; frame-time statistics printed on exit; then the
 `delivery_spread` measurement repeated while the window draws.
 
@@ -654,8 +652,7 @@ ear.
   sizes are the legible minimum, so a crowded screen gains room by other
   means: a third row of chord symbols for the densest bars; n bars
   across in place of a fixed 8, or two lines of 4 bars stacked at a
-  larger size; the wheel smaller in a corner, or left out when it cannot
-  fit; a **Big** view for a screen shared by several musicians (e.g. a
+  larger size; a **Big** view for a screen shared by several musicians (e.g. a
   family jam on a large screen) that enlarges symbols and voicings for
   simpler songs, with the same fit check showing where a dense song no
   longer fits. Views showing tracks beyond the lead bring their own

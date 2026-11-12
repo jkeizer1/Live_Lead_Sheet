@@ -12,8 +12,7 @@ language, library or internal design.
 ## 1. Play screen
 
 **EFS-1.1** The play screen shows at once: the song overview, the
-counter, the tempo, the key wheel, the cues panel, and the voice
-tracks.
+counter, the tempo, the cues panel, and the voice tracks.
 
 **EFS-1.2 Song overview.** A strip across the top shows every section in
 order, by name, with its repeat count. The current section and the
@@ -60,8 +59,8 @@ each track's pitch staff hides it and shows it again, at any time, also
 while playing. Hidden, the track keeps its chord symbols and rhythm line,
 and the space goes to other tracks (EFS-1.12).
 
-**EFS-1.5a Chord naming.** Every chord name, on the strip, the wheel and
-in the authoring view, follows the standard convention:
+**EFS-1.5a Chord naming.** Every chord name, on the strip and in the
+authoring view, follows the standard convention:
 
 - the root is a capital letter, with its accidental: C, F♯, B♭;
 - minor is a lower-case **m**: Am, Am7, F♯m7♭5;
@@ -84,7 +83,7 @@ rhythm line uses the neutral (percussion) clef. The alto and tenor clefs
 are for parts a musician plays (later, EFS-3.8); mixed clefs within a
 track are not needed.
 
-**EFS-1.5c Marks.** Accent, strong accent, staccato, legato and fermata
+**EFS-1.5c Marks.** Accent, Marcato (meaining strong accent), staccato, legato and fermata
 marks (EFS-3.5, EFS-3.6) are drawn as in standard notation on the
 element that carries them, in the rhythm line and on the pitch staff.
 
@@ -105,19 +104,8 @@ double barline and the new key signature at the bar where it takes
 effect, and the cautionary key signature at the end of the bar before.
 The cues panel lists it (EFS-1.11).
 
-**EFS-1.10 Key wheel.** One large wheel for the song:
-
-- seven wedges in the diatonic cycle of fifths (I – IV – vii° – iii –
-  vi – ii – V), Roman numerals inside, chord names just outside, spelled
-  by the key;
-- in minor keys, a degree with two common chords keeps one wedge, with
-  the alternative as a second, smaller label;
-- the lead track's current chord: its wedge brightened and outlined, the
-  other wedges dimmed, with colour on or off. The wheel shows only what is
-  playing now; what comes next is read from the staff;
-- a chord outside the key shown in the centre, by name;
-- subtle colour by function (tonic, subdominant, dominant), with colour
-  switchable off.
+**EFS-1.10** CANCELLED (Jim, 9 Nov 2026). The number stays so that other
+references remain valid.
 
 **EFS-1.11 Cues panel.** A side panel listing what is coming: each
 phrase cue, key change and tempo change in view, with its bar and beat.
@@ -129,7 +117,7 @@ all fit at that minimum, the lead track is always shown and the screen
 says plainly which tracks are hidden — never silently.
 
 **EFS-1.13 Look.** Dark theme with soft contrast throughout, including
-every control. Chord symbols, counter and wheel are readable at arm's
+every control. Chord symbols and counter are readable at arm's
 length.
 
 **EFS-1.14 Warnings region.** A small region of the play screen lists
@@ -274,13 +262,14 @@ length, EFS-4.3.)
 **EFS-3.6 Velocity and accents.** The velocity of a note is a device
 setting, not a song setting. In the studio configuration each voice track
 has a normal velocity and, for each accent mark the song uses, an accent
-velocity (*accent* and *strong accent*). In the song, an accent mark on a
+velocity (*accent* and *marcato* (means strong accent). In the song, an accent mark on a
 sounding element selects the level. Rhythm patterns carry accent marks
 (a backbeat on beats 2 and 4), and apply copies them. Pressure, pitch
 bend and other controllers are later (EFS-3.8).
 
 **EFS-3.7 Lead track.** Exactly one voice track is marked lead; its
 chords drive the key wheel and the chord symbols.
+CANCELLED - THERE IS NO Keywheel. THERE IS A LEAD TRACK; it is the first track carrying the harmony chords.
 
 **EFS-3.8 Track types.** Each track has a type. In V1: poly voice and mono
 voice (EFS-3.2, 3.3; a beat pulse, EFS-2.6, is a mono voice), clock and
@@ -352,8 +341,7 @@ meter with its beat grouping, and tempo (written, or carry on).
 **EFS-5.2a Minor keys.** A minor key uses the natural-minor key
 signature, as in standard notation. Chords that use the raised sixth or
 seventh degree (*e.g.* E7 in A minor) are written with accidentals,
-named by their actual notes, and shown on the wheel as the degree's
-alternative chord. A section never has to choose a minor form.
+named by their actual notes. A section never has to choose a minor form.
 
 **EFS-5.3 Chords.** Start a section from a library progression, then
 change any chord, or the rhythm element it starts on.

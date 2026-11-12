@@ -86,7 +86,52 @@ impl Velocity {
     pub const fn value(self) -> u8 {
         self.velocity
     }
+
+    /// The velocity `eighths` eighths of the way from this one to `limit`,
+    /// rounded to the nearest whole velocity (a tie rounds up). Song
+    /// Notation, section 6: `>` and `<` are 3 eighths of the way, `>>` and
+    /// `<<` 6 eighths (3/4). More than 8 eighths is taken as 8, the limit
+    /// itself, so the result is always a valid velocity.
+    ///
+    /// Units: `(8 eighths/step × velocity ± eighths × room) eighths ÷ 8
+    /// eighths/step` → velocity steps, with `room` the steps between this
+    /// velocity and the limit.
+    #[must_use]
+    pub fn eighths_of_the_way_to(self, limit: VelocityLimit, eighths: u8) -> Velocity {
+        let from: u32 = u32::from(self.velocity);
+        let eighths: u32 = u32::from(eighths).min(EIGHTHS_PER_ONE);
+        let moved_eighth_velocities: u32 = match limit {
+            VelocityLimit::Loudest => {
+                let room: u32 = u32::from(LARGEST_DATA_VALUE) - from;
+                EIGHTHS_PER_ONE * from + eighths * room
+            }
+            VelocityLimit::Softest => {
+                let room: u32 = from - u32::from(SMALLEST_VELOCITY);
+                EIGHTHS_PER_ONE * from - eighths * room
+            }
+        };
+        // + 4 eighth-velocities is half a velocity: rounds half up.
+        let rounded: u32 = (moved_eighth_velocities + EIGHTHS_PER_ONE / 2) / EIGHTHS_PER_ONE;
+        // Between the two velocities by construction, so 1 to 127 fits a u8.
+        let rounded_velocity: u8 = u8::try_from(rounded).unwrap_or(LARGEST_DATA_VALUE);
+        Velocity {
+            velocity: rounded_velocity,
+        }
+    }
 }
+
+/// The two ends of the velocity range a mark moves a velocity toward.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VelocityLimit {
+    /// 127.
+    Loudest,
+    /// 1: velocity 0 means note-off.
+    Softest,
+}
+
+const SMALLEST_VELOCITY: u8 = 1;
+/// Eighths in one whole: 3/8 and 3/4 are written as 3 and 6 eighths.
+const EIGHTHS_PER_ONE: u32 = 8;
 
 /// A controller (CC) number, 0 to 127.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -206,6 +251,63 @@ mod tests {
     fn velocity_zero_is_refused() {
         assert!(Velocity::new(0).is_err());
         assert_eq!(Velocity::new(127).unwrap().value(), 127);
+    }
+
+    #[test]
+    fn marks_move_a_velocity_a_share_of_the_room_toward_a_limit() {
+        // Song Notation, section 6, the table: normal 64, 90, 100.
+        let moved = |normal: u8, limit: VelocityLimit, eighths: u8| -> u8 {
+            Velocity::new(normal)
+                .unwrap()
+                .eighths_of_the_way_to(limit, eighths)
+                .value()
+        };
+        // pp, p, f, ff at normal 64: 17, 40, 88, 111.
+        assert_eq!(moved(64, VelocityLimit::Softest, 6), 17);
+        assert_eq!(moved(64, VelocityLimit::Softest, 3), 40);
+        assert_eq!(moved(64, VelocityLimit::Loudest, 3), 88);
+        assert_eq!(moved(64, VelocityLimit::Loudest, 6), 111);
+        // normal 90: 23, 57, 104, 118.
+        assert_eq!(moved(90, VelocityLimit::Softest, 6), 23);
+        assert_eq!(moved(90, VelocityLimit::Softest, 3), 57);
+        assert_eq!(moved(90, VelocityLimit::Loudest, 3), 104);
+        assert_eq!(moved(90, VelocityLimit::Loudest, 6), 118);
+        // normal 100: 26, 63, 110, 120.
+        assert_eq!(moved(100, VelocityLimit::Softest, 6), 26);
+        assert_eq!(moved(100, VelocityLimit::Softest, 3), 63);
+        assert_eq!(moved(100, VelocityLimit::Loudest, 3), 110);
+        assert_eq!(moved(100, VelocityLimit::Loudest, 6), 120);
+    }
+
+    #[test]
+    fn a_mark_never_reaches_the_limit_or_leaves_the_range() {
+        for normal in 1..=127_u8 {
+            for eighths in [0, 3, 6, 8, 200] {
+                for limit in [VelocityLimit::Loudest, VelocityLimit::Softest] {
+                    let moved: u8 = Velocity::new(normal)
+                        .unwrap()
+                        .eighths_of_the_way_to(limit, eighths)
+                        .value();
+                    assert!((1..=127).contains(&moved), "{normal} {eighths}");
+                }
+            }
+        }
+        // 3/4 of the way is short of the limit while there is room.
+        let at_100: Velocity = Velocity::new(100).unwrap();
+        assert!(
+            at_100
+                .eighths_of_the_way_to(VelocityLimit::Loudest, 6)
+                .value()
+                < 127
+        );
+        // No room: a velocity already at the limit stays there.
+        let loudest: Velocity = Velocity::new(127).unwrap();
+        assert_eq!(
+            loudest
+                .eighths_of_the_way_to(VelocityLimit::Loudest, 6)
+                .value(),
+            127
+        );
     }
 
     #[test]

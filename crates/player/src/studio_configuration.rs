@@ -9,14 +9,19 @@
 use std::fmt;
 
 use vocabulary::duration::Duration;
-use vocabulary::midi_values::{MidiChannel, Velocity};
-use vocabulary::rhythm_pattern::{AccentLevel, ElementKind};
-use vocabulary::song::{CueDestination, CueMessage, ElementContents, Song, Track, TrackKind};
+use vocabulary::midi_values::{MidiChannel, Velocity, VelocityLimit};
+use vocabulary::rhythm_pattern::AccentLevel;
+use vocabulary::song::{CueDestination, CueMessage, Song, Track, TrackKind};
 
 /// The velocity each accent level sends. `normal` is always there: it is
 /// `Velocity::MEZZO_FORTE` (64) when the configuration writes none. The
 /// accent (`>`) and marcato (`>>`) levels are present only when the
 /// configuration gives them.
+/// `>` and `<` move a velocity 3/8 of the way to its limit; `>>` and `<<`
+/// 3/4 (6/8). Eighths of the way.
+const ONE_MARK_EIGHTHS: u8 = 3;
+const TWO_MARKS_EIGHTHS: u8 = 6;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VelocityLevels {
     normal: Velocity,
@@ -43,13 +48,29 @@ impl VelocityLevels {
         self.normal
     }
 
-    /// The velocity for a level, when the configuration gives one.
+    /// The velocity for a level (Song Notation, section 6). The studio's
+    /// `accent` and `marcato` are absolute velocities. Without them, and for
+    /// the soft marks (which have no studio word), a mark moves the normal
+    /// velocity a share of the way toward 127 or 1: 3/8 of the way for `>`
+    /// and `<`, 3/4 for `>>` and `<<`. No loudness curve is applied.
     #[must_use]
-    pub const fn for_level(self, level: AccentLevel) -> Option<Velocity> {
+    pub fn for_level(self, level: AccentLevel) -> Velocity {
         match level {
-            AccentLevel::Normal => Some(self.normal),
-            AccentLevel::Accent => self.accent,
-            AccentLevel::Marcato => self.marcato,
+            AccentLevel::Normal => self.normal,
+            AccentLevel::Accent => self.accent.unwrap_or_else(|| {
+                self.normal
+                    .eighths_of_the_way_to(VelocityLimit::Loudest, ONE_MARK_EIGHTHS)
+            }),
+            AccentLevel::Marcato => self.marcato.unwrap_or_else(|| {
+                self.normal
+                    .eighths_of_the_way_to(VelocityLimit::Loudest, TWO_MARKS_EIGHTHS)
+            }),
+            AccentLevel::Soft => self
+                .normal
+                .eighths_of_the_way_to(VelocityLimit::Softest, ONE_MARK_EIGHTHS),
+            AccentLevel::Softer => self
+                .normal
+                .eighths_of_the_way_to(VelocityLimit::Softest, TWO_MARKS_EIGHTHS),
         }
     }
 }
@@ -224,29 +245,6 @@ impl StudioConfiguration {
                 track_name: track_name.to_string(),
             });
         }
-        match track.kind() {
-            TrackKind::Voice { .. } => {
-                let used: Vec<AccentLevel> = accent_levels_used(song, track_name);
-                Self::check_velocity(track_name, output, &used, unmet);
-            }
-            TrackKind::ClockAndTransport | TrackKind::CueControl { .. } => {}
-        }
-    }
-
-    fn check_velocity(
-        track_name: &str,
-        output: &TrackOutput,
-        used: &[AccentLevel],
-        unmet: &mut Vec<UnmetNeed>,
-    ) {
-        for level in used {
-            if output.velocity.for_level(*level).is_none() {
-                unmet.push(UnmetNeed::NoVelocity {
-                    track_name: track_name.to_string(),
-                    level: *level,
-                });
-            }
-        }
     }
 
     fn check_cue(
@@ -289,30 +287,6 @@ impl StudioConfiguration {
     }
 }
 
-/// The accent levels a song's lines for `track_name` use above normal,
-/// from the marks of their sounding elements.
-fn accent_levels_used(song: &Song, track_name: &str) -> Vec<AccentLevel> {
-    let mut used: Vec<AccentLevel> = vec![AccentLevel::Normal];
-    for section in song.sections() {
-        for line in section.lines() {
-            if line.track_name() != track_name {
-                continue;
-            }
-            for line_element in line.elements() {
-                let level: AccentLevel = line_element.element().marks().accent();
-                // A sounding element with no contents takes them from a
-                // sample source: it sounds, so its accent level counts.
-                let sounds: bool = line_element.element().kind() == ElementKind::Sounding
-                    && !matches!(line_element.contents(), Some(ElementContents::Cue(_)));
-                if sounds && !used.contains(&level) {
-                    used.push(level);
-                }
-            }
-        }
-    }
-    used
-}
-
 /// What a song needs that a studio configuration does not give.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnmetNeed {
@@ -321,10 +295,6 @@ pub enum UnmetNeed {
     },
     NoChannel {
         track_name: String,
-    },
-    NoVelocity {
-        track_name: String,
-        level: AccentLevel,
     },
     NoDestination {
         destination_name: String,
@@ -352,18 +322,6 @@ impl fmt::Display for UnmetNeed {
                 "the studio gives track \"{track_name}\" no channel. Add channel 1 (or 1 to 16) \
                  after its port"
             ),
-            UnmetNeed::NoVelocity { track_name, level } => {
-                let word: &str = match level {
-                    AccentLevel::Normal => "normal",
-                    AccentLevel::Accent => "accent",
-                    AccentLevel::Marcato => "marcato",
-                };
-                write!(
-                    f,
-                    "the song plays {word} notes on \"{track_name}\", and the studio gives no \
-                     velocity for them. Add velocity {word} 100 (1 to 127) to the track"
-                )
-            }
             UnmetNeed::NoDestination {
                 destination_name,
                 cue_track_name,
@@ -466,9 +424,23 @@ mod tests {
 
     #[test]
     fn velocity_levels_answer_by_accent_level() {
+        // Normal 90 with an absolute accent of 105 and no marcato. Marcato
+        // and the soft marks are shares of the room (Song Notation, section
+        // 6): 3/4 of the way from 90 to 127 is 118, 3/8 of the way from 90
+        // down to 1 is 57, 3/4 of the way is 23.
         let levels: VelocityLevels = VelocityLevels::new(velocity(90), Some(velocity(105)), None);
-        assert_eq!(levels.for_level(AccentLevel::Normal), Some(velocity(90)));
-        assert_eq!(levels.for_level(AccentLevel::Accent), Some(velocity(105)));
-        assert_eq!(levels.for_level(AccentLevel::Marcato), None);
+        assert_eq!(levels.for_level(AccentLevel::Normal), velocity(90));
+        assert_eq!(levels.for_level(AccentLevel::Accent), velocity(105));
+        assert_eq!(levels.for_level(AccentLevel::Marcato), velocity(118));
+        assert_eq!(levels.for_level(AccentLevel::Soft), velocity(57));
+        assert_eq!(levels.for_level(AccentLevel::Softer), velocity(23));
+    }
+
+    #[test]
+    fn without_absolute_velocities_accent_is_three_eighths_of_the_room_above_normal() {
+        // Normal 64: 3/8 of the way to 127 is 88.
+        let levels: VelocityLevels = VelocityLevels::new(velocity(64), None, None);
+        assert_eq!(levels.for_level(AccentLevel::Accent), velocity(88));
+        assert_eq!(levels.for_level(AccentLevel::Marcato), velocity(111));
     }
 }

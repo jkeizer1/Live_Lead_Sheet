@@ -19,9 +19,9 @@ track "Bass"
   type mono_voice
   clef bass
 
-track "Cues"
-  type cue_control
-  cue "Start SQ-1"  destination "SQ-1"  start
+#track "Cues"
+#  type cue_control
+#  cue "Start SQ-1"  destination "SQ-1"  start
 
 section "Count-in"  count-in
   meter 4/4  tempo 140 beats/min
@@ -30,35 +30,34 @@ section "Count-in"  count-in
 # C – G – Am – F
 section "Verse"  repeat 1
   key C major  meter 4/4  tempo 140 beats/min
-  line "Beat"  | C4:q> / /> /           | / / / /             | C4 / / /       | / / / / |
 #                C                         G                  Am                 F
-  line "Keys"  | I:h /                  | V  /                |  vi /          | IV:w   |
+  line "Keys"  | I:h /                  | V  /                |  vi /          | IV:w                       |
   line "Bass"  | C2:h r:q G2            | G2 B2 D2 G2         | A2 C2 E2:h     | F3:q> A2 C3> E2:e B3       |
-  line "Cues"  | "Start SQ-1":w         | r                   |  r             |  r  |
+  line "Beat"  | C4:q> / /> /           | / / / /             | C4 / / /       | / / / / |
 
 # G – Am
 section "Verse"  repeat 2
   key C major  meter 4/4  tempo 140 beats/min
-  line "Beat"  | C4:q> / /> /           | / / / /             |
+
 #                G                        Am
-  line "Keys"  | V:h /                  | vi  /               | 
+  line "Keys"  | V:h> /                 | vi>>  /               | 
   line "Bass"  | G2:h  B2               | A2  /               |
-  line "Cues"  | "Start SQ-1":w         | r                   |
+  line "Beat"  | C4:q> / /> /           | / / / /             |
 #################
+
 # C – G – Am – F
 section "Verse"  repeat 1
   key C major  meter 4/4  tempo 140 beats/min
-  line "Beat"  | C4:q> / /> /           | / / / /             | C4 / / /       | / / / / |
 #                C                         G                  Am                 F
-  line "Keys"  | I:h /                  | V  /                |  vi /          | IV:w   |
+  line "Keys"  | I:h /                  | V  /                |  vi /          | IV:w                       |
   line "Bass"  | C2:h r:q G2            | G2 B2 D2 G2         | A2 C2 E2:h     | F3:q> A2 C3> E2:e B3       |
-  line "Cues"  | "Start SQ-1":w         | r                   |  r             |  r  |
+  line "Beat"  | C4:q> / /> /           | / / / /             | C4 / / /       | / / / / |
 
 # B7 – Dm
 section "Verse"  repeat 2
   key C major  meter 4/4  tempo 140 beats/min
-  line "Beat"  | C4:q> / /> /           | / / / /             |
 #                Baug                    Dm                 
   line "Keys"  | vii°:h /               | ii  /               | 
   line "Bass"  | B2:h  E2               | D2  F2              |
-  line "Cues"  | "Start SQ-1":w         | r                   |
+  line "Beat"  | C4:q> / /> /           | / / / /             |
+

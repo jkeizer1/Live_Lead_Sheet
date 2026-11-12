@@ -70,7 +70,8 @@ pub fn key(written: Key) -> String {
 pub fn marks(written: ElementMarks) -> String {
     let mut text: String = String::new();
     match written.accent() {
-        AccentLevel::Normal => {}
+        // `<` and `<<` change the velocity only: nothing is drawn.
+        AccentLevel::Normal | AccentLevel::Soft | AccentLevel::Softer => {}
         AccentLevel::Accent => text.push_str("->"),
         AccentLevel::Marcato => text.push_str("-^"),
     }

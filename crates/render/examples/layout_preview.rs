@@ -1,6 +1,5 @@
 //! Draws the spike frame's lines and glyphs on the CPU into a greyscale
-//! image, to check the layout without a window or GPU. The wheel's wedges
-//! are left out (its labels are drawn); brightness stands for
+//! image, to check the layout without a window or GPU. Brightness stands for
 //! colour.
 //!
 //! `cargo run --release -p render --example layout_preview -- [WIDTH HEIGHT] [hidden] [bar=N]`
@@ -15,10 +14,8 @@ use std::process::ExitCode;
 use render::glyph_atlas::GlyphAtlas;
 use render::glyph_instance::GlyphInstance;
 use render::line_instance::LineInstance;
-use render::spike_music::{SpikeChord, chord_at, spike_music};
+use render::spike_music::spike_music;
 use render::strip_layout::{BARS_IN_STRIP, StripGeometry, staff_control_label, strip_lines};
-use render::wheel_instance::WheelInstance;
-use render::wheel_layout::{wheel_labels, wheel_layout};
 
 /// The bar the playhead is in, unless `bar=N` says otherwise.
 const PREVIEW_BAR: usize = 2;
@@ -87,21 +84,6 @@ fn run() -> Result<(), String> {
     let mut glyphs: Vec<GlyphInstance> = Vec::new();
     spike_music(&geometry, &atlas, &mut lines, &mut glyphs).map_err(|e| e.to_string())?;
     staff_control_label(&geometry, &atlas, &mut glyphs).map_err(|e| e.to_string())?;
-    // The wheel follows the chord under the playhead, as in the app.
-    let current: Option<SpikeChord> = chord_at(playhead_fraction);
-    let wheel: WheelInstance =
-        wheel_layout(width, height, current.and_then(|chord| chord.degree), true);
-    let outside_key_chord: Option<&str> = match current {
-        Some(SpikeChord {
-            symbol,
-            degree: None,
-        }) => Some(symbol),
-        Some(SpikeChord {
-            degree: Some(_), ..
-        })
-        | None => None,
-    };
-    wheel_labels(&wheel, &atlas, outside_key_chord, &mut glyphs).map_err(|e| e.to_string())?;
 
     let mut image: Image = Image::new(width_pixels, height_pixels)?;
     for line in &lines {

@@ -1,6 +1,6 @@
 # Live Lead Sheet — Song Notation
 
-Revision 19 — 11 Nov 2026 (Jim's answers of 11 Nov 2026 written into sections 1 to 8; sample sources, the dynamics line, repeat signs and Euclidean rhythms added; section 9 holds only what is still open)
+Revision 21 — 11 Nov 2026 (Jim's decisions on Q29 to Q33 written into sections 3 to 7; crescendo and diminuendo decisions and a list of items to confirm added to section 8; section 9 holds only what is still open)
 
 **Status: draft for trial.** *Decided* marks what Jim has decided;
 everything else is a proposal to try with a working player. Every open
@@ -86,7 +86,7 @@ can start from the chords' roots. Its result is written into the song.
   work first; the uncoupled lines are what make this a modular sequencer
   and not one more notation program.
 - **Phrase dynamics on their own line** (11 Nov 2026): `pp`, `p`, `mf`,
-  `f`, `ff` and the crescendo and diminuendo wedges, written in rhythm
+  `f`, `ff` and the crescendo and diminuendo marks, written in rhythm
   notation and taken up by each sounding element (section 5, "Dynamics,
   in rhythm notation"). Marks on single notes stay in the note line.
 - **Every source line has its own play head** (11 Nov 2026). At first
@@ -206,8 +206,13 @@ A bar must add up exactly. Charleston is 1½ + ½ + 2 = 4 quarters, a full
   The steps fill the bar, as `fitBar(...)` does: in a 4/4 bar the 8 steps
   are eighth notes, and in a 3/4 bar the same 8 steps are fitted evenly
   into the bar. A hit is a sounding element one step long, and the other
-  steps are rests. *Decided (Jim, 11 Nov 2026); not yet built.* The name
-  `euclid` is the one used in discussion.
+  steps are rests. *Decided (Jim, 11 Nov 2026); not yet built.*
+  `euclid` only generates rhythm elements, so it is written where a
+  length is written. In a rhythm library entry it stands alone:
+  `| euclid(3,8) |`. In a song line it follows the colon:
+  `C2:euclid(3,8)` plays C2 on every hit (a coupled line), and
+  `:euclid(3,8)` takes what each hit plays from the track's
+  `sample_source` line (an uncoupled line).
 
 **Ties.** `~` joins an element to the one after it into a single note of
 the combined duration. It may stand before a barline (here in the rhythm
@@ -237,15 +242,18 @@ letter, the dots and `r`), and before a tie.
 They apply to a sounding element (a fermata may also stand on a rest). Each
 mark changes only the element it is written after. The spellings are
 decided (Jim, 11 Nov 2026). `>>` is called marcato, the term of standard
-rudiments ("strong" is not a musical term), and `<` and `<<` were added
-for soft notes.
+rudiments ("strong" is not a musical term). `<` and `<<` are the same
+kind of mark in the other direction: the note is sent at a lower
+velocity, and that is all they do. They have no name of their own and no
+sign on the staff, since print has no articulation sign for one soft
+note. *Decided (Jim, 11 Nov 2026).*
 
 | Mark | Meaning | In the MIDI | On the staff |
 |---|---|---|---|
 | `>` | accent | velocity above the track's normal velocity, or the track's `accent` velocity if the studio gives one | accent sign |
 | `>>` | marcato | velocity further above normal, or the track's `marcato` velocity if the studio gives one | marcato sign |
-| `<` | soft | velocity below the track's normal velocity | not decided |
-| `<<` | very soft | velocity further below normal | not decided |
+| `<` | a softer note | velocity below the track's normal velocity | nothing |
+| `<<` | a still softer note | velocity further below normal | nothing |
 | `'` | staccato | sounds for half its written duration | dot |
 | `_` | legato: joined to the next note | the next note on is sent before this note's note off, so the two overlap; a mono receiver set to legato keeps its gate high | slur |
 | `^` | fermata | nothing in V1 | fermata sign |
@@ -465,8 +473,8 @@ Attributes of a voice track:
   (treble and bass braced, for chords that run well below middle C). The
   composer composes in the clef; the music stays on the staff and not on
   ledger lines. The rhythm line always uses the percussion clef (EFS-1.5).
-- `lead` — exactly one voice track carries it: its chords drive the key
-  wheel and the chord symbols (EFS-3.7). When the lead track has several
+- `lead` — exactly one voice track carries it: it is the song's
+  harmony track, and the chord symbols show its chords. When the lead track has several
   voice layers, the chords are read from voice layer 1 (proposed; nothing
   reads chord symbols yet).
 - `voice_layer n "Name"` — optional, one line per name: a name for one of
@@ -480,8 +488,9 @@ Attributes of a voice track:
 - **Octave annotations.** `+8va` and `-8va` move what follows one octave
   up or down from the clef's octave. One may be written at the start of
   any bar, most often at the start of a section, on any track with notes
-  or chords, and it stays in effect until otherwise stated. The register
-  of a device is a different matter, set by `octave_offset` in the studio
+  or chords, and it stays in effect until it is changed. `loco`, the
+  word print uses, returns to the clef's octave. The register of a
+  device is a different matter, set by `octave_offset` in the studio
   configuration (section 6). *Decided (Jim, 11 Nov 2026); not yet built.*
 - `instrument` — for `musician_voice`: a label, typed freely at the
   musician's discretion. The clef follows standard notation; Appendix C
@@ -709,15 +718,20 @@ normal from the fourth.
 - **A level holds until the next mark,** as in print. There is no "back
   to normal" sign: the normal level is written, `mf`.
 - **A song with no dynamics line plays at `mf` throughout.**
+- **The levels are relative to `mf`.** `pp` and `p` lie below the
+  track's normal velocity and `f` and `ff` above it, so all four shift
+  when the studio gives the track another `velocity normal`. *Decided
+  (Jim, 11 Nov 2026).*
 - **Each sounding element takes its loudness from the dynamics line** at
   the moment it starts, as a rhythm takes its chord from a sample
-  source. Inside a wedge the level is part-way between the mark before
-  the wedge and the mark after it.
-- **`<` and `>` have two homes.** On a dynamics line they are the wedges.
+  source. Inside a crescendo or diminuendo the level moves in a straight
+  line in time, from the level before it to the level written after it
+  (decisions in section 8, "Decided for the marks and the dynamics line").
+- **`<` and `>` have two homes.** On a dynamics line they are the crescendo and the diminuendo.
   After a note in a note line they are the marks for a single note.
 - **On the screen** the line is drawn above the staff, or its highest
   ledger line, and below the chords. The player shows the letters in
-  italics and the wedges as elongated symbols.
+  italics and the crescendo and diminuendo as elongated symbols.
 - **`mp`** (mezzo-piano) is left out until it is wanted.
 - **One play head at first.** The dynamics line moves with the track.
   Like a sample source, it can later have its own play head and tempo,
@@ -775,8 +789,8 @@ Jim, 11 Nov 2026*).
 
 ### What the song does not say
 
-Chord symbols and the key wheel read the chords carried by the lead track
-(EFS-3.7), at the element where each chord starts. A bass line is free: it
+Chord symbols read the chords carried by the lead track (the harmony
+track), at the element where each chord starts. A bass line is free: it
 plays the roots in the example, but nothing requires it.
 
 **Not in the song at all:** engraving choices, such as rests left out
@@ -842,22 +856,42 @@ destination "SQ-1"
   for the marks the song uses. *Decided (Jim, 11 Nov 2026).* Built on
   11 Nov 2026: `normal` is 64 when not written, the word for `>>` is
   `marcato`, and `strong` is refused with a message saying to write
-  `marcato`. Not yet built: the relative levels, so a studio block must
-  still give an `accent` or `marcato` velocity when the song uses that
-  mark.
+  `marcato`. The relative levels are built too (see below): a studio
+  block no longer has to give an `accent` or `marcato` velocity.
   - `normal` is the track's normal level, which Jim called
     `volume_normal`. When it is not written it is 64, the value the MIDI
     1.0 specification gives for a mezzo-forte note.
   - The marks `<<`, `<`, `>` and `>>` are relative to the normal level,
     unless the block gives an absolute velocity for a mark (`accent` for
-    `>`, `marcato` for `>>`).
+    `>`, `marcato` for `>>`). `<` and `<<` have no word here and are
+    always relative (*decided, Jim, 11 Nov 2026*).
+  - The levels `pp`, `p`, `f` and `ff` of a dynamics line are relative to
+    the normal level too, and shift with it.
+  - **The numbers are a share of the room left** (*decided, Jim,
+    11 Nov 2026; built for the marks on a note; the levels of the
+    `dynamics` line are not yet built*). A MIDI velocity runs from 1 to 127.
+    `f` is 3/8 of the way from the normal velocity to 127, and `ff` is
+    3/4 of the way. `p` is 3/8 of the way from the normal velocity to 1,
+    and `pp` is 3/4 of the way. A mark on a single note does the same
+    from the level in force at that note: 3/8 of the way for `<` and
+    `>`, 3/4 for `<<` and `>>`. The result is rounded to the nearest
+    whole velocity. Nothing reaches the limit, so `f` and `ff` stay
+    apart on a track whose normal velocity is high.
+
+    | Normal velocity | `pp` | `p` | `mf` | `f` | `ff` |
+    |---|---|---|---|---|---|
+    | 64 | 17 | 40 | 64 | 88 | 111 |
+    | 90 | 23 | 57 | 90 | 104 | 118 |
+    | 100 | 26 | 63 | 100 | 110 | 120 |
+
+    Worked for a normal velocity of 100: the room above is 127 − 100 =
+    27, so `f` is 100 + 3/8 × 27 = 110 and `ff` is 100 + 3/4 × 27 = 120;
+    the room below is 100 − 1 = 99, so `p` is 100 − 3/8 × 99 = 63 and
+    `pp` is 100 − 3/4 × 99 = 26. All of these are MIDI velocities.
   - **No loudness curve is applied.** The song and the player send
-    velocities. How a velocity becomes loudness is the receiving
-    device's job: the MIDI 1.0 specification leaves it to the receiver
-    and says the response should preferably be exponential. A device is
-    tuned to the incoming velocities; in the modular that is the choice
-    of a linear or an exponential VCA, by taste, and it is not the FH-2's
-    job. A device that sounds quiet at 64 gets a higher `normal` here.
+    velocities, and the studio configuration says nothing about how a
+    device turns a velocity into loudness. That is the receiving
+    device's business. *Decided (Jim, 11 Nov 2026).*
 - **Device timing**, optional and omitted when not needed: `retrigger_gap`
   (a stopgap that raises the 5 ms lead of a note off before the next note
   on above its floor; Q11) and `settle_delay` (time for a quantizer's voltage to settle after
@@ -922,7 +956,16 @@ progression "ii-V"
 **Apply** takes a progression, a rhythm, a bar range and a track, and
 returns the track's line for those bars. In the editor it is a drag; in
 the first tests it is a function run from the terminal. Its rules are
-conveniences, and everything it writes can be changed by hand:
+conveniences, and everything it writes can be changed by hand.
+
+Apply writes a coupled line: each element carries its chord (`IV:e`),
+as before there were sample sources. A coupled line holds its chords
+itself and is never sampled from a source. Only an element with nothing
+before the colon (`:e`) looks at the track's `sample_source` line, and
+such uncoupled lines are written by hand, with nothing for apply to
+place. *Decided (Jim, 11 Nov 2026).*
+
+The rules:
 
 1. The bar's first chord goes on the bar's first sounding element, and the
    later elements carry it on. For `| qr h q |` and the chord `ii7` the
@@ -988,16 +1031,51 @@ are part of this program's first version, not a later version.
 **Decided on 11 Nov 2026 and not yet in the code:**
 
 - The `dynamics` line.
-- The marks `<` and `<<`, and velocities for the marks that are relative
-  to the normal level.
-- Legato sent as overlapping notes; one note for the same pitch in two
-  voice layers.
+- Legato sent as overlapping notes (partly built: the overlap exists and
+  the sample source follow uses it; still to do: the `_` mark, and one
+  note for the same pitch in two voice layers).
 - `euclid(hits,steps)`.
 - Repeat signs `|%n ... %|`.
-- Octave annotations `+8va` and `-8va`; the `home_octave` setting
-  removed.
+- Octave annotations `+8va`, `-8va` and `loco`; the `home_octave`
+  setting removed.
 - Inversions, `[1stInversion]` and so on.
 - `grouping` on a meter.
+
+**Decided for the marks and the dynamics line** (*Jim, 11 Nov 2026*). These
+fill what the sections above leave unsaid. The words are musical:
+**crescendo** is `<` on a dynamics line and **diminuendo** is `>`; the
+word "wedge" is not used for them.
+
+- **Straight line.** A crescendo or diminuendo moves the level in a
+  straight line in time over its written length, from the level before
+  it to the level written after it. A sounding element takes the level at
+  the moment it starts, rounded to the nearest whole velocity. Example:
+  halfway through a crescendo from `p` (40) to `f` (88) at a normal
+  velocity of 64, the level is 64.
+- **The author writes the target.** A crescendo or diminuendo ends where
+  the next level mark begins (`pp`, `p`, `mf`, `f`, `ff`), which may be
+  bars later (a crescendo over two bars is `<:w` for two bars, then the
+  target level). A crescendo or diminuendo with no level written after
+  it, or followed directly by another crescendo or diminuendo, is refused
+  with a message that says to write the target level.
+- **No level before it.** A crescendo or diminuendo at the start of a
+  line starts from `mf`, the normal velocity.
+- **A mark on a note inside a crescendo or diminuendo** (`>`, `>>`, `<`,
+  `<<`) is measured from the level the line has reached at that note.
+- **A studio `accent` or `marcato` velocity is absolute.** It overrides
+  whatever level is in force, even under `p`.
+
+**To confirm before the item is built:**
+
+- The code names for the accent levels of `<` and `<<`: built as `Soft`
+  and `Softer`.
+- Whether `:euclid(3,8)` may carry marks like any other element:
+  proposed yes.
+
+**To check against the Co-work decisions** (choices Claude made when it
+built `sample_source`; neither is stated above): a `sample_source` line
+may not hold a rest, and a source pairs with the rhythm line of its own
+voice layer (`voice_layer 2 sample_source` with the layer 2 rhythm line).
 
 **Built:**
 
@@ -1024,6 +1102,24 @@ are part of this program's first version, not a later version.
   written (11 Nov 2026; `crates/song_text/src/studio_file.rs`,
   `crates/player/src/studio_configuration.rs`).
 
+- Relative velocities and the marks `<` and `<<` (11 Nov 2026): a mark
+  on a note moves the level in force 3/8 or 3/4 of the way toward 127 or
+  1, rounded to the nearest whole velocity; studio `accent` and
+  `marcato` are absolute overrides; `<` and `<<` draw nothing
+  (`crates/vocabulary/src/midi_values.rs`,
+  `crates/player/src/studio_configuration.rs`,
+  `crates/song_text/src/rhythm_bar.rs`). The levels of the `dynamics`
+  line are not built.
+
+**Tested by Jim on the real studio (Nov 2026)**, recorded in
+`crates/song_text/examples/song_play_test/explainer.md`: the Demo's
+count-in and beat velocities (127 and 80 on the studio's accent and
+normal), the Keys and the Bass, checked on MIDI Monitor and by ear. The
+soft marks `<` and `<<` were checked on the Beat track with normal 80:
+beat 1 sent velocity 50 and 21 (the player's log and the receiver's MIDI
+log agree), the unmarked beats 80. The sample-source song is built and
+unit-tested but not yet recorded as heard.
+
 **Where the code lives.** The vocabulary crate holds the musical types
 (`RhythmPattern`, `VoiceLine`, `Song` and their parts). The studio
 configuration is not music, and A-1 keeps devices out of the vocabulary,
@@ -1042,11 +1138,12 @@ When a question is decided,
 its block is replaced by the decision, written into sections 1 to 8.
 
 Each block gives the question, its context, why it matters, the options
-(with the recommendation that will be used unless Jim says otherwise),
+(with a recommendation, which is not used until Jim confirms it),
 and where and when it was raised.
 
-On 11 Nov 2026 Jim answered Q4, Q13 to Q17, Q20, Q21 and Q23 to Q27.
-Those decisions are now in sections 1 to 8, marked "11 Nov 2026".
+On 11 Nov 2026 Jim answered Q4, Q13 to Q17, Q20, Q21, Q23 to Q27 and
+Q29 to Q33. Those decisions are now in sections 1 to 8, marked
+"11 Nov 2026".
 
 **OPEN_QUESTION Q19:** How does a song drive a queued device such as the
 Korg SQ-1? *Required, not yet designed.*
@@ -1087,99 +1184,52 @@ Korg SQ-1? *Required, not yet designed.*
   - what it does when the section repeats or the next section starts:
     start again, or carry on from where it is;
   - how a gradual change of its tempo is written.
-- Options: none chosen. Jim will choose after hearing step 2 on real
-  devices; these rules are easier to choose by ear than on paper.
+- Options: none chosen. Jim takes this up after every item of the list
+  "Decided on 11 Nov 2026 and not yet in the code" in section 8 is
+  built; shifting play heads are explored then (Jim, 11 Nov 2026).
 - Raised: Jim, 11 Nov 2026.
 
-**OPEN_QUESTION Q29:** Which velocities do the levels and the marks send,
-and how do they combine?
-- Context: decided on 11 Nov 2026: the normal level `mf` is velocity 64,
-  or the track's `velocity normal`; the levels `pp`, `p`, `f`, `ff` of a
-  dynamics line and the marks `<<`, `<`, `>`, `>>` on single notes are
-  placed around it, evenly spaced by default; a track's studio block may
-  give absolute velocities. Not decided: the numbers, how the studio
-  block spells a velocity for `pp`, `p`, `f` and `ff`, and what a mark
-  on a single note does while a level other than `mf` is in force (a
-  `>` on a note during `p`).
-- Why it matters: the dynamics line cannot be built without it.
-- Options:
-  - (a) A mark on a note is a step up or down from the level in force.
-    Proposed default velocities: `pp` 16, `p` 40, `mf` 64, `f` 88,
-    `ff` 112 (24 apart); `<` and `>` move a note 12 down or up, `<<`
-    and `>>` 24, kept within 1 to 127.
-  - (b) A mark on a note is an absolute velocity and overrides the level
-    in force.
-- Recommendation, used unless Jim says otherwise: (a). An accent in
-  print means louder than the notes around it.
-- Raised: Claude, 11 Nov 2026.
-
-**OPEN_QUESTION Q30:** What do the soft marks `<` and `<<` on a single
-note draw on the staff, and what are they called?
-- Context: `>` draws the accent sign and `>>` the marcato sign. Jim
-  decided on 11 Nov 2026 that `<` and `<<` make a single note softer.
-  Standard rudiments has no articulation sign for one soft note.
-  Percussion notation has a matching pair, called anti-accents: a note
-  head in parentheses is significantly softer than the notes around it
-  (the ghost note), and a note head in square brackets is much softer.
-- Why it matters: the mark must read correctly on the staff and on an
-  exported score, and the studio file needs a word for each level, as
-  `accent` and `marcato` are the words for `>` and `>>`.
-- Options:
-  - (a) `<` draws the note head in parentheses and `<<` in square
-    brackets; the studio words are `soft` and `very_soft`.
-  - (b) Nothing is drawn; the marks only change the velocity.
-- Recommendation, used unless Jim says otherwise: (a).
-- Raised: Claude, 11 Nov 2026.
-
-**OPEN_QUESTION Q31:** How is the return to the clef's octave written
-after `+8va` or `-8va`?
-- Context: Jim decided on 11 Nov 2026 that an octave annotation stays in
-  effect "until otherwise stated". The way to state otherwise has no
-  spelling yet. In print the word `loco` ("in place") cancels an octave
-  sign.
-- Why it matters: without it a passage cannot return to its written
-  octave inside a section.
-- Options:
-  - (a) `loco`, as in print.
-  - (b) The opposite annotation cancels: `-8va` after `+8va` returns to
-    the clef's octave.
-- Recommendation, used unless Jim says otherwise: (a).
-- Raised: Claude, 11 Nov 2026.
-
-**OPEN_QUESTION Q32:** Where may `euclid(hits,steps)` be written, and
-what does a hit play in a song line?
-- Context: Jim decided on 11 Nov 2026 to build Euclidean rhythms with
-  the usual two parameters, the steps filling the bar. In a rhythm
-  library entry a hit is simply a sounding element. In a song line a
-  sounding element also needs something to play. The name `euclid` was
-  used in discussion and has not been confirmed.
-- Why it matters: it fixes the spelling and what the loader accepts.
-- Options:
-  - (a) In rhythm library entries and in uncoupled rhythm lines, where
-    each hit takes what it plays from the track's `sample_source` line.
-  - (b) Also in coupled lines, with what the hits play written first,
-    for example `C2:euclid(3,8)`.
-- Recommendation, used unless Jim says otherwise: (a), with the name
-  `euclid`.
-- Raised: Claude, 11 Nov 2026.
-
-**OPEN_QUESTION Q33:** What does apply write, now that there are sample
-sources?
-- Context: section 7, "The libraries (`.library`), and apply". Apply
-  takes a progression and a rhythm and writes a coupled line, one chord
-  on each element. Since 11 Nov 2026 a progression carries no timing and
-  a track can be written uncoupled: the progression's bars are already a
-  `sample_source` line, and the rhythm is already a rhythm line, with
-  nothing to place. In a coupled line an element carries one chord, so a
-  chord that begins part-way through a held element has no place there;
-  rule 4 of apply reports chords that could not be placed.
-- Why it matters: it decides what `apply_test` builds.
-- Options:
-  - (a) Apply writes coupled lines, as now.
-  - (b) Apply writes a `sample_source` line and a rhythm line.
-  - (c) The musician chooses each time.
-- Recommendation: none; this needs Jim.
-- Raised: Claude, 11 Nov 2026.
+**OPEN_QUESTION Q34:** How does a track send pitch to a device that
+gates again on every note on, so that a change of source note inside a
+sounding element is heard as legato?
+- Context: legato is built as overlapping notes (the new note on, then
+  the old note off). On 12 Nov 2026 Jim heard the Disting NT gate again on
+  every change of the sample source, so on that receiver the overlap is
+  not legato. MIDI 1.0 cannot change the pitch of a sounding note without
+  a note on, and the receiver decides whether a note on while another is
+  held fires a gate. Pitch bend would only slide or offset the pitch and
+  depends on the receiver's bend range, so Jim does not want it.
+- Why it matters: with track and hold (section 5, "Sample sources and
+  uncoupled lines") the rhythm must drive the gates and the source must
+  drive only the pitch. The `_` mark, a tie, and one note for the same
+  pitch in two voice layers need the same thing.
+- Direction (Jim, 12 Nov 2026), not yet decided: carry the pitch on
+  control change (CC) numbers, and use the note on and note off for the
+  gate only, as a modular system keeps pitch and gate apart.
+  - The studio says per track that its pitch goes on CCs; the song
+    does not change.
+  - CC numbers start at 60 (a mono track uses 60, a chord up to four,
+    60 to 63), clear of Jim's controller, which uses up to 52.
+  - A chord with fewer than four notes sends the root on the CCs it does
+    not use.
+  - A per-track delay in the studio, about plus or minus 20 ms, between
+    the CC and the note on, so the gate never opens on the previous
+    pitch (which direction is positive is not fixed).
+  - One CC step is one semitone (the value is the MIDI note number).
+  - The note on still carries the element's first pitch, so a device that
+    listens only to notes plays the rhythm.
+- To decide: how each receiver turns the CC into pitch (the Expert
+  Sleepers NT, EX and FH-2 mappings, which Jim is checking); the CC to
+  1 V/octave conversion an analog oscillator needs somewhere in the path
+  (exactly one semitone per CC step, no slew); and whether the delay is
+  one setting per track or one per CC.
+- Options: Jim's direction above. The receiver test (steps the pitch CC
+  one semitone at a time and is checked on a tuner or quantizer) comes
+  before the build. A plugin for the Disting NT that makes legato from
+  overlapping notes is a possible alternative for that receiver. A
+  measurement of overlapping notes, CC 68 and CC 126 was proposed and not
+  taken up (Jim, 12 Nov 2026).
+- Raised: Jim, 12 Nov 2026; recorded 12 Nov 2026 16:18 (local time).
 
 ### Deferred (Jim, 11 Nov 2026)
 

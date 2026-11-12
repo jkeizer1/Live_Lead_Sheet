@@ -415,13 +415,7 @@ mod tests {
         assert_eq!(bass.channel.unwrap().number(), 2);
         assert_eq!(bass.octave_offset_octaves, -1);
         assert_eq!(bass.retrigger_gap, Duration::from_ms(2));
-        assert_eq!(
-            bass.velocity
-                .for_level(AccentLevel::Accent)
-                .unwrap()
-                .value(),
-            115
-        );
+        assert_eq!(bass.velocity.for_level(AccentLevel::Accent).value(), 115);
         assert!(studio.output_of("Clock").unwrap().channel.is_none());
         assert_eq!(
             studio
@@ -516,7 +510,7 @@ mod tests {
     }
 
     #[test]
-    fn a_mark_the_song_uses_needs_its_velocity() {
+    fn a_mark_the_song_uses_needs_no_studio_velocity() {
         let song = crate::song_file::parse_song(
             "song_test_count_in_and_verse.song",
             &include_str!("../../../songs/song_test_count_in_and_verse.song")
@@ -530,7 +524,8 @@ mod tests {
             .iter()
             .map(ToString::to_string)
             .collect();
-        assert_eq!(unmet.len(), 1, "{unmet:?}");
-        assert!(unmet[0].contains("marcato notes on \"Bass\""));
+        // The marcato is relative to the track's normal velocity when the
+        // studio gives no marcato velocity.
+        assert!(unmet.is_empty(), "{unmet:?}");
     }
 }

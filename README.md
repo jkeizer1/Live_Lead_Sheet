@@ -17,7 +17,6 @@ looping).
 
 | Control | Does |
 |---|---|
-| C | Wheel coloured by function, on and off |
 | Click the staff control | Hide or show the pitch staff (EFS-1.5) |
 | Esc | Quit |
 

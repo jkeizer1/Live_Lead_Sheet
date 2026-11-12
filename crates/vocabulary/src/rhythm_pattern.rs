@@ -22,6 +22,12 @@ pub enum AccentLevel {
     Accent,
     /// `>>`, marcato.
     Marcato,
+    /// `<`, a softer note: a lower velocity and nothing else (Song
+    /// Notation, section 3). It has no name in the notation and no sign on
+    /// the staff.
+    Soft,
+    /// `<<`, a still softer note.
+    Softer,
 }
 
 /// The marks an element carries (Song Notation, section 3).

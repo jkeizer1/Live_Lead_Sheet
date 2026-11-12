@@ -27,5 +27,5 @@ track "Bass"
   velocity normal 100  accent 115
   retrigger_gap 2 ms
 
-destination "SQ-1"
-  port "To SQ-1"  channel 1
+#destination "SQ-1"
+#  port "To SQ-1"  channel 1

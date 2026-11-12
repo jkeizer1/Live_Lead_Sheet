@@ -187,6 +187,10 @@ bright white fields or dropdowns.
 - Explanations target Jim's background: C, older C++, Java, ABAP,
   enterprise integration and architecture. He is learning Rust — explain
   Rust-specific idioms the first time they appear.
+- Any open question to be settled shall be called out with an OPEN_QUESTION tag:
+  this allows one to use the Linux_MD_Reader program to scan all documents at 
+  once in the project and find open questions. Each OPEN_QUESTION shall be date
+  time stamped.  Closing decisions will be captured in place relative to the question.
 
 ## Commands
 
