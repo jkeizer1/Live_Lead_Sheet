@@ -401,9 +401,20 @@ fn print_line(track: &Track, line: &Line, several: bool, section: &Section) {
                 );
             }
         }
+        LineRole::SampleSource(number) => {
+            println!(
+                "  {}, sample source of voice layer {} (each bar shared evenly):",
+                line.track_name(),
+                number.value()
+            );
+        }
         LineRole::VoiceLayer(_) | LineRole::CuePlacement => {
             println!("  {}:", line.track_name());
         }
+    }
+    if matches!(line.role(), LineRole::SampleSource(_)) {
+        print_source_elements(line, section);
+        return;
     }
     for line_element in line.elements() {
         let element = line_element.element();
@@ -416,6 +427,31 @@ fn print_line(track: &Track, line: &Line, several: bool, section: &Section) {
         println!(
             "    {place}: {length}{}{}",
             describe_marks(line_element),
+            describe_contents(line_element.contents())
+        );
+    }
+}
+
+/// A sample source's elements by their share of the bar ("part 2 of 3"):
+/// a third of a bar is not on a beat, so a beat is not named.
+fn print_source_elements(line: &Line, section: &Section) {
+    let bar_ticks: u64 = section.time_signature().bar_length().ticks();
+    let elements: &[LineElement] = line.elements();
+    for (index, line_element) in elements.iter().enumerate() {
+        let bar_index: u64 = line_element.element().start().ticks() / bar_ticks;
+        let in_bar: Vec<&LineElement> = elements
+            .iter()
+            .filter(|other: &&LineElement| other.element().start().ticks() / bar_ticks == bar_index)
+            .collect();
+        let part: usize = elements[..index]
+            .iter()
+            .filter(|other: &&LineElement| other.element().start().ticks() / bar_ticks == bar_index)
+            .count()
+            + 1;
+        println!(
+            "    bar {}, part {part} of {}{}",
+            bar_index + 1,
+            in_bar.len(),
             describe_contents(line_element.contents())
         );
     }
@@ -443,7 +479,9 @@ fn describe_marks(line_element: &LineElement) -> String {
 
 fn describe_contents(contents: Option<&ElementContents>) -> String {
     match contents {
-        None => String::new(),
+        // A sounding element with no contents takes them from the track's
+        // sample source.
+        None => String::from(" — plays what the sample source holds"),
         Some(ElementContents::Chord(chord)) => format!(" — chord {chord}"),
         Some(ElementContents::Notes(notes)) if notes.len() == 1 => format!(" — note {}", notes[0]),
         Some(ElementContents::Notes(notes)) => format!(" — notes {}", join_pitches(notes)),

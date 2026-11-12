@@ -1,0 +1,28 @@
+# Sample source: the chords and bass notes are written on their own lines,
+# the rhythm on the lines below. Each rhythm element plays what its source
+# holds when it starts, and follows the source if it changes while it sounds.
+# Play it with the Demo studio:
+#   cargo run --release -p song_text --example song_play_test -- \
+#     songs/Sample_source.song songs/Demo.studio
+song "Sample source"
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+track "Bass"
+  type mono_voice
+  clef bass
+
+section "Chords and bass from sources"  repeat 2
+  key C major  meter 4/4  tempo 120 beats/min
+  # Bar 2 shares its bar between IV, IV and V (a third of a bar each), so the
+  # half note on beat 3 starts on the second IV and moves to V.
+  line "Keys"  sample_source  | I | IV IV V | vi | V |
+  line "Keys"                 | :h :q :q | :h :h | :q :q :q :q | :w |
+  line "Bass"  sample_source  | C2 | F2 F2 G2 | A2 | G2 |
+  line "Bass"                 | :q :q :q :q | :q :q :q :q | :h :h | :q r :h |

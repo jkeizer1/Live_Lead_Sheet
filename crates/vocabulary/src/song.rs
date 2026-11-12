@@ -198,6 +198,11 @@ pub enum LineRole {
     VoiceLayer(VoiceLayerNumber),
     /// The line of a cue control track, placing its cues.
     CuePlacement,
+    /// The chords or notes a voice layer's rhythm line takes what it plays
+    /// from (Song Notation, section 5, "Sample sources and uncoupled
+    /// lines"). Its elements carry contents and no lengths of their own: the
+    /// elements of a bar share the bar evenly. It plays nothing itself.
+    SampleSource(VoiceLayerNumber),
 }
 
 impl fmt::Display for LineRole {
@@ -205,6 +210,9 @@ impl fmt::Display for LineRole {
         match self {
             LineRole::VoiceLayer(number) => write!(f, "voice layer {}", number.value()),
             LineRole::CuePlacement => write!(f, "cue placement"),
+            LineRole::SampleSource(number) => {
+                write!(f, "sample source of voice layer {}", number.value())
+            }
         }
     }
 }
@@ -405,12 +413,24 @@ impl Line {
             &rhythm,
         )
         .map_err(SongError::Rhythm)?;
+        check_role(track, role)?;
         for line_element in &elements {
-            if line_element.element().kind() == ElementKind::Sounding {
-                check_contents(track, line_element)?;
+            match (role, line_element.element().kind()) {
+                (LineRole::SampleSource(_), ElementKind::Rest) => {
+                    return Err(SongError::RestInSampleSource {
+                        track_name: track.name().to_string(),
+                        start_ticks: line_element.element().start().ticks(),
+                    });
+                }
+                // A rhythm element with no contents takes them from the
+                // sample source; the section checks that one exists.
+                (LineRole::VoiceLayer(_), ElementKind::Sounding)
+                    if line_element.contents().is_none()
+                        && matches!(track.kind(), TrackKind::Voice { .. }) => {}
+                (_, ElementKind::Sounding) => check_contents(track, line_element)?,
+                (_, ElementKind::Rest) => {}
             }
         }
-        check_role(track, role)?;
         Ok(Line {
             track_name: track.name().to_string(),
             role,
@@ -453,12 +473,12 @@ fn check_role(track: &Track, role: LineRole) -> Result<(), SongError> {
                 voice: VoiceKind::Mono,
                 ..
             },
-            LineRole::VoiceLayer(number),
+            LineRole::VoiceLayer(number) | LineRole::SampleSource(number),
         ) if number != VoiceLayerNumber::FIRST => Err(SongError::VoiceLayerOnMonoVoice {
             track_name: track.name().to_string(),
             number: number.value(),
         }),
-        (TrackKind::Voice { .. }, LineRole::VoiceLayer(_))
+        (TrackKind::Voice { .. }, LineRole::VoiceLayer(_) | LineRole::SampleSource(_))
         | (TrackKind::CueControl { .. }, LineRole::CuePlacement) => Ok(()),
         (TrackKind::Voice { .. } | TrackKind::CueControl { .. }, _) => {
             Err(SongError::RoleNotForTrack {
@@ -579,6 +599,7 @@ impl Section {
                 });
             }
         }
+        check_sample_sources(name, &lines)?;
         if count_in && bar_count > MAX_COUNT_IN_BARS {
             return Err(SongError::CountInTooLong {
                 section_name: name.to_string(),
@@ -641,6 +662,49 @@ impl Section {
     pub fn bar_count(&self) -> u32 {
         self.lines.first().map_or(0, Line::bar_count)
     }
+}
+
+/// Each sample source needs the rhythm line of its voice layer, and each
+/// rhythm element that writes no contents needs a sample source: a source
+/// plays nothing alone, and a rhythm with nothing to take is a mistake the
+/// song says so (Song Notation, section 5).
+fn check_sample_sources(section_name: &str, lines: &[Line]) -> Result<(), SongError> {
+    for line in lines {
+        match line.role() {
+            LineRole::SampleSource(number) => {
+                let has_rhythm: bool = lines.iter().any(|other: &Line| {
+                    other.track_name() == line.track_name()
+                        && other.role() == LineRole::VoiceLayer(number)
+                });
+                if !has_rhythm {
+                    return Err(SongError::SampleSourceWithoutRhythm {
+                        section_name: section_name.to_string(),
+                        track_name: line.track_name().to_string(),
+                        number: number.value(),
+                    });
+                }
+            }
+            LineRole::VoiceLayer(number) => {
+                let takes_from_source: bool = line.elements().iter().any(|line_element| {
+                    line_element.element().kind() == ElementKind::Sounding
+                        && line_element.contents().is_none()
+                });
+                let has_source: bool = lines.iter().any(|other: &Line| {
+                    other.track_name() == line.track_name()
+                        && other.role() == LineRole::SampleSource(number)
+                });
+                if takes_from_source && !has_source {
+                    return Err(SongError::RhythmWithoutSampleSource {
+                        section_name: section_name.to_string(),
+                        track_name: line.track_name().to_string(),
+                        number: number.value(),
+                    });
+                }
+            }
+            LineRole::CuePlacement => {}
+        }
+    }
+    Ok(())
 }
 
 fn line_has_chord(line: &Line) -> bool {
@@ -824,6 +888,20 @@ pub enum SongError {
         track_name: String,
         cue_name: String,
     },
+    RestInSampleSource {
+        track_name: String,
+        start_ticks: u64,
+    },
+    SampleSourceWithoutRhythm {
+        section_name: String,
+        track_name: String,
+        number: u8,
+    },
+    RhythmWithoutSampleSource {
+        section_name: String,
+        track_name: String,
+        number: u8,
+    },
     Rhythm(RhythmPatternError),
 }
 
@@ -896,6 +974,12 @@ impl fmt::Display for SongError {
                     f,
                     "section {section_name:?} has two lines for {track_name:?}. Keep one"
                 ),
+                LineRole::SampleSource(number) => write!(
+                    f,
+                    "section {section_name:?} has two sample_source lines for {track_name:?} \
+                     voice layer {}. Keep one",
+                    number.value()
+                ),
             },
             SongError::VoiceLayerZero => write!(
                 f,
@@ -967,6 +1051,32 @@ impl fmt::Display for SongError {
                 f,
                 "track {track_name:?} has no cue named {cue_name:?}. Define it under the \
                  track with: cue \"{cue_name}\" destination \"...\" start"
+            ),
+            SongError::RestInSampleSource { track_name, .. } => write!(
+                f,
+                "track {track_name:?}: a sample_source line holds chords or notes, not rests. \
+                 Put the rests on the rhythm line below it, e.g. r:q"
+            ),
+            SongError::SampleSourceWithoutRhythm {
+                section_name,
+                track_name,
+                number,
+            } => write!(
+                f,
+                "section {section_name:?} has a sample_source line for {track_name:?} voice \
+                 layer {number} and no rhythm line for it. Add line {track_name:?} with the \
+                 lengths, e.g. | :q :q :q :q |"
+            ),
+            SongError::RhythmWithoutSampleSource {
+                section_name,
+                track_name,
+                number,
+            } => write!(
+                f,
+                "section {section_name:?}: {track_name:?} voice layer {number} has an element \
+                 with nothing before its colon (e.g. :q), which takes what it plays from a \
+                 sample_source line, and the section has none for it. Add line {track_name:?} \
+                 sample_source | ... |, or write what the element plays, e.g. C4:q"
             ),
             SongError::Rhythm(error) => write!(f, "{error}"),
         }
@@ -1096,14 +1206,63 @@ mod tests {
         assert!(matches!(error, SongError::ContentsNotAllowed { .. }));
     }
 
+    fn quarters_of(contents: Option<&ElementContents>, kind: ElementKind) -> Vec<LineElement> {
+        (0..4)
+            .map(|index| quarter(index, kind, contents.cloned()))
+            .collect()
+    }
+
+    /// A voice element with no contents takes them from a sample source, so
+    /// the line accepts it and the section asks for the source.
     #[test]
-    fn a_sounding_element_on_a_voice_must_carry_something() {
-        let elements: Vec<LineElement> = (0..4)
-            .map(|index| quarter(index, ElementKind::Sounding, None))
-            .collect();
+    fn a_voice_element_with_no_contents_needs_a_sample_source_in_its_section() {
+        let rhythm: Line = Line::new(
+            &keys(),
+            layer_one(),
+            four_four(),
+            1,
+            quarters_of(None, ElementKind::Sounding),
+        )
+        .unwrap();
         assert!(matches!(
-            Line::new(&keys(), layer_one(), four_four(), 1, elements).unwrap_err(),
-            SongError::ElementWithoutContents { .. }
+            section_of(vec![rhythm.clone()]).unwrap_err(),
+            SongError::RhythmWithoutSampleSource { .. }
+        ));
+        let source: Line = Line::new(
+            &keys(),
+            LineRole::SampleSource(VoiceLayerNumber::FIRST),
+            four_four(),
+            1,
+            quarters_of(Some(&one_chord()), ElementKind::Sounding),
+        )
+        .unwrap();
+        assert!(section_of(vec![rhythm, source]).is_ok());
+    }
+
+    #[test]
+    fn a_sample_source_needs_its_rhythm_line_and_holds_no_rests() {
+        let source: Line = Line::new(
+            &keys(),
+            LineRole::SampleSource(VoiceLayerNumber::FIRST),
+            four_four(),
+            1,
+            quarters_of(Some(&one_chord()), ElementKind::Sounding),
+        )
+        .unwrap();
+        assert!(matches!(
+            section_of(vec![source]).unwrap_err(),
+            SongError::SampleSourceWithoutRhythm { .. }
+        ));
+        assert!(matches!(
+            Line::new(
+                &keys(),
+                LineRole::SampleSource(VoiceLayerNumber::FIRST),
+                four_four(),
+                1,
+                quarters_of(None, ElementKind::Rest),
+            )
+            .unwrap_err(),
+            SongError::RestInSampleSource { .. }
         ));
     }
 

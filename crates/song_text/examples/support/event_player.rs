@@ -187,7 +187,7 @@ fn send(
             note.value(),
             velocity.value(),
         ),
-        OutputAction::NoteOff { channel, note } => {
+        OutputAction::NoteOff { channel, note } | OutputAction::LegatoNoteOff { channel, note } => {
             output.queue_note_off(port, at, channel.wire_value(), note.value())
         }
         OutputAction::TouchingNoteOff {

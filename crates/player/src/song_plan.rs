@@ -14,16 +14,17 @@ use vocabulary::midi_values::NoteNumber;
 use vocabulary::phrase_cue::{
     ChannelMessage, ControlCueMessage, OutputPortName, PhraseCue, PhraseCueError, TransportMessage,
 };
-use vocabulary::rhythm_pattern::AccentLevel;
+use vocabulary::rhythm_pattern::{AccentLevel, ElementKind};
 use vocabulary::score_length::ScoreLength;
 use vocabulary::score_position::ScorePosition;
 use vocabulary::song::{
-    CueDefinition, CueDestination, CueMessage, ElementContents, Line, LineElement, Section, Song,
-    Track, TrackKind,
+    CueDefinition, CueDestination, CueMessage, ElementContents, Line, LineElement, LineRole,
+    Section, Song, Track, TrackKind,
 };
 use vocabulary::tempo::Tempo;
 
 use crate::note_track::{NoteTrack, NoteTrackError, TimedNote};
+use crate::sample_source::held_stretches;
 use crate::studio_configuration::{StudioConfiguration, TrackOutput, UnmetNeed};
 use crate::voicing::{VoicingError, plain_voicing};
 
@@ -223,16 +224,26 @@ fn voice_track(
     let mut notes: Vec<TimedNote> = Vec::new();
     for pass in passes {
         for line in pass.section.lines() {
-            if line.track_name() == track.name() {
-                notes.extend(line_notes(
-                    track,
-                    line,
-                    pass,
-                    output,
-                    home_octave,
-                    pass.section.key(),
-                )?);
+            if line.track_name() != track.name() {
+                continue;
             }
+            // A sample source plays nothing itself: the rhythm line of its
+            // voice layer takes what it holds.
+            let LineRole::VoiceLayer(layer) = line.role() else {
+                continue;
+            };
+            let source: Option<&Line> = pass.section.lines().iter().find(|other: &&Line| {
+                other.track_name() == track.name() && other.role() == LineRole::SampleSource(layer)
+            });
+            notes.extend(line_notes(
+                track,
+                line,
+                source,
+                pass,
+                output,
+                home_octave,
+                pass.section.key(),
+            )?);
         }
     }
     NoteTrack::new(
@@ -246,10 +257,13 @@ fn voice_track(
 }
 
 /// The notes of one line in one pass of a section: a note, or all of a
-/// chord's notes, at each sounding element that no tie leads into.
+/// chord's notes, at each sounding element that no tie leads into. An
+/// element with no contents of its own takes them from `source`, and follows
+/// the source if it changes while the element sounds.
 fn line_notes(
     track: &Track,
     line: &Line,
+    source: Option<&Line>,
     pass: &Pass,
     output: &TrackOutput,
     home_octave: i8,
@@ -258,9 +272,9 @@ fn line_notes(
     let elements: &[LineElement] = line.elements();
     let mut notes: Vec<TimedNote> = Vec::new();
     for (index, line_element) in elements.iter().enumerate() {
-        let Some(contents) = line_element.contents() else {
-            continue; // a rest
-        };
+        if line_element.element().kind() == ElementKind::Rest {
+            continue;
+        }
         let continues_a_tie: bool = index > 0 && elements[index - 1].element().tied_to_next();
         if continues_a_tie {
             continue;
@@ -283,14 +297,56 @@ fn line_notes(
                         level,
                     }],
                 })?;
-        let start_ticks: u64 = pass.start_ticks + element.start().ticks();
-        for note in note_numbers(contents, key, home_octave, output, track)? {
-            notes.push(TimedNote {
-                start_ticks,
-                length_ticks: sounding_ticks,
-                note,
-                velocity,
-            });
+        // Ticks from the start of the line, then from the start of the song.
+        let line_start_ticks: u64 = element.start().ticks();
+        let stretches: Vec<(u64, u64, &ElementContents)> =
+            if let Some(contents) = line_element.contents() {
+                vec![(line_start_ticks, sounding_ticks, contents)]
+            } else {
+                let source: &Line = source.ok_or_else(|| PlanError::NoSampleSource {
+                    track_name: track.name().to_string(),
+                    section_name: pass.section.name().to_string(),
+                    start_ticks: line_start_ticks,
+                })?;
+                held_stretches(source, line_start_ticks, sounding_ticks)
+                    .into_iter()
+                    .map(|stretch| (stretch.start_ticks, stretch.length_ticks, stretch.contents))
+                    .collect()
+            };
+        // Indexes in `notes` of the notes sounding in the stretch before.
+        let mut sounding: Vec<usize> = Vec::new();
+        for (stretch_start_ticks, stretch_length_ticks, contents) in stretches {
+            let mut now_sounding: Vec<usize> = Vec::new();
+            for note in note_numbers(contents, key, home_octave, output, track)? {
+                // A pitch the stretch before also plays is held, not struck
+                // again: on one channel a note off for it, right after its
+                // new note on, would end the new note.
+                let held: Option<usize> = sounding
+                    .iter()
+                    .copied()
+                    .find(|&index: &usize| notes[index].note == note);
+                if let Some(index) = held {
+                    notes[index].length_ticks += stretch_length_ticks;
+                    now_sounding.push(index);
+                } else {
+                    now_sounding.push(notes.len());
+                    notes.push(TimedNote {
+                        start_ticks: pass.start_ticks + stretch_start_ticks,
+                        length_ticks: stretch_length_ticks,
+                        note,
+                        velocity,
+                        legato_to_next: false,
+                    });
+                }
+            }
+            // What stops here is released after the new notes start: the
+            // source followed the element with no new gate.
+            for &index in &sounding {
+                if !now_sounding.contains(&index) {
+                    notes[index].legato_to_next = true;
+                }
+            }
+            sounding = now_sounding;
         }
     }
     Ok(notes)
@@ -498,6 +554,14 @@ pub enum PlanError {
         section_name: String,
         start_ticks: u64,
     },
+    /// A rhythm element takes its contents from a sample source the section
+    /// does not have. A song refuses this when it is made, so it is
+    /// reported and not guessed.
+    NoSampleSource {
+        track_name: String,
+        section_name: String,
+        start_ticks: u64,
+    },
     OffsetOutOfRange {
         track_name: String,
         note: u8,
@@ -544,6 +608,16 @@ impl fmt::Display for PlanError {
                 "track \"{track_name}\", section \"{section_name}\": a tie runs into a note \
                  that plays something else (at {start_ticks} ticks into the line). Remove the \
                  ~ or give both notes the same contents"
+            ),
+            PlanError::NoSampleSource {
+                track_name,
+                section_name,
+                start_ticks,
+            } => write!(
+                f,
+                "track \"{track_name}\", section \"{section_name}\": an element with nothing \
+                 before its colon (at {start_ticks} ticks into the line) has no sample_source \
+                 line to take its contents from. Add one, or write what the element plays"
             ),
             PlanError::OffsetOutOfRange {
                 track_name,

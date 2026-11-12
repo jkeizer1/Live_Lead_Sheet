@@ -48,6 +48,14 @@ pub enum OutputAction {
         note_on_position: ScorePosition,
         retrigger_gap: Duration,
     },
+    /// A note-off that is sent after the note-ons at its position, so the
+    /// next note starts before this one ends: legato as a keyboard sends it
+    /// when a second key is pressed while the first is held. No lead is
+    /// taken off the note.
+    LegatoNoteOff {
+        channel: MidiChannel,
+        note: NoteNumber,
+    },
     ControlChange {
         channel: MidiChannel,
         controller: ControllerNumber,
@@ -73,7 +81,8 @@ impl OutputAction {
     /// - control and program changes before the notes they set up;
     /// - Start, Stop and Continue before that position's Timing Clock,
     ///   which MIDI counts as the first clock pulse after Start;
-    /// - note ons last.
+    /// - note ons next;
+    /// - a legato note off after them, so it follows the note on it joins.
     fn order_at_same_position(self) -> u8 {
         match self {
             OutputAction::NoteOff { .. } | OutputAction::TouchingNoteOff { .. } => 0,
@@ -82,6 +91,7 @@ impl OutputAction {
             OutputAction::Transport(_) => 3,
             OutputAction::ClockPulse => 4,
             OutputAction::NoteOn { .. } => 5,
+            OutputAction::LegatoNoteOff { .. } => 6,
         }
     }
 }
@@ -161,8 +171,9 @@ fn timing_clock(
 /// A note-on at each note's start and a note-off at its end. A note that
 /// starts at or after the end of the stretch is left out, and one that
 /// reaches past it is cut there. A note-off at a position where the track
-/// starts a note is a touching note-off (legato, a connected gate, is not
-/// built yet).
+/// starts a note is a touching note-off, unless the note is marked
+/// `legato_to_next`: then it is a legato note-off, sent after the note-ons
+/// of its position.
 fn note_events(
     track: &NoteTrack,
     stretch_length: ScoreLength,
@@ -202,7 +213,12 @@ fn note_events(
         events.push(ScheduledEvent {
             position: ScorePosition::from_ticks(end_ticks),
             port: track.port().clone(),
-            action: if start_ticks_of_notes.contains(&end_ticks) {
+            action: if timed.legato_to_next {
+                OutputAction::LegatoNoteOff {
+                    channel: track.channel(),
+                    note: timed.note,
+                }
+            } else if start_ticks_of_notes.contains(&end_ticks) {
                 OutputAction::TouchingNoteOff {
                     channel: track.channel(),
                     note: timed.note,
@@ -353,6 +369,7 @@ mod tests {
                 length_ticks: 1260,
                 note: NoteNumber::new(60).unwrap(),
                 velocity: Velocity::new(if beat_index == 0 { 127 } else { 64 }).unwrap(),
+                legato_to_next: false,
             })
             .collect();
         NoteTrack::new(
@@ -408,6 +425,7 @@ mod tests {
                 length_ticks: 1260,
                 note: NoteNumber::new(60).unwrap(),
                 velocity: Velocity::new(127).unwrap(),
+                legato_to_next: false,
             }],
         )
         .unwrap();
@@ -444,6 +462,7 @@ mod tests {
             length_ticks: 10_000,
             note: NoteNumber::new(60).unwrap(),
             velocity: Velocity::new(64).unwrap(),
+            legato_to_next: false,
         };
         let track: NoteTrack = NoteTrack::new(
             "Beat",
@@ -474,6 +493,7 @@ mod tests {
             length_ticks: 5040,
             note: NoteNumber::new(60).unwrap(),
             velocity: Velocity::new(64).unwrap(),
+            legato_to_next: false,
         };
         let track: NoteTrack = NoteTrack::new(
             "Bass",
@@ -507,6 +527,7 @@ mod tests {
             length_ticks: 2520,
             note: NoteNumber::new(60).unwrap(),
             velocity: Velocity::new(64).unwrap(),
+            legato_to_next: false,
         };
         let track: NoteTrack = NoteTrack::new(
             "Bass",
@@ -540,6 +561,7 @@ mod tests {
             length_ticks: 5040,
             note: NoteNumber::new(60).unwrap(),
             velocity: Velocity::new(64).unwrap(),
+            legato_to_next: false,
         };
         let track: NoteTrack = NoteTrack::new(
             "Bass",
@@ -570,6 +592,46 @@ mod tests {
         // The note ending at 10080 ticks, the end of the stretch, touches
         // no note and stays a plain note-off.
         assert_eq!(touching, vec![expected]);
+    }
+
+    #[test]
+    fn a_legato_note_off_follows_the_note_on_it_joins_and_takes_no_lead() {
+        let note = |start_ticks: u64, pitch: u8, legato_to_next: bool| TimedNote {
+            start_ticks,
+            length_ticks: 5040,
+            note: NoteNumber::new(pitch).unwrap(),
+            velocity: Velocity::new(64).unwrap(),
+            legato_to_next,
+        };
+        // A mono bass: C4 for a quarter note, then D4 where C4 ends. C4 is
+        // marked legato, so its note-off comes after D4's note-on.
+        let track: NoteTrack = NoteTrack::new(
+            "Bass",
+            port("Bass"),
+            MidiChannel::new(2).unwrap(),
+            vec![note(0, 60, true), note(5040, 62, false)],
+        )
+        .unwrap();
+        let events: Vec<ScheduledEvent> = schedule(
+            &port("Clock"),
+            &[track],
+            &[],
+            ScoreLength::from_ticks(10_080),
+        )
+        .unwrap();
+        let at_5040: Vec<(&str, u8)> = events
+            .iter()
+            .filter(|event: &&ScheduledEvent| event.position.ticks() == 5040)
+            .filter_map(|event: &ScheduledEvent| match event.action {
+                OutputAction::NoteOn { note, .. } => Some(("on", note.value())),
+                OutputAction::LegatoNoteOff { note, .. } => Some(("legato off", note.value())),
+                OutputAction::TouchingNoteOff { note, .. } | OutputAction::NoteOff { note, .. } => {
+                    Some(("other off", note.value()))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(at_5040, vec![("on", 62), ("legato off", 60)]);
     }
 
     #[test]

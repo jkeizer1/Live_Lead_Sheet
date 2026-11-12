@@ -12,7 +12,7 @@ use vocabulary::time_signature::TimeSignature;
 
 use crate::contents_text::parse_voice_contents;
 use crate::length_words::describe_place;
-use crate::rhythm_bar::{BarElement, BarNotation, LengthCarry, parse_bars};
+use crate::rhythm_bar::{BarElement, BarNotation, LengthCarry, parse_bars, parse_source_bars};
 
 /// One text line holding bars of a song line: the `line "Keys" | … |` line
 /// itself, or a line that continues it, `| … |`.
@@ -51,14 +51,21 @@ pub fn build_line(
     let mut bar_line_numbers: Vec<usize> = Vec::new();
     let mut carry: LengthCarry = LengthCarry::start_of_line();
     for part in parts {
-        let part_bars: Vec<Vec<BarElement>> = parse_bars(
-            part.text,
-            bars.len(),
-            bar_length_ticks,
-            BarNotation::SongLine,
-            &mut carry,
-        )
-        .map_err(|message| LineError {
+        // A sample source writes contents and no lengths: its elements share
+        // each bar evenly. Every other line writes both.
+        let read: Result<Vec<Vec<BarElement>>, String> =
+            if matches!(role, LineRole::SampleSource(_)) {
+                parse_source_bars(part.text, bars.len(), bar_length_ticks)
+            } else {
+                parse_bars(
+                    part.text,
+                    bars.len(),
+                    bar_length_ticks,
+                    BarNotation::SongLine,
+                    &mut carry,
+                )
+            };
+        let part_bars: Vec<Vec<BarElement>> = read.map_err(|message| LineError {
             line_number: part.line_number,
             message,
         })?;
@@ -151,6 +158,17 @@ fn contents_of(
         // The bar parser gives a rest no contents: `r` is all it writes.
         return Ok(None);
     }
+    if placed.from_source {
+        // `:q` plays what the sample source holds when it starts. It is not
+        // a `/`, so what a later `/` repeats is left as it was.
+        return match track.kind() {
+            TrackKind::Voice { .. } => Ok(None),
+            _ => Err(String::from(
+                "only a voice track has a sample_source. Name the cue instead, \
+                 e.g. \"Start SQ-1\":w",
+            )),
+        };
+    }
     match (track.kind(), &placed.contents_text) {
         (TrackKind::Voice { voice, .. }, Some(text)) => {
             let contents: ElementContents = parse_voice_contents(text, *voice)?;
@@ -206,6 +224,11 @@ fn describe_song_error(error: &SongError, time_signature: TimeSignature) -> Stri
             why,
         } => format!(
             "{}: track \"{track_name}\" cannot play that: {why}",
+            describe_place(*start_ticks, time_signature)
+        ),
+        SongError::RestInSampleSource { start_ticks, .. } => format!(
+            "{}: a sample_source line holds chords or notes, not rests. Put the rests on the \
+             rhythm line below it, e.g. r:q",
             describe_place(*start_ticks, time_signature)
         ),
         SongError::ContentsOnRest { start_ticks } => format!(

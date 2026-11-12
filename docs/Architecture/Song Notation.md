@@ -625,7 +625,7 @@ key changes, as standard notation requires (*decided, Jim, 11 Nov 2026*).
 
 ### Sample sources and uncoupled lines
 
-*Decided (Jim, 11 Nov 2026); not yet built.*
+*Decided (Jim, 11 Nov 2026); built, with one play head.*
 
 What a track plays and when it plays it can be written on two lines of
 the same track. Each track can be written coupled or uncoupled.
@@ -987,7 +987,6 @@ are part of this program's first version, not a later version.
 
 **Decided on 11 Nov 2026 and not yet in the code:**
 
-- `sample_source` lines, rhythm-only elements (`:q`) and track and hold.
 - The `dynamics` line.
 - The marks `<` and `<<`, and velocities for the marks that are relative
   to the normal level.
@@ -1006,6 +1005,21 @@ are part of this program's first version, not a later version.
 - A tie with no note after it, at the end of a rhythm pattern or of a
   song line, is refused (`crates/vocabulary/src/rhythm_pattern.rs`). This
   was already so before 11 Nov 2026.
+- `sample_source` lines, rhythm-only elements (`:q`) and track and hold,
+  at the track's tempo with one play head (11 Nov 2026;
+  `crates/song_text/src/rhythm_bar.rs`, `crates/vocabulary/src/song.rs`,
+  `crates/player/src/sample_source.rs`; tested by
+  `crates/song_text/tests/sample_source_plan.rs`, and `songs/Sample_source.song`
+  to hear). When the source changes inside a sounding element, the new
+  notes start before the old ones end, with no new gate (a legato note
+  off, `crates/player/src/schedule.rs`); a pitch both chords play is held
+  through, not struck again. The `_` legato mark and one note for the
+  same pitch in two voice layers still use none of this. The LilyPond
+  export refuses a song with a sample source.
+- Fractional tempos (11 Nov 2026): `tempo 112.5 beats/min`, up to three
+  decimals, held exactly as whole milli-beats; a tempo that does not make
+  a whole number of milli-quarters per minute is refused
+  (`crates/vocabulary/src/tempo.rs`, `crates/song_text/src/song_file.rs`).
 - `marcato` in place of `strong`, and `velocity normal` 64 when not
   written (11 Nov 2026; `crates/song_text/src/studio_file.rs`,
   `crates/player/src/studio_configuration.rs`).

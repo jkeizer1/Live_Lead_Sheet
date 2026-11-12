@@ -210,6 +210,7 @@ fn beat_track(
             } else {
                 velocity(NORMAL_VELOCITY)?
             },
+            legato_to_next: false,
         });
         start_ticks += beat_length_ticks;
     }
@@ -424,7 +425,7 @@ fn send(
                 velocity.value(),
             )
         }
-        OutputAction::NoteOff { channel, note } => {
+        OutputAction::NoteOff { channel, note } | OutputAction::LegatoNoteOff { channel, note } => {
             sounding.retain(|sounding_note: &SoundingNote| {
                 !(sounding_note.port_name == event.port
                     && sounding_note.channel == channel
@@ -569,6 +570,7 @@ fn action_text(action: OutputAction) -> String {
             channel.number()
         ),
         OutputAction::NoteOff { channel, note }
+        | OutputAction::LegatoNoteOff { channel, note }
         | OutputAction::TouchingNoteOff { channel, note, .. } => {
             format!("note off {} on channel {}", note.value(), channel.number())
         }

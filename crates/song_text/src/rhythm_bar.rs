@@ -34,6 +34,11 @@ pub struct BarElement {
     /// for a rest, for every element of a rhythm library, and for `/` in a
     /// song line, which plays what the sounding element before it played.
     pub contents_text: Option<String>,
+    /// True for an element written with nothing before its colon (`:q`): it
+    /// takes what it plays from the track's `sample_source` line. Such an
+    /// element has no `contents_text`, like `/`, but plays nothing of its own
+    /// earlier in the line.
+    pub from_source: bool,
 }
 
 /// Which of the two spellings a bar is written in.
@@ -82,6 +87,7 @@ struct WrittenElement {
     marks: ElementMarks,
     tied_to_next: bool,
     contents_text: Option<String>,
+    from_source: bool,
 }
 
 /// What a group does to the natural length of what is inside it.
@@ -226,6 +232,106 @@ pub fn parse_bars(
     Ok(bars)
 }
 
+/// The bars of a `sample_source` line: chords or notes with no lengths, which
+/// share each bar evenly (Song Notation, section 5). `IV IV V` in a 4/4 bar
+/// puts each chord on a third of the bar, 6720 ticks.
+///
+/// # Errors
+///
+/// A message saying what is wrong and what to type instead: an empty bar, a
+/// rest, or a length, mark or tie on an element.
+pub fn parse_source_bars(
+    line: &str,
+    bars_so_far: usize,
+    bar_length_ticks: u64,
+) -> Result<Vec<Vec<BarElement>>, String> {
+    let line: &str = line.trim();
+    if !line.starts_with('|') || !line.ends_with('|') || line.len() < 2 {
+        return Err(String::from(
+            "a line of bars starts and ends with |, e.g. | I | IV IV V |",
+        ));
+    }
+    let inside: &str = &line[1..line.len() - 1];
+    let mut bars: Vec<Vec<BarElement>> = Vec::new();
+    for (offset, bar_text) in split_at_barlines(inside).into_iter().enumerate() {
+        let bar_number: usize = bars_so_far + offset + 1;
+        bars.push(parse_source_bar(bar_text, bar_number, bar_length_ticks)?);
+    }
+    Ok(bars)
+}
+
+fn parse_source_bar(
+    bar_text: &str,
+    bar_number: usize,
+    bar_length_ticks: u64,
+) -> Result<Vec<BarElement>, String> {
+    let mut cursor: Cursor = Cursor::new(bar_text);
+    let mut contents: Vec<Option<String>> = Vec::new();
+    loop {
+        cursor.skip_whitespace();
+        if cursor.peek().is_none() {
+            break;
+        }
+        let element_text: String = cursor.element_text();
+        match parse_song_contents(&mut cursor, &element_text)? {
+            WrittenContents::Rest => {
+                return Err(format!(
+                    "bar {bar_number}: a sample_source line holds chords or notes, not rests. \
+                     Put the rests on the rhythm line below it, e.g. r:q"
+                ));
+            }
+            WrittenContents::FromSource => {
+                return Err(format!(
+                    "bar {bar_number}: \"{element_text}\" has nothing to play. A sample_source \
+                     line holds chords or notes, e.g. I or [C3 E3 G3]"
+                ));
+            }
+            WrittenContents::Same => contents.push(None),
+            WrittenContents::Text(text) => contents.push(Some(text)),
+        }
+        match cursor.peek() {
+            None => {}
+            Some(character) if character.is_whitespace() => {}
+            Some(_) => {
+                return Err(format!(
+                    "bar {bar_number}: \"{element_text}\": a sample_source line has no lengths, \
+                     marks or ties. Write the chord or note alone, and its length on the rhythm \
+                     line below it, e.g. :q"
+                ));
+            }
+        }
+    }
+    let count: u64 = contents.len() as u64;
+    if count == 0 {
+        return Err(format!(
+            "bar {bar_number} is empty. Write at least one chord or note in it, e.g. | I |"
+        ));
+    }
+    // The place of element i is i × bar ÷ count, rounded half up, so no
+    // rounded step is added to another: ticks × (elements ÷ elements) → ticks.
+    let tick_of = |index: u64| -> u64 { (2 * index * bar_length_ticks + count) / (2 * count) };
+    let mut placed: Vec<BarElement> = Vec::new();
+    for (index, text) in contents.into_iter().enumerate() {
+        let start_ticks: u64 = tick_of(index as u64);
+        let end_ticks: u64 = tick_of(index as u64 + 1);
+        if end_ticks <= start_ticks {
+            return Err(format!(
+                "bar {bar_number} has too many elements for the bar. Write fewer"
+            ));
+        }
+        placed.push(BarElement {
+            start_ticks,
+            length_ticks: end_ticks - start_ticks,
+            kind: ElementKind::Sounding,
+            marks: ElementMarks::NONE,
+            tied_to_next: false,
+            contents_text: text,
+            from_source: false,
+        });
+    }
+    Ok(placed)
+}
+
 /// Splits at `|`, except inside a quoted cue name.
 fn split_at_barlines(text: &str) -> Vec<&str> {
     let mut parts: Vec<&str> = Vec::new();
@@ -288,6 +394,7 @@ fn place(
             marks: element.marks,
             tied_to_next: element.tied_to_next,
             contents_text: element.contents_text.clone(),
+            from_source: element.from_source,
         });
     }
     Ok(result)
@@ -443,11 +550,14 @@ fn parse_rhythm_element(cursor: &mut Cursor) -> Result<WrittenElement, String> {
         marks,
         tied_to_next,
         contents_text: None,
+        from_source: false,
     })
 }
 
 /// What a song line's element plays, as written.
 enum WrittenContents {
+    /// Nothing before the colon (`:q`): what the `sample_source` line holds.
+    FromSource,
     /// `r`.
     Rest,
     /// `/`: what the sounding element before it played.
@@ -504,10 +614,11 @@ fn parse_song_element(
             )
         })?,
     };
-    let (kind, contents_text): (ElementKind, Option<String>) = match contents {
-        WrittenContents::Rest => (ElementKind::Rest, None),
-        WrittenContents::Same => (ElementKind::Sounding, None),
-        WrittenContents::Text(text) => (ElementKind::Sounding, Some(text)),
+    let (kind, contents_text, from_source): (ElementKind, Option<String>, bool) = match contents {
+        WrittenContents::Rest => (ElementKind::Rest, None, false),
+        WrittenContents::Same => (ElementKind::Sounding, None, false),
+        WrittenContents::FromSource => (ElementKind::Sounding, None, true),
+        WrittenContents::Text(text) => (ElementKind::Sounding, Some(text), false),
     };
     check_rest(kind, marks, tied_to_next)?;
     Ok(WrittenElement {
@@ -516,6 +627,7 @@ fn parse_song_element(
         marks,
         tied_to_next,
         contents_text,
+        from_source,
     })
 }
 
@@ -585,7 +697,10 @@ fn parse_song_contents(cursor: &mut Cursor, element_text: &str) -> Result<Writte
         {
             Err(misplaced_sharp(element_text))
         }
-        Some(':' | '>' | '\'' | '_' | '^' | '~') | None => Err(format!(
+        // Nothing before the colon: the element's length is written and what
+        // it plays comes from the sample source (Song Notation, section 4).
+        Some(':') => Ok(WrittenContents::FromSource),
+        Some('>' | '\'' | '_' | '^' | '~') | None => Err(format!(
             "\"{element_text}\" does not say what it plays. Write a note, chord, r or / \
              first, e.g. C4:q"
         )),
@@ -1143,9 +1258,25 @@ mod tests {
     }
 
     #[test]
+    fn a_length_with_nothing_before_the_colon_takes_its_contents_from_the_source() {
+        let bar: Vec<BarElement> = parse_bar(
+            ":h :q r:q",
+            1,
+            4 * 5040,
+            BarNotation::SongLine,
+            &mut LengthCarry::start_of_line(),
+        )
+        .unwrap();
+        let from_source: Vec<bool> = bar.iter().map(|element| element.from_source).collect();
+        assert_eq!(from_source, vec![true, true, false]);
+        assert!(bar.iter().all(|element| element.contents_text.is_none()));
+        assert_eq!(bar[0].length_ticks, 2 * 5040);
+    }
+
+    #[test]
     fn broken_contents_say_what_to_type() {
         assert!(
-            song(":q C2 C2 C2")
+            song(">q C2 C2 C2")
                 .unwrap_err()
                 .contains("does not say what it plays")
         );

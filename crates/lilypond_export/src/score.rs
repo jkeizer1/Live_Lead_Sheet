@@ -98,6 +98,11 @@ fn spell_song(song: &Song) -> Result<SpelledSong, ExportError> {
     for section in song.sections() {
         let mut lines: HashMap<LineKey, Vec<SpelledBar>> = HashMap::new();
         for line in section.lines() {
+            if matches!(line.role(), LineRole::SampleSource(_)) {
+                return Err(ExportError::SampleSourceNotDrawn {
+                    track_name: line.track_name().to_string(),
+                });
+            }
             let Some(track_index) = song
                 .tracks()
                 .iter()
@@ -197,7 +202,8 @@ fn roles_of(track_index: usize, spelled: &SpelledSong) -> Vec<LineRole> {
         }
     }
     roles.sort_by_key(|role: &LineRole| match role {
-        LineRole::VoiceLayer(number) => number.value(),
+        // A sample source never gets here: `spell_song` refuses it.
+        LineRole::VoiceLayer(number) | LineRole::SampleSource(number) => number.value(),
         LineRole::CuePlacement => 0,
     });
     roles
@@ -351,7 +357,9 @@ fn voice_music(
             )
     });
     let first_on_staff: bool = line_key.is_some_and(|line_key: LineKey| match line_key.role {
-        LineRole::VoiceLayer(number) => number == VoiceLayerNumber::FIRST,
+        LineRole::VoiceLayer(number) | LineRole::SampleSource(number) => {
+            number == VoiceLayerNumber::FIRST
+        }
         LineRole::CuePlacement => true,
     });
     let mut music: String = String::new();

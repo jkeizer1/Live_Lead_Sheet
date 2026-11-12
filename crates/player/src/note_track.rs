@@ -30,6 +30,12 @@ pub struct TimedNote {
     pub length_ticks: u64,
     pub note: NoteNumber,
     pub velocity: Velocity,
+    /// True when another note of the track starts where this one ends and
+    /// this note's note-off is sent after that note-on, so a mono receiver
+    /// set to legato keeps its gate high (Song Notation, section 3, "How
+    /// legato works in MIDI"). False: the note ends as written, and a note
+    /// touching the next one is shortened (Q11).
+    pub legato_to_next: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -157,6 +163,7 @@ impl NoteTrack {
                     length_ticks: sounding_ticks.min(stretch_length.ticks() - start_ticks),
                     note,
                     velocity,
+                    legato_to_next: false,
                 });
             }
             pattern_start_ticks = pattern_start_ticks

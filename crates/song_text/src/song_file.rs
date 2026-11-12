@@ -44,6 +44,8 @@ struct RawLine {
     track_name: String,
     /// `voice_layer n` when written after the track's name.
     voice_layer: Option<VoiceLayerNumber>,
+    /// `sample_source` written after the track's name (and voice layer).
+    sample_source: bool,
     line_number: usize,
     parts: Vec<RawBarsText>,
 }
@@ -73,27 +75,35 @@ struct OpenSection {
 /// A tempo as the song file writes it. How long a beat is comes from the
 /// section's meter, which may be written after the tempo or carried from
 /// the section before, so the conversion waits until the section closes.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum WrittenTempo {
-    BeatsPerMinute(u64),
-    BeatsPerSecond(u64),
+    BeatsPerMinute(MilliBeats),
+    BeatsPerSecond(MilliBeats),
+}
+
+/// The number of a written tempo: whole milli-beats (1000 mbeats = 1 beat)
+/// for exactness, with the text as typed for messages.
+#[derive(Debug, Clone)]
+struct MilliBeats {
+    milli_beats: u64,
+    text: String,
 }
 
 impl WrittenTempo {
-    fn to_tempo(self, time_signature: TimeSignature) -> Result<Tempo, String> {
+    fn to_tempo(&self, time_signature: TimeSignature) -> Result<Tempo, String> {
         let beat_length: ScoreLength = time_signature.beat_length();
         let (result, written): (Result<Tempo, TempoError>, String) = match self {
-            WrittenTempo::BeatsPerMinute(beats_per_minute) => (
-                Tempo::from_beats_per_minute(beats_per_minute, beat_length),
-                format!("{beats_per_minute} beats/min"),
+            WrittenTempo::BeatsPerMinute(number) => (
+                Tempo::from_milli_beats_per_minute(number.milli_beats, beat_length),
+                format!("{} beats/min", number.text),
             ),
-            WrittenTempo::BeatsPerSecond(beats_per_second) => (
-                Tempo::from_beats_per_second(beats_per_second, beat_length),
-                format!("{beats_per_second} beats/s"),
+            WrittenTempo::BeatsPerSecond(number) => (
+                Tempo::from_milli_beats_per_second(number.milli_beats, beat_length),
+                format!("{} beats/s", number.text),
             ),
         };
         result.map_err(|error| match error {
-            TempoError::Zero => format!("a tempo of {written} never plays. Use 1 or more"),
+            TempoError::Zero => format!("a tempo of {written} never plays. Use more than 0"),
             TempoError::TooFast { .. }
             | TempoError::BeatsTooFast { .. }
             | TempoError::BeatsPerSecondTooFast { .. } => format!("{written} is too fast"),
@@ -347,6 +357,7 @@ impl SongReader<'_> {
                         return Err(message);
                     }
                 };
+            let (sample_source, bars_text): (bool, &str) = read_sample_source(bars_text);
             // The bars may all be on the lines below, so a bare name is fine.
             let parts: Vec<RawBarsText> = if bars_text.trim().is_empty() {
                 Vec::new()
@@ -359,6 +370,7 @@ impl SongReader<'_> {
             section.lines.push(RawLine {
                 track_name: track_name.to_string(),
                 voice_layer,
+                sample_source,
                 line_number,
                 parts,
             });
@@ -402,7 +414,7 @@ impl SongReader<'_> {
             );
             return;
         };
-        let tempo: Tempo = match (open.tempo, self.carried.tempo) {
+        let tempo: Tempo = match (&open.tempo, self.carried.tempo) {
             (Some(written), _) => match written.to_tempo(time_signature) {
                 Ok(tempo) => tempo,
                 Err(message) => {
@@ -487,6 +499,9 @@ impl SongReader<'_> {
             // track's line places its cues. A role that does not suit the
             // track is refused by the line, with a message.
             let role: LineRole = match (raw.voice_layer, track.kind()) {
+                (number, _) if raw.sample_source => {
+                    LineRole::SampleSource(number.unwrap_or(VoiceLayerNumber::FIRST))
+                }
                 (Some(number), _) => LineRole::VoiceLayer(number),
                 (None, TrackKind::CueControl { .. }) => LineRole::CuePlacement,
                 (None, TrackKind::Voice { .. } | TrackKind::ClockAndTransport) => {
@@ -617,12 +632,15 @@ fn build_track(open: &OpenTrack) -> Result<Track, String> {
 /// text as it is when no voice layer is written.
 fn read_voice_layer(after_name: &str) -> Result<(Option<VoiceLayerNumber>, &str), String> {
     let Some(rest) = keyword_rest(after_name.trim(), "voice_layer") else {
-        if after_name.trim().is_empty() || after_name.trim_start().starts_with('|') {
+        if after_name.trim().is_empty()
+            || after_name.trim_start().starts_with('|')
+            || keyword_rest(after_name.trim(), "sample_source").is_some()
+        {
             return Ok((None, after_name));
         }
         return Err(format!(
             "\"{}\" after the track's name is not understood. Write voice_layer and its \
-             number, or the bars, e.g. line \"Keys\" voice_layer 2 | C4:q D4 E4 F4 |",
+             number, sample_source, or the bars, e.g. line \"Keys\" voice_layer 2 | C4:q D4 E4 F4 |",
             after_name.trim()
         ));
     };
@@ -631,6 +649,15 @@ fn read_voice_layer(after_name: &str) -> Result<(Option<VoiceLayerNumber>, &str)
     let number_text: &str = rest.split_whitespace().next().unwrap_or("");
     let number: VoiceLayerNumber = voice_layer_number(number_text)?;
     Ok((Some(number), rest[number_text.len()..].trim_start()))
+}
+
+/// `sample_source` right after the track's name or its voice layer, and the
+/// text after it; the text as it is when the word is not there.
+fn read_sample_source(after: &str) -> (bool, &str) {
+    match keyword_rest(after.trim(), "sample_source") {
+        Some(rest) => (true, rest),
+        None => (false, after),
+    }
 }
 
 /// `2` → voice layer 2.
@@ -797,34 +824,65 @@ fn read_meter<'a>(section: &mut OpenSection, after: &'a [Word]) -> Result<&'a [W
     Ok(rest)
 }
 
-/// `tempo 120 beats/min` or `tempo 2 beats/s`: a whole number of beats,
-/// the beat being the one the meter defines.
+/// A tempo's number as whole milli-beats: digits, then optionally a point
+/// and one to three decimals (`120`, `112.5`, `0.125`). `None` for anything
+/// else, including a fourth decimal, which would not be held exactly.
+fn parse_milli_beats(text: &str) -> Option<u64> {
+    let (whole, decimals): (&str, &str) = text.split_once('.').unwrap_or((text, ""));
+    let digits_only = |part: &str| part.bytes().all(|byte: u8| byte.is_ascii_digit());
+    // A point must be followed by a decimal: "112." is a typing slip.
+    let point_without_decimals: bool = text.contains('.') && decimals.is_empty();
+    if whole.is_empty()
+        || !digits_only(whole)
+        || !digits_only(decimals)
+        || decimals.len() > 3
+        || point_without_decimals
+    {
+        return None;
+    }
+    // Pad the decimals to three digits: "5" is 500 mbeats, "125" is 125.
+    let milli_part: u64 = format!("{decimals:0<3}").parse::<u64>().ok()?;
+    whole
+        .parse::<u64>()
+        .ok()?
+        .checked_mul(1000)?
+        .checked_add(milli_part)
+}
+
+/// `tempo 120 beats/min`, `tempo 112.5 beats/min` or `tempo 2 beats/s`: a
+/// number of beats with up to three decimals, the beat being the one the
+/// meter defines.
 fn read_tempo<'a>(section: &mut OpenSection, after: &'a [Word]) -> Result<&'a [Word], String> {
     let wrong = || {
         String::from(
-            "write the tempo as whole beats with its unit, e.g. tempo 120 beats/min or \
-             tempo 2 beats/s",
+            "write the tempo as beats with its unit, e.g. tempo 120 beats/min, \
+             tempo 112.5 beats/min (up to 3 decimals) or tempo 2 beats/s",
         )
     };
     let [number, unit, rest @ ..] = after else {
         return Err(wrong());
     };
-    let beats: u64 = number.text.parse::<u64>().map_err(|_| wrong())?;
+    let milli_beats: u64 = parse_milli_beats(&number.text).ok_or_else(wrong)?;
+    let number_written = || MilliBeats {
+        milli_beats,
+        text: number.text.clone(),
+    };
     let written: WrittenTempo = match unit.text.as_str() {
-        "beats/min" => WrittenTempo::BeatsPerMinute(beats),
-        "beats/s" => WrittenTempo::BeatsPerSecond(beats),
+        "beats/min" => WrittenTempo::BeatsPerMinute(number_written()),
+        "beats/s" => WrittenTempo::BeatsPerSecond(number_written()),
         // The note-value units of earlier song files (q/min, e/min, ...).
         old if old.ends_with("/min") || old.ends_with("/s") => {
             return Err(format!(
-                "{old} is no longer read. Write the tempo in beats, e.g. tempo {beats} \
-                 beats/min. The meter says what a beat is (in 6/8, a dotted quarter)"
+                "{old} is no longer read. Write the tempo in beats, e.g. tempo {} \
+                 beats/min. The meter says what a beat is (in 6/8, a dotted quarter)",
+                number.text
             ));
         }
         _ => return Err(wrong()),
     };
-    if beats == 0 {
+    if milli_beats == 0 {
         return Err(String::from(
-            "a tempo of 0 beats never plays. Use 1 or more",
+            "a tempo of 0 beats never plays. Use more than 0",
         ));
     }
     if section.tempo.replace(written).is_some() {
@@ -1050,10 +1108,12 @@ mod tests {
     }
 
     #[test]
-    fn a_tempo_without_whole_beats_and_a_unit_is_refused() {
+    fn a_tempo_without_a_beat_number_and_a_unit_is_refused() {
         for written in [
             "tempo 120",
-            "tempo 112.5 beats/min",
+            "tempo 112.1234 beats/min",
+            "tempo .5 beats/min",
+            "tempo 112. beats/min",
             "tempo 120 bpm",
             "tempo 0 beats/min",
         ] {
@@ -1062,6 +1122,45 @@ mod tests {
             assert_eq!(errors.len(), 1, "{written}: {errors:?}");
             assert!(errors[0].starts_with("test.song line 12:"), "{}", errors[0]);
         }
+    }
+
+    #[test]
+    fn a_fractional_tempo_is_held_exactly() {
+        // (written, meter, mq/min). 4/4: 112.5 beats/min × 1 q/beat = 112500
+        // mq/min. 6/8: 100.5 beats/min × 1.5 q/beat = 150.75 q/min = 150750
+        // mq/min.
+        for (written, meter, expected_milli_quarters_per_minute) in [
+            ("tempo 112.5 beats/min", "4/4", 112_500_u64),
+            ("tempo 112.125 beats/min", "4/4", 112_125),
+            ("tempo 100.5 beats/min", "6/8", 150_750),
+            ("tempo 0.5 beats/s", "4/4", 30_000),
+        ] {
+            // One bar of a chord, filling the bar of the meter.
+            let bar: &str = if meter == "6/8" { "I:q. /" } else { "I:w" };
+            let text: String = song_with(&format!("  line \"Keys\" | {bar} |\n"))
+                .replace("tempo 120 beats/min", written)
+                .replace("meter 4/4", &format!("meter {meter}"));
+            let song: Song = parse_song("test.song", &text).unwrap();
+            assert_eq!(
+                song.sections()[0].tempo().milli_quarters_per_minute(),
+                expected_milli_quarters_per_minute,
+                "{written} in {meter}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_fractional_tempo_that_is_not_whole_milli_quarters_is_refused() {
+        // 16th-note beats (x/16 meters): 0.001 beats/min × 0.25 q/beat is
+        // 0.25 mq/min, not whole.
+        let errors: Vec<String> = errors_of(
+            &song_with("  line \"Keys\" | I:q |\n")
+                .replace("tempo 120 beats/min", "tempo 100.001 beats/min")
+                .replace("meter 4/4", "meter 4/16"),
+        );
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        // Reported at the section's line, where the meter and tempo meet.
+        assert!(errors[0].starts_with("test.song line 11:"), "{}", errors[0]);
     }
 
     #[test]

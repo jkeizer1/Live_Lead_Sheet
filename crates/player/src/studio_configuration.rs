@@ -10,7 +10,7 @@ use std::fmt;
 
 use vocabulary::duration::Duration;
 use vocabulary::midi_values::{MidiChannel, Velocity};
-use vocabulary::rhythm_pattern::AccentLevel;
+use vocabulary::rhythm_pattern::{AccentLevel, ElementKind};
 use vocabulary::song::{CueDestination, CueMessage, ElementContents, Song, Track, TrackKind};
 
 /// The velocity each accent level sends. `normal` is always there: it is
@@ -300,7 +300,9 @@ fn accent_levels_used(song: &Song, track_name: &str) -> Vec<AccentLevel> {
             }
             for line_element in line.elements() {
                 let level: AccentLevel = line_element.element().marks().accent();
-                let sounds: bool = line_element.contents().is_some()
+                // A sounding element with no contents takes them from a
+                // sample source: it sounds, so its accent level counts.
+                let sounds: bool = line_element.element().kind() == ElementKind::Sounding
                     && !matches!(line_element.contents(), Some(ElementContents::Cue(_)));
                 if sounds && !used.contains(&level) {
                     used.push(level);
