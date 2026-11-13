@@ -23,11 +23,11 @@ track "Beat"
   clef treble
 
 section "Count-in"  count-in
-  meter 4/4  tempo 100 beats/min
+  meter 4/4  tempo 100.9 beats/min
   line "Beat"  | C4:q> / / / |
 
 section "Chords and bass from sources"  repeat 1
-  key C major  meter 4/4  tempo 100 beats/min
+  key C major  meter 4/4  
 #  line "Keys"  sample_source  | I ii ii        | IV IV V        |
 #  line "Keys"                 | :h r:q r:q     | :h :h          |
 

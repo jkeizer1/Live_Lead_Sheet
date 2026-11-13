@@ -1218,6 +1218,46 @@ sounding element is heard as legato?
   - One CC step is one semitone (the value is the MIDI note number).
   - The note on still carries the element's first pitch, so a device that
     listens only to notes plays the rhythm.
+- Findings (Jim, 12 Nov 2026, with `held_notes_test`: Bass note on at
+  beat 1, a second note on at beat 3 with the first still held, both
+  note offs at the end of the bar; logged 12 Nov 2026 19:05 local time):
+  - FH-2 making gate and CV, into an analog voice (CV to the oscillator,
+    gate to the envelope, envelope to the amplifier): a hard gate at
+    beat 1 and a legato change of pitch at beat 3. The gate stayed high.
+    So the held-note sequence works with a MIDI to CV converter.
+  - Disting NT, Macro Oscillator 2, driven by that same CV and gate from
+    the FH-2: the note at beat 1 sounds, and there is no pitch change at
+    beat 3. Disting NT, Poly FM driven by CV and gate: a gate at beat 1
+    only and no pitch change at beat 3. The later entry below shows
+    Poly FM following the pitch, so the cause here is not known.
+  - Disting NT under MIDI control: Macro Oscillator 1 and Poly FM both
+    gate their envelopes at beat 1 and again at beat 3.
+  - 12 Nov 2026 19:17 (local time, Jim): the player's own sequence,
+    `song_play_test` with `songs/Legato_test.song` and `songs/Demo.studio`
+    (note on at beat 1; at beat 3 the second note on and then the first
+    note off at the same instant; the second note off 5 ms before the bar
+    ends), FH-2 CV and gate into the Disting NT's Poly FM with MIDI
+    switched off in Poly FM: the pitch change at beat 3 is a clear
+    legato note, like an analog oscillator. Under MIDI control the same
+    song gives two gates.
+  - So the same FH-2 and the same NT algorithm gave no pitch change with
+    `held_notes_test` (both keys held until the end of the bar) and a
+    legato change with the player's sequence (the first key released at
+    the change). Jim ran it across several NT algorithms and does not
+    think the setup differed. The cause is not known. A spurious gate
+    from the FH-2 when the first key is released was considered and
+    judged very unlikely (an envelope triggers only on a rising edge, and
+    a release would not make one), so it is not being pursued.
+  - Every NT algorithm tested so far emulates a Yamaha or Mutable
+    Instruments instrument. Jim will keep testing across NT algorithms to
+    see whether the behaviour is common, and can ask Os at Expert Sleepers
+    directly. Still to test: the System 35's MIDI converter and the ARP
+    2600 (whose dual mono mode plays a second note legato).
+  - Known to work on the NT side (Jim, 12 Nov 2026): Poly FM transposes a
+    held note from a CC (a CC mapped to its transpose input, tested with a
+    Launch Control CC). Any NT value input can be mapped to a CC, so the CC
+    route is simple on the receiver; which algorithm parameters can take a
+    pitch CC exactly, one step per semitone, is still to be checked.
 - To decide: how each receiver turns the CC into pitch (the Expert
   Sleepers NT, EX and FH-2 mappings, which Jim is checking); the CC to
   1 V/octave conversion an analog oscillator needs somewhere in the path
@@ -1230,6 +1270,10 @@ sounding element is heard as legato?
   measurement of overlapping notes, CC 68 and CC 126 was proposed and not
   taken up (Jim, 12 Nov 2026).
 - Raised: Jim, 12 Nov 2026; recorded 12 Nov 2026 16:18 (local time).
+- Status (Jim, 12 Nov 2026 19:26 local time): on hold. The result so far:
+  the FH-2 with an analog voice works with the player's legato, and so
+  does the NT's Poly FM on CV and gate; the NT's own MIDI mode gates again
+  on every note on. Nothing is to be built until the further tests are in.
 
 ### Deferred (Jim, 11 Nov 2026)
 

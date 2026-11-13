@@ -1,0 +1,34 @@
+# Legato test: the simplest sample source. The Bass rhythm is one whole
+# note per bar; its source holds two notes, C2 for the first half of the
+# bar and G2 for the second. With track and hold the whole note has one
+# gate at beat 1, and the pitch changes to G2 on beat 3 without a new gate.
+# The Beat track is steady quarter notes.
+#
+# Print what the player sends, with no MIDI hardware:
+#   cargo run -p song_text --example legato_order_test
+# Listen to it (Bass on channel 2, Beat on channel 15):
+#   cargo run --release -p song_text --example song_play_test -- \
+#     songs/Legato_test.song songs/Demo.studio
+song "Legato test"
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+track "Bass"
+  type mono_voice
+  clef bass
+
+track "Beat"
+  type mono_voice
+  clef treble
+
+section "One whole note, two source notes"  repeat 2
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Bass"  sample_source  | C1 G1 |
+  line "Bass"                 | :w |
+  line "Beat"                 | C4:q / / / |

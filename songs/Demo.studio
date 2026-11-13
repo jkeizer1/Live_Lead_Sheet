@@ -20,10 +20,9 @@ track "Beat"
 track "Keys"
   port "Harmony"  channel 1
   velocity normal 70  accent 105  marcato 120
-
 track "Bass"
   port "Bass"  channel 2
-  octave_offset 1 octaves
+  octave_offset -2 octaves
   velocity normal 100  accent 115
   retrigger_gap 2 ms
 
