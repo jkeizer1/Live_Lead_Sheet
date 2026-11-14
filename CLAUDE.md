@@ -96,6 +96,36 @@ code only in adapters), but do not build them.
   a limitation -> accept it. 
 - a new test song goes in songs_canonical/ without asking, so I don’t ask each time.
 - Name the folders in README.md only (it already lists them), so CLAUDE.md doesn’t go stale when a folder is added.
+- **Each document that has open questions keeps them in one section called
+  "Open questions".** Every question's block, open or closed, lives in that
+  section, so a reader finds them all in one place. A document with no open
+  questions needs no such section. Do not scatter question blocks through
+  the other sections; if a question arises elsewhere, give its block to the
+  Open questions section and leave only a short pointer ("see Q34") where
+  it arose.
+- **Open questions** are tagged OPEN_QUESTION, with a date and time, so the
+  Linux_MD_Reader program can scan every document at once and list what is
+  still open. A question's block holds the question, its context, what was
+  tried or found, the options, and where and when it was raised. The block
+  is a working record and may be untidy; it is kept for future reference.
+- **Closing a question.** The block stays where it is. Change its tag from
+  OPEN_QUESTION to "Qn (CLOSED, Jim, date)", so a scan finds only what is
+  still open, and state the conclusion plainly in the block, under its
+  status. A recommendation of mine is not a conclusion until Jim has
+  confirmed it.
+- **Carrying a conclusion into the specifications is done together, one
+  document at a time.** After a question is closed, Claude does not edit
+  any specification on its own. It lists in chat each document that may be
+  affected, saying for each, in a few words, what statement the conclusion
+  touches or that nothing needs changing. Jim picks the first document.
+  Claude proposes the exact wording change for that document alone and
+  waits for Jim's yes before editing it. When it is done, Claude reports
+  what changed and asks which document is next. Never edit two documents
+  in one step, and never apply a conclusion to a document Jim has not
+  named. If the conclusion shows that something is impossible or no longer
+  wanted, removing it from a document follows the same steps, one document
+  at a time, once Jim has agreed. If a conclusion changes nothing a
+  specification says, Claude says so and edits nothing.
 
 ## Coding rules
 

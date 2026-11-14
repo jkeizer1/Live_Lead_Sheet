@@ -3,11 +3,18 @@ studio "System35 Studio"
 
 port "Clock"
 port "Bass"
+port "NTBass"
 
 track "Clock"
   port "Clock" channel 16
 
 track "Bass"
+  port "Bass"  channel 1
+  octave_offset -1 octaves
+  velocity normal 90  accent 115
+  retrigger_gap 100 ms
+
+track "NTBass"
   port "Bass"  channel 1
   octave_offset -1 octaves
   velocity normal 90  accent 115

@@ -1,0 +1,30 @@
+# System35 legato and general test
+# cargo run --release -p song_text --example song_play_test -- songs/system35.song songs/system35.studio
+
+song "System35 Testing"
+
+track "Clock"
+  type clock_and_transport
+
+track "Bass"
+  type mono_voice
+  clef bass
+
+track "NTBass"
+  type mono_voice
+  clef bass
+  lead
+
+section "tune" repeat 2
+  key C major
+  meter 4/4  tempo 100 beats/min
+  line "Bass"     | A2:w |
+
+section "1" repeat 120
+
+  line "Bass"     | D2:e_ A2:e_ F2:e_ D2:e  A2:e_ G2:e_ F2:e  r:e  | C3:h_  D2:h  |  
+                  | D2:e  A2:e  F2:e  D2:e  A2:e  r:e   F2:e  r:e  | C2:h   D1:h  |  
+
+  line "NTBass"   | D2:e_ A2:e_ F2:e_ D2:e  A2:e_ G2:e_ F2:e  r:e  | C3:h_  D2:h  |  
+                  | D2:e  A2:e  F2:e  D2:e  A2:e  r:e   F2:e  r:e  | C2:h   D1:h  |  
+                  

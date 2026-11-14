@@ -1201,7 +1201,7 @@ Korg SQ-1? *Required, not yet designed.*
   built; shifting play heads are explored then (Jim, 11 Nov 2026).
 - Raised: Jim, 11 Nov 2026.
 
-**OPEN_QUESTION Q34:** How does a track send pitch to a device that
+**Q34 (CLOSED, Jim, 14 Nov 2026 — see Status below):** How does a track send pitch to a device that
 gates again on every note on, so that a change of source note inside a
 sounding element is heard as legato?
 - Context: legato is built as overlapping notes (the new note on, then
@@ -1215,21 +1215,17 @@ sounding element is heard as legato?
   uncoupled lines") the rhythm must drive the gates and the source must
   drive only the pitch. The `_` mark, a tie, and one note for the same
   pitch in two voice layers need the same thing.
-- Direction (Jim, 12 Nov 2026), not yet decided: carry the pitch on
-  control change (CC) numbers, and use the note on and note off for the
-  gate only, as a modular system keeps pitch and gate apart.
-  - The studio says per track that its pitch goes on CCs; the song
-    does not change.
-  - CC numbers start at 60 (a mono track uses 60, a chord up to four,
-    60 to 63), clear of Jim's controller, which uses up to 52.
-  - A chord with fewer than four notes sends the root on the CCs it does
-    not use.
-  - A per-track delay in the studio, about plus or minus 20 ms, between
-    the CC and the note on, so the gate never opens on the previous
-    pitch (which direction is positive is not fixed).
-  - One CC step is one semitone (the value is the MIDI note number).
-  - The note on still carries the element's first pitch, so a device that
-    listens only to notes plays the rhythm.
+- Deferred idea (Jim, 12 Nov 2026; deferred 14 Nov 2026, perhaps for
+  good): carry the pitch on control change (CC) numbers and use the note on
+  and note off for the gate only, as a modular system keeps pitch and gate
+  apart. Deferred because it would be brittle and specific to each device:
+  every receiver's note mapping and transposition settings would have to
+  match exactly, an endless source of future errors. On 12 Nov 2026 the
+  Disting NT's Poly FM did transpose a held note from a CC, so the idea is
+  workable on that receiver. The details drafted on 12 Nov (CC numbers, a
+  per-track delay, the root note on unused CCs) are dropped. A plugin for
+  the Disting NT that makes legato from overlapping notes was also thought
+  of and not pursued.
 - Findings (Jim, 12 Nov 2026, with `held_notes_test`: Bass note on at
   beat 1, a second note on at beat 3 with the first still held, both
   note offs at the end of the bar; logged 12 Nov 2026 19:05 local time):
@@ -1265,11 +1261,6 @@ sounding element is heard as legato?
     see whether the behaviour is common, and can ask Os at Expert Sleepers
     directly. Still to test: the System 35's MIDI converter and the ARP
     2600 (whose dual mono mode plays a second note legato).
-  - Known to work on the NT side (Jim, 12 Nov 2026): Poly FM transposes a
-    held note from a CC (a CC mapped to its transpose input, tested with a
-    Launch Control CC). Any NT value input can be mapped to a CC, so the CC
-    route is simple on the receiver; which algorithm parameters can take a
-    pitch CC exactly, one step per semitone, is still to be checked.
   - 14 Nov 2026 (Jim): System 35 chain: player to the Behringer CM1A
     (MIDI to CV), its S-trig to the 911 envelope generator, the 911 to the
     902 VCA, the CM1A's CV to the VCO and the VCO through the VCA to the
@@ -1283,22 +1274,34 @@ sounding element is heard as legato?
     built the player sent `_` notes like any others, so earlier listening
     on that chain heard no difference.) So the System 35's MIDI converter
     works with the player's legato, and that receiver is done.
-- To decide: how each receiver turns the CC into pitch (the Expert
-  Sleepers NT, EX and FH-2 mappings, which Jim is checking); the CC to
-  1 V/octave conversion an analog oscillator needs somewhere in the path
-  (exactly one semitone per CC step, no slew); and whether the delay is
-  one setting per track or one per CC.
-- Options: Jim's direction above. The receiver test (steps the pitch CC
-  one semitone at a time and is checked on a tuner or quantizer) comes
-  before the build. A plugin for the Disting NT that makes legato from
-  overlapping notes is a possible alternative for that receiver. A
-  measurement of overlapping notes, CC 68 and CC 126 was proposed and not
-  taken up (Jim, 12 Nov 2026).
+  - 14 Nov 2026 (Jim): Disting NT, Poly FM under MIDI control, with the
+    `_` mark built: no legato, with `retrigger_gap` at 100 ms and at 2 ms.
+    The player's MIDI went straight to the NT's MIDI input, with no FH-2
+    in the path. This agrees with the 12 Nov finding that the NT's own MIDI mode gates
+    again on every note on. Other NT MIDI algorithms are being retested.
+  - 14 Nov 2026 (Jim): the player's MIDI to the FH-2 alone, the FH-2's CV
+    and gate into the Disting NT's Poly FM with the NT's MIDI path
+    disabled, with the `_` mark built: legato works, with `retrigger_gap`
+    at 100 ms and at 2 ms. So on 14 Nov 2026 legato from the `_` mark works
+    on the System 35 chain (CM1A, 911, 902) and on the FH-2's CV and gate
+    into Poly FM, and does not work in the NT's own MIDI mode (Poly FM).
 - Raised: Jim, 12 Nov 2026; recorded 12 Nov 2026 16:18 (local time).
 - Status (Jim, 12 Nov 2026 19:26 local time): on hold. The result so far:
   the FH-2 with an analog voice works with the player's legato, and so
   does the NT's Poly FM on CV and gate; the NT's own MIDI mode gates again
   on every note on. Nothing is to be built until the further tests are in.
+- **Decision (Jim, 14 Nov 2026): closed. Legato is solved in the player
+  as it is.** The `_` mark and the sample-source follow send legato as
+  overlapping notes (the new note on, then the old note off). A receiver
+  that cannot make legato from that, such as the Disting NT's own MIDI
+  algorithms, is fed through a MIDI to CV and gate converter (the FH-2, or
+  the Behringer CM1A on the System 35), which the tests above show works.
+  The control change (CC) idea is recorded above under "Deferred idea".
+  - One more observation (Jim, 14 Nov 2026): on the NT's Poly FM with its
+    MIDI path and the FH-2's CV and gate both enabled, the two paths
+    fight: the pitches differ, and both the legato and the extra gates
+    are heard at once. Patching one voice from both paths is not a valid
+    setup; use one path per voice.
 
 ### Deferred (Jim, 11 Nov 2026)
 
