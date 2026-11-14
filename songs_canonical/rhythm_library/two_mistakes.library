@@ -1,0 +1,9 @@
+# Canonical test rhythm library (deliberately wrong): crates/song_text/src/rhythm_library.rs, test `mistakes_are_all_reported_and_nothing_loads`.
+# A short bar in "Short" and a rhythm with no group. The loader must refuse it: both are reported.
+rhythm "Short"
+  group "Swing"
+  meter 4/4
+  | q q q e |
+rhythm "No group"
+  meter 4/4
+  | w |

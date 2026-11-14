@@ -1,0 +1,14 @@
+# Canonical test song (deliberately wrong): crates/song_text/src/song_file.rs, test `meter_15_8`.
+# A compound meter above twelve (15/8). The loader must refuse it: at the section line.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+track "Bass"
+  type mono_voice
+  clef bass
+section "A"
+  key C major  meter 15/8  tempo 120 beats/min

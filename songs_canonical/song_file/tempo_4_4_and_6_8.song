@@ -1,0 +1,15 @@
+# Canonical test song (valid): crates/song_text/src/song_file.rs, test `tempo_4_4_and_6_8`.
+# Section A: 4/4 at 120 beats/min (120 q/min). Section B: 6/8 at 60 beats/min of dotted quarters (90 q/min).
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+section "A"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Keys" | I:w |
+section "B"
+  meter 6/8  tempo 60 beats/min
+  line "Keys" | I:h. |

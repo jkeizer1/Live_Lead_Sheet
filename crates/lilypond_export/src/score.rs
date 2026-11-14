@@ -566,24 +566,19 @@ mod tests {
     use super::*;
     use song_text::song_file::parse_song;
 
-    const HEAD: &str = "song \"T\"\ntrack \"Clock\"\n  type clock_and_transport\n\
-                        track \"Manual\"\n  type poly_voice\n  clef grand\n  lead\n\
-                        track \"Bass\"\n  type mono_voice\n  clef bass\n\
-                        track \"Cues\"\n  type cue_control\n  cue \"Go\" destination \"X\" start\n";
+    // Each song below is a file in songs_canonical/lilypond_export/: tracks
+    // Manual (poly voice), Bass (mono voice) and Cues, then one section.
 
-    fn lilypond_of(sections: &str) -> String {
-        let song: Song = parse_song("test.song", &format!("{HEAD}{sections}")).unwrap();
+    fn lilypond_of(text: &str) -> String {
+        let song: Song = parse_song("test.song", text).unwrap();
         song_to_lilypond(&song).unwrap()
     }
 
     #[test]
     fn voice_layers_share_a_staff_with_their_own_stem_directions() {
-        let text: String = lilypond_of(
-            "section \"A\"\n  key C major  meter 4/4  tempo 60 beats/min\n\
-             \x20 line \"Manual\"  voice_layer 1  | G4:h F4 |\n\
-             \x20 line \"Manual\"  voice_layer 2  | Eb4:q D4 C4 D4 |\n\
-             \x20 line \"Manual\"  voice_layer 3  | C3:w |\n",
-        );
+        let text: String = lilypond_of(include_str!(
+            "../../../songs_canonical/lilypond_export/voice_layers.song"
+        ));
         assert!(text.contains("\\new Voice { \\voiceOne"), "{text}");
         assert!(text.contains("\\new Voice { \\voiceTwo"), "{text}");
         // Layer 3 lies below middle C, so it is alone on the lower staff.
@@ -597,10 +592,9 @@ mod tests {
 
     #[test]
     fn a_track_with_no_line_rests_and_a_repeat_is_a_volta() {
-        let text: String = lilypond_of(
-            "section \"A\"  repeat 2\n  key C major  meter 3/8  tempo 60 beats/min\n\
-             \x20 line \"Manual\"  | I:q. | / |\n",
-        );
+        let text: String = lilypond_of(include_str!(
+            "../../../songs_canonical/lilypond_export/repeat_and_rests.song"
+        ));
         // The bass rests two bars of 3/8.
         assert!(text.contains("R1*6/8"), "{text}");
         assert!(text.contains("\\repeat volta 2 {"), "{text}");
@@ -611,11 +605,9 @@ mod tests {
 
     #[test]
     fn triplets_marks_ties_slurs_and_cues_are_written() {
-        let text: String = lilypond_of(
-            "section \"A\"\n  key C major  meter 4/4  tempo 60 beats/min\n\
-             \x20 line \"Bass\"  | trp (C2:q D2 E2) F2:q_ G2~ | G2:w^ |\n\
-             \x20 line \"Cues\"  | \"Go\":h r | r:w |\n",
-        );
+        let text: String = lilypond_of(include_str!(
+            "../../../songs_canonical/lilypond_export/triplets_marks_ties_slurs_cues.song"
+        ));
         assert!(text.contains("\\tuplet 3/2 { c,4 d,4 e,4 }"), "{text}");
         assert!(text.contains("f,4( g,4~)"), "{text}");
         assert!(text.contains("g,1\\fermata"), "{text}");
@@ -624,10 +616,9 @@ mod tests {
 
     #[test]
     fn a_compound_meter_counts_dotted_quarter_beats() {
-        let text: String = lilypond_of(
-            "section \"A\"\n  key C major  meter 6/8  tempo 60 beats/min\n\
-             \x20 line \"Bass\"  | C2:q. G2 |\n",
-        );
+        let text: String = lilypond_of(include_str!(
+            "../../../songs_canonical/lilypond_export/compound_meter.song"
+        ));
         assert!(text.contains("\\tempo 4. = 60"), "{text}");
     }
 }

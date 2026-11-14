@@ -12,8 +12,10 @@ use vocabulary::control_track::ControlTrack;
 use vocabulary::duration::Duration;
 use vocabulary::song::Song;
 
-const DEMO_SONG: &str = include_str!("../../../songs/song_test_count_in_and_verse.song");
-const DEMO_STUDIO: &str = include_str!("../../../songs/song_test_count_in_and_verse.studio");
+const DEMO_SONG: &str =
+    include_str!("../../../songs_canonical/count_in_and_verse/song_test_count_in_and_verse.song");
+const DEMO_STUDIO: &str =
+    include_str!("../../../songs_canonical/count_in_and_verse/song_test_count_in_and_verse.studio");
 
 /// Ticks in a quarter note.
 const QUARTER: u64 = 5040;

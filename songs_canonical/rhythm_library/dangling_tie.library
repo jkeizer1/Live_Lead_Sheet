@@ -1,0 +1,6 @@
+# Canonical test rhythm library (deliberately wrong): crates/song_text/src/rhythm_library.rs, test `a_tie_with_nothing_to_join_is_reported_at_the_rhythm`.
+# A tie on the last note, with no note after it. The loader must refuse it: reported at the rhythm.
+rhythm "Dangling"
+  group "Swing"
+  meter 4/4
+  | hr qr er e~ |

@@ -1,0 +1,44 @@
+# Canonical test song: crates/song_text/tests/sample_source_plan.rs reads
+# this file and expects exactly this content. Each section is one case of a
+# `sample_source` line (Song Notation, section 5); the test finds a case by
+# its section and bars. Studio: sample_source.studio. Change a copy in
+# songs/, not this file.
+song "Sample source cases"
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+# Section 0, bars 1-2. Bar 2 shares its bar between IV, IV and V (6720 ticks each).
+section "shared bar"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Keys" sample_source | I | IV IV V |
+  line "Keys" | :w | :w |
+
+# Section 1, bars 3-4. A whole note over one chord is one stretch.
+section "one chord per element"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Keys" sample_source | I | IV |
+  line "Keys" | :w | :w |
+
+# Section 2, bar 5. IV and vi share A4 and C5: those are held, not struck again.
+section "change inside a note"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Keys" sample_source | IV vi |
+  line "Keys" | :w |
+
+# Section 3, bars 6-7. The change to V falls inside a rest, so it is not heard.
+section "rest closes the gate"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Keys" sample_source | I | V |
+  line "Keys" | :q :q r:h | r:h :h |
+
+# Section 4, bar 8. Two tied half notes: one gate that follows the source to V.
+section "tied half notes"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Keys" sample_source | IV IV V |
+  line "Keys" | :h~ :h |

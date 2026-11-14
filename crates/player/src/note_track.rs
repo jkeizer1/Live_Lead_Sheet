@@ -8,6 +8,7 @@
 //! divider is a mono voice that plays one fixed note (Song Notation,
 //! section 5).
 
+use std::collections::BTreeMap;
 use std::fmt;
 
 use vocabulary::duration::Duration;
@@ -35,6 +36,10 @@ pub struct TimedNote {
     /// set to legato keeps its gate high (Song Notation, section 3, "How
     /// legato works in MIDI"). False: the note ends as written, and a note
     /// touching the next one is shortened (Q11).
+    ///
+    /// A planner sets it from the `_` mark; [`NoteTrack::new`] then clears
+    /// it where no note starts at the note's end, and joins a note to a
+    /// touching note of the same pitch.
     pub legato_to_next: bool,
 }
 
@@ -74,7 +79,7 @@ impl NoteTrack {
             track_name: track_name.to_string(),
             port,
             channel,
-            notes,
+            notes: join_legato_notes(notes),
             // Zero is harmless: the ALSA output's own lead floor still applies.
             retrigger_gap: Duration::ZERO,
         })
@@ -156,7 +161,7 @@ impl NoteTrack {
                     length_ticks: sounding_ticks.min(stretch_length.ticks() - start_ticks),
                     note,
                     velocity,
-                    legato_to_next: false,
+                    legato_to_next: element.marks().legato(),
                 });
             }
             pattern_start_ticks = pattern_start_ticks
@@ -185,6 +190,73 @@ impl NoteTrack {
     pub fn notes(&self) -> &[TimedNote] {
         &self.notes
     }
+}
+
+/// Settles the `_` marks of a track's notes, which the planner set on
+/// every marked note, whatever follows it (Song Notation, section 3):
+///
+/// - A marked note with no note starting where it ends has nothing to join
+///   (a rest follows, or staccato cut it short): it ends as written.
+/// - A marked note followed by a note of the same pitch on the same channel
+///   becomes one longer note: a note-off for that pitch right after the
+///   second note-on would end the second note. The joined note keeps the
+///   first note's velocity and takes the second note's mark.
+///
+/// The notes keep their order; a note joined into an earlier one is left out.
+fn join_legato_notes(mut notes: Vec<TimedNote>) -> Vec<TimedNote> {
+    // Start (ticks) → indexes of the notes starting there.
+    let mut starting_at: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
+    for (index, note) in notes.iter().enumerate() {
+        starting_at.entry(note.start_ticks).or_default().push(index);
+    }
+    let mut joined_away: Vec<bool> = vec![false; notes.len()];
+    for index in 0..notes.len() {
+        if joined_away[index] {
+            continue;
+        }
+        while notes[index].legato_to_next {
+            // Lengths were checked non-zero and starts are far below the
+            // limit of u64, so the sum cannot overflow in practice; a note
+            // that does overflow simply ends as written.
+            let Some(end_ticks) = notes[index]
+                .start_ticks
+                .checked_add(notes[index].length_ticks)
+            else {
+                notes[index].legato_to_next = false;
+                break;
+            };
+            let touching: Vec<usize> = starting_at
+                .get(&end_ticks)
+                .map(|indexes: &Vec<usize>| {
+                    indexes
+                        .iter()
+                        .copied()
+                        .filter(|&other: &usize| other != index && !joined_away[other])
+                        .collect()
+                })
+                .unwrap_or_default();
+            if touching.is_empty() {
+                notes[index].legato_to_next = false;
+                break;
+            }
+            let same_pitch: Option<usize> = touching
+                .iter()
+                .copied()
+                .find(|&other: &usize| notes[other].note == notes[index].note);
+            let Some(other) = same_pitch else {
+                // Joined to a note of another pitch: sent as legato.
+                break;
+            };
+            joined_away[other] = true;
+            notes[index].length_ticks += notes[other].length_ticks;
+            notes[index].legato_to_next = notes[other].legato_to_next;
+        }
+    }
+    notes
+        .into_iter()
+        .zip(joined_away)
+        .filter_map(|(note, gone): (TimedNote, bool)| if gone { None } else { Some(note) })
+        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

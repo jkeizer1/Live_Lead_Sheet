@@ -1,0 +1,12 @@
+# Canonical test song (valid): crates/note_spelling/src/spelled_line.rs, test `triplets`.
+# Two triplets and a quarter note in one bar.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+section "A"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Keys"  | trp (C4:q D4 E4) trp (F4:e G4 A4) B4:q |

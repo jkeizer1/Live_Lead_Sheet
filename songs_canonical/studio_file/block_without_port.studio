@@ -1,0 +1,5 @@
+# Canonical test studio (deliberately wrong): crates/song_text/src/studio_file.rs, test `block_without_port`.
+# A track block with no port. The loader must refuse it: reported at the block name.
+studio "S"
+track "Keys"
+  channel 1

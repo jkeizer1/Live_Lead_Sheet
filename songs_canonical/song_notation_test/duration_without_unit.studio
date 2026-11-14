@@ -1,0 +1,6 @@
+# Canonical test studio (deliberately wrong): crates/song_text/examples/song_notation_test/main.rs, case "a duration without its unit".
+# The loader must refuse it with one message: retrigger_gap is written without its unit.
+studio "S"
+port "P"
+track "Bass"
+  port "P"  channel 2  retrigger_gap 2

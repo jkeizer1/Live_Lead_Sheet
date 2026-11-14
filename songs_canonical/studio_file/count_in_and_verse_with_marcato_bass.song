@@ -1,0 +1,39 @@
+# Canonical test song (valid): crates/song_text/src/studio_file.rs, test `count_in_and_verse_with_marcato_bass`.
+# The count-in and verse song with the first Bass bar changed to C2:q>> (a marcato note), a mark the studio gives no velocity for.
+# Test song, owned by the tests (song_text's song_file, studio_file and
+# demo_song_plan tests check exactly what is written here). Do not edit for
+# music; change it only together with those tests.
+#
+# A one-bar count-in, then a two-bar verse played twice.
+song "Song test count-in and verse"
+
+track "Clock"
+  type clock_and_transport
+
+track "Beat"
+  type mono_voice
+  clef treble
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+track "Bass"
+  type mono_voice
+  clef bass
+
+track "Cues"
+  type cue_control
+  cue "Start SQ-1"  destination "SQ-1"  start
+
+section "Count-in"  count-in
+  meter 4/4  tempo 120 beats/min
+  line "Beat"  | C4:q> / / / |
+
+section "Verse"  repeat 2
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Beat"  | C4:q> / / /   | /> / / /       |
+  line "Keys"  | I:q / / /     | r ii7:h V7:q   |
+  line "Bass"  | C2:q>> / / / | G2 /:h /:q |
+  line "Cues"  | "Start SQ-1":w | r             |

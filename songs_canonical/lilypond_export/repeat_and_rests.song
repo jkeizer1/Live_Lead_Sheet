@@ -1,0 +1,18 @@
+# Canonical test song (valid): crates/lilypond_export/src/score.rs, test `repeat_and_rests`.
+# A section repeated twice in 3/8 with one chord line; the Bass has no line and rests.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Manual"
+  type poly_voice
+  clef grand
+  lead
+track "Bass"
+  type mono_voice
+  clef bass
+track "Cues"
+  type cue_control
+  cue "Go" destination "X" start
+section "A"  repeat 2
+  key C major  meter 3/8  tempo 60 beats/min
+  line "Manual"  | I:q. | / |

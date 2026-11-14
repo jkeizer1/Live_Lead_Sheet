@@ -1,0 +1,7 @@
+# Canonical test studio (deliberately wrong): crates/song_text/src/studio_file.rs, test `strong_instead_of_marcato`.
+# The old word strong for marcato. The loader must refuse it: says to write marcato.
+studio "S"
+port "P"
+track "A"
+  port "P"  channel 1
+  velocity normal 90  strong 120

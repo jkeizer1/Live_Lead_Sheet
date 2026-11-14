@@ -1,0 +1,6 @@
+# Canonical test rhythm library (deliberately wrong): crates/song_text/examples/rhythm_notation_test/main.rs, case "a bar that is short".
+# The loader must refuse it with one message: the bar is short by an eighth note.
+rhythm "X"
+ group "G"
+ meter 4/4
+ | q q q e |

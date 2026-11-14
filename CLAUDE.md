@@ -94,6 +94,8 @@ code only in adapters), but do not build them.
   unless they pose a risk (e.g. program crashes, disruptions to the player playing)
 - Perfection is the enemy of the good relative to documents; when Jim says to accept
   a limitation -> accept it. 
+- a new test song goes in songs_canonical/ without asking, so I don’t ask each time.
+- Name the folders in README.md only (it already lists them), so CLAUDE.md doesn’t go stale when a folder is added.
 
 ## Coding rules
 
@@ -128,6 +130,35 @@ code only in adapters), but do not build them.
   unit (`ticks`, `instant_ns`, `milli_quarters_per_minute`,
   `NANOSECONDS_PER_MINUTE`); no bare numbers standing for quantities.
   Comments on calculations show the units, and how they cancel.
+- **Test inputs are files, never text inside Rust.** Every song, studio and
+  rhythm library that a test uses (unit test, integration test or
+  `_test` example) is a file under `songs_canonical/`, in a folder named for
+  the test that reads it (`song_file/`, `sample_source/`, ...). The test
+  reads it with `include_str!` (an example may do the same, so it does not
+  depend on the folder it is run from). Do not build song text with
+  `format!`, `concat!`, `.replace()` or a helper that assembles a header
+  and a tail: write the whole file, one file per case, so Jim can open it
+  and play it. A case that is a variation of another (a song with one bar
+  changed) is its own file.
+- **Every canonical file starts with two comment lines:** which test reads
+  it (crate, file, test name), and what the case is. For a deliberately
+  wrong file, the second line also says what the loader must refuse and
+  why. A test that checks a line number in a message counts the two
+  comment lines: the number is the one the file shows.
+- **A canonical file is what its test expects, no more.** Jim experiments
+  on a copy in `songs/`, never on a canonical file. Change a canonical file
+  only together with the test that reads it, and say so in the chat.
+  Canonical files are valid for the notation as it stands, so when the
+  notation changes, update them in the same step.
+- **One case per file for bad inputs;** a valid song that holds several
+  cases may use one file with one section per case (`legato_mark.song`),
+  and the test finds a case by its bars. Do not mix approaches inside one
+  test.
+- **Exception:** a fragment of one bar for the bar parser
+  (`rhythm("q. e hr")` in `rhythm_bar.rs`) is not a song and may stay in
+  the test.
+- Keep `README.md` and the `explainer.md` of an affected `_test` example
+  current when canonical files are added, moved or renamed.
 
 ## Conventions everywhere
 

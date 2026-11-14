@@ -1,0 +1,6 @@
+# Canonical test rhythm library (deliberately wrong): crates/song_text/examples/rhythm_notation_test/main.rs, case "a tie with nothing to join".
+# The loader must refuse it with one message: the tie has no note after it.
+rhythm "X"
+ group "G"
+ meter 4/4
+ | hr qr er e~ |

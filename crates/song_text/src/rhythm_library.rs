@@ -248,23 +248,10 @@ mod tests {
     use super::*;
     use vocabulary::rhythm_pattern::ElementKind;
 
-    const GOOD: &str = r#"
-# Starter rhythms
-rhythm "Charleston"
-  group "Swing"
-  meter 4/4
-  | q. e hr |
-
-rhythm "Anticipation"
-  group "Swing"
-  meter 4/4
-  | hr qr er e~ | q hr. |
-
-rhythm "Backbeat"
-  group "Rock"
-  meter 4/4
-  | q q> q q> |
-"#;
+    // Each library below is a file in songs_canonical/rhythm_library/, starting
+    // with two comment lines: a line number in a message is the number the
+    // file shows.
+    const GOOD: &str = include_str!("../../../songs_canonical/rhythm_library/good.library");
 
     #[test]
     fn a_good_file_loads_every_entry() {
@@ -284,21 +271,24 @@ rhythm "Backbeat"
 
     #[test]
     fn mistakes_are_all_reported_and_nothing_loads() {
-        let text: &str = "rhythm \"Short\"\n  group \"Swing\"\n  meter 4/4\n  | q q q e |\n\
-                          rhythm \"No group\"\n  meter 4/4\n  | w |\n";
+        let text: &str =
+            include_str!("../../../songs_canonical/rhythm_library/two_mistakes.library");
+
         let errors: Vec<ParseError> = parse_rhythm_library("bad.library", text).unwrap_err();
         assert_eq!(errors.len(), 2);
         assert_eq!(
             errors[0].to_string(),
-            "bad.library line 4: bar 1 is short by an eighth note. Add e or er."
+            "bad.library line 6: bar 1 is short by an eighth note. Add e or er."
         );
-        assert_eq!(errors[1].line_number(), 5);
+        assert_eq!(errors[1].line_number(), 7);
         assert!(errors[1].message().contains("has no group"));
     }
 
     #[test]
     fn a_tie_with_nothing_to_join_is_reported_at_the_rhythm() {
-        let text: &str = "rhythm \"Dangling\"\n  group \"Swing\"\n  meter 4/4\n  | hr qr er e~ |\n";
+        let text: &str =
+            include_str!("../../../songs_canonical/rhythm_library/dangling_tie.library");
+
         let errors: Vec<ParseError> = parse_rhythm_library("tie.library", text).unwrap_err();
         assert_eq!(errors.len(), 1);
         assert!(
@@ -311,14 +301,18 @@ rhythm "Backbeat"
     #[test]
     fn a_hash_inside_a_name_is_not_a_comment() {
         let text: &str =
-            "# a comment\nrhythm \"F# shuffle\"\n  group \"Swing\"\n  meter 4/4\n  | w |\n";
+            include_str!("../../../songs_canonical/rhythm_library/hash_in_a_name.library");
+
         let entries: Vec<RhythmLibraryEntry> = parse_rhythm_library("hash.library", text).unwrap();
         assert_eq!(entries[0].pattern().name(), "F# shuffle");
     }
 
     #[test]
     fn lines_outside_a_rhythm_and_bad_meters_are_reported() {
-        let text: &str = "| q q q q |\nrhythm \"X\"\n  group \"G\"\n  meter 4/3\n  | w |\n";
+        let text: &str = include_str!(
+            "../../../songs_canonical/rhythm_library/line_outside_and_bad_meter.library"
+        );
+
         let errors: Vec<ParseError> = parse_rhythm_library("odd.library", text).unwrap_err();
         assert!(errors[0].message().contains("outside a rhythm"));
         assert!(errors[1].message().contains("not a time signature"));

@@ -1,0 +1,6 @@
+# Canonical test rhythm library (deliberately wrong): crates/song_text/examples/rhythm_notation_test/main.rs, case "a bar that is long".
+# The loader must refuse it with one message: the bar is over by a quarter note.
+rhythm "X"
+ group "G"
+ meter 3/4
+ | q q q q |

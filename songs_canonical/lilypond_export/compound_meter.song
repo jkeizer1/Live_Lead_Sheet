@@ -1,0 +1,18 @@
+# Canonical test song (valid): crates/lilypond_export/src/score.rs, test `compound_meter`.
+# 6/8 at 60 beats/min: the beat is a dotted quarter note.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Manual"
+  type poly_voice
+  clef grand
+  lead
+track "Bass"
+  type mono_voice
+  clef bass
+track "Cues"
+  type cue_control
+  cue "Go" destination "X" start
+section "A"
+  key C major  meter 6/8  tempo 60 beats/min
+  line "Bass"  | C2:q. G2 |

@@ -1,0 +1,15 @@
+# Canonical test song (deliberately wrong): crates/song_text/examples/song_notation_test/main.rs, case "a chord on the mono bass".
+# The loader must refuse it with one message: a mono voice plays one note at a time.
+song "T"
+track "Clock"
+ type clock_and_transport
+track "Keys"
+ type poly_voice
+ clef grand
+ lead
+track "Bass"
+ type mono_voice
+ clef bass
+section "A"
+ key C major  meter 4/4  tempo 120 beats/min
+ line "Bass" | C2:q / / V7 |

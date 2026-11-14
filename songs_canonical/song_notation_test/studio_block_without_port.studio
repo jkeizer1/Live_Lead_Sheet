@@ -1,0 +1,5 @@
+# Canonical test studio (deliberately wrong): crates/song_text/examples/song_notation_test/main.rs, case "a studio block with no port".
+# The loader must refuse it with one message: the Keys block has no port.
+studio "S"
+track "Keys"
+  channel 1

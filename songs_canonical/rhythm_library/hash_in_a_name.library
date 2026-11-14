@@ -1,0 +1,7 @@
+# Canonical test rhythm library (valid): crates/song_text/src/rhythm_library.rs, test `a_hash_inside_a_name_is_not_a_comment`.
+# A comment line, then a rhythm named "F# shuffle": the # in the name is a sharp, not a comment.
+# a comment
+rhythm "F# shuffle"
+  group "Swing"
+  meter 4/4
+  | w |

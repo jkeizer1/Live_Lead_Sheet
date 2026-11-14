@@ -1,0 +1,9 @@
+# Canonical test song (deliberately wrong): crates/song_text/src/song_file.rs, test `track_block_mistakes`.
+# Two mistakes in track blocks: an unknown setting (wobble) and an unknown track type. The loader must refuse it: both are reported.
+song "T"
+track "A"
+  clef treble
+  type poly_voice
+  wobble
+track "B"
+  type bass_synth

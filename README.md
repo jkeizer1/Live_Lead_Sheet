@@ -4,7 +4,7 @@ A live lead sheet for improvising: it plays a song (chords, rhythm, bass)
 to MIDI instruments and shows key, meter, chord names and voicings on a
 staff, with the bars ahead in view. See `docs/Concept/Concept Brief.md`.
 
-Revision 6 — 2026-11-08
+Revision 9 — 2026-11-14
 
 ## The program
 
@@ -21,6 +21,17 @@ looping).
 | Esc | Quit |
 
 ## Tests
+
+Every song and studio that a test uses (the unit tests, the integration tests and
+`song_notation_test`) is a file under `songs_canonical/`, in a folder named for
+the test that reads it (`song_file/`, `studio_file/`, `sample_source/`,
+`legato_mark/`, `note_spelling/`, `lilypond_export/`, `song_notation_test/`,
+`count_in_and_verse/`). Each file starts with two comment lines: which test reads
+it, what case it is, and for a bad file, what the loader must say. A test checks
+exactly what its file says, so edit a copy in `songs/` to experiment, not the
+canonical file.
+The rhythm library tests (`rhythm_library.rs`, `rhythm_notation_test`) work the same
+way, with `.library` files in `rhythm_library/` and `rhythm_notation_test/`.
 
 ```
 cargo test
@@ -39,7 +50,7 @@ has its own folder under `examples/`, with `main.rs` and an
 | `cargo run --release -p alsa_output --example control_track_test -- [options]` | Test: plays a count-in on the beat pulse, then a reset trigger and an SQ-1 Start on the music's first bar, with Timing Clock on its own port (D-10); optional SQ-1 restarts. Asks you to connect its ports, then waits for Enter. See its `explainer.md` | Terminal |
 | `cargo run --release -p song_text --example rhythm_notation_test -- [LIBRARY_FILE] [--play "Name" [--bpm N] [--bars N] [--channel C] [--note N] [--transport]]` | Test: loads `library/Rhythms.library` (or the file given), prints every rhythm in beats and note values, and checks that six kinds of mistake are reported as EFS-6.3 asks. With `--play`, plays that rhythm on the beat-pulse port (Timing Clock on its own port) and asks you to connect the ports first; `--transport` adds Start and Stop, which the FH-2's clock output needs. See its `explainer.md` | Terminal |
 | `cargo run -p song_text --example song_notation_test -- [SONG_FILE [STUDIO_FILE]]` | Test: loads `songs/Demo.song` and `songs/Demo.studio` (or the files given), prints the song track by track and bar by bar in beats and note values, checks that the studio gives every track and cue destination the song needs, and checks that nine kinds of mistake are reported as EFS-6.3 asks. See its `explainer.md` | Terminal |
-| `cargo run --release -p song_text --example song_play_test -- [SONG_FILE [STUDIO_FILE]]` | Test: plays `songs/Demo.song` through `songs/Demo.studio` (or the files given): count-in, beat, chords, bass, the Start cue, with Timing Clock, Start and Stop on the studio's clock port. A note that ends where the next note on its track starts is sent 5 ms short (more with the studio's `retrigger_gap`). Where a sample source changes inside a sounding note, the new notes are sent first and the old ones released after them (legato), so the gate stays high on a mono receiver set to legato. Opens one output port for each port the studio lists, names them and asks you to connect them first. To hear sample sources (chords and bass notes on their own lines, rhythm below): `-- songs/Sample_source.song songs/Demo.studio`. See its `explainer.md` | Terminal |
+| `cargo run --release -p song_text --example song_play_test -- [SONG_FILE [STUDIO_FILE]]` | Test: plays `songs/Demo.song` through `songs/Demo.studio` (or the files given): count-in, beat, chords, bass, the Start cue, with Timing Clock, Start and Stop on the studio's clock port. A note that ends where the next note on its track starts is sent 5 ms short (more with the studio's `retrigger_gap`). Where a sample source changes inside a sounding note, the new notes are sent first and the old ones released after them (legato), so the gate stays high on a mono receiver set to legato. The `_` mark does the same for a note and the next note on its track that starts where it ends; a marked note followed by the same pitch becomes one longer note. Opens one output port for each port the studio lists, names them and asks you to connect them first. To hear sample sources (chords and bass notes on their own lines, rhythm below): `-- songs/Sample_source.song songs/Demo.studio`. See its `explainer.md` | Terminal |
 | `cargo run -p lilypond_export --example lilypond_export_test -- SONG_FILE [OUTPUT_FILE]` | Test: writes the song as a LilyPond file, to read it as sheet music; then `lilypond -o ~/tmp ~/tmp/NAME.ly` engraves it (LilyPond is installed separately: `sudo apt install lilypond`). Draws plain and dotted values and triplets; anything else is reported with its section, track and bar. See its `explainer.md` | `~/tmp/NAME.ly` (or OUTPUT_FILE), then `~/tmp/NAME.pdf` |
 | `cargo run -p song_text --example legato_order_test -- [SONG_FILE [STUDIO_FILE]]` | Test: lists, for `songs/Legato_test.song` and `songs/Demo.studio` (or the files given), every note on and note off the player hands to the ALSA output, track by track, with its instant and channel, and checks that at a sample source change the new note on comes before the old note off. No MIDI hardware needed. To see what ALSA delivers, play the song with `song_play_test` and run `aseqdump -p "Lead Sheet"`. See its `explainer.md` | Terminal |
 | `cargo run --release -p alsa_output --example held_notes_test -- [--bpm N] [--bars N] [--channel C] [--first-note N] [--second-note N] [--velocity V]` | Test: the most basic legato case as a keyboard sends it. Each bar the port `Bass` gets a note on at beat 1, a second note on at beat 3 with the first still held, then both note offs at the end of the bar; the port `Beat pulse` gets steady quarter notes. Finds out whether a mono voice keeps one gate and changes pitch at beat 3. Asks you to connect its ports, then waits for Enter. See its `explainer.md` | Terminal |

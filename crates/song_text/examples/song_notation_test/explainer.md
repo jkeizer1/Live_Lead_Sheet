@@ -1,6 +1,6 @@
 # song_notation_test
 
-Revision 4 — 8 Nov 2026 (the song notation's new order, voice layers, nine mistakes)
+Revision 5 — 14 Nov 2026 (the nine bad files are files in songs_canonical/song_notation_test/)
 
 ## What it proves
 
@@ -62,3 +62,4 @@ seventh, and where it sits on the staff) are worked out in `song_play_test`.
 - Revision 2, 5 Nov 2026: the beat pulse is a mono voice; Demo files changed.
 - Revision 3, 7 Nov 2026: places named in beats (and pulses in compound meters); tempo written in beats/min.
 - Revision 4, 8 Nov 2026: song lines write what an element plays first, then its length (Song Notation Revision 15); voice layers printed; the mistake "a first note that says nothing" became "a first note with no length", and "a line in the old order" was added.
+- Revision 5, 14 Nov 2026: the nine bad songs and studios are files in `songs_canonical/song_notation_test/`, each with a comment saying what is wrong, instead of text inside the program; the lines in the expected messages moved down by the two comment lines.

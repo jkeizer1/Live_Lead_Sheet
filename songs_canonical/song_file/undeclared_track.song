@@ -1,0 +1,15 @@
+# Canonical test song (deliberately wrong): crates/song_text/src/song_file.rs, test `undeclared_track`.
+# A line for the track "Drums", which the song does not declare. The loader must refuse it: one message naming the track.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+track "Bass"
+  type mono_voice
+  clef bass
+section "A"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Drums"  | C4:q D4 E4 F4 |

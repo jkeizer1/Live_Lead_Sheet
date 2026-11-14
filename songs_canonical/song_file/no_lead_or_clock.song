@@ -1,0 +1,9 @@
+# Canonical test song (deliberately wrong): crates/song_text/src/song_file.rs, test `no_lead_or_clock`.
+# No lead track and no clock and transport track. The loader must refuse it: asks for a clock and transport track.
+song "T"
+track "Keys"
+  type poly_voice
+  clef treble
+section "A"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Keys" | I:q / / / |

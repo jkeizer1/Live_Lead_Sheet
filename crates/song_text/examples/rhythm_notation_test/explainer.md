@@ -1,6 +1,6 @@
 # rhythm_notation_test
 
-Revision 5 — 7 Nov 2026 (places are named in beats; "count" replaced by beat)
+Revision 6 — 14 Nov 2026 (the six bad libraries are files in songs_canonical/rhythm_notation_test/)
 
 ## What it proves
 
@@ -169,3 +169,4 @@ needs one more listening.
 - Revision 3, 5 Nov 2026: the beat pulse is a mono voice; velocity comes from the rhythm's marks, gate length from the written length; library accents written with `>`.
 - Revision 4, 5 Nov 2026: the play half uses the shared `support/event_player.rs`; listening findings with the NT's velocity gates.
 - Revision 5, 7 Nov 2026: places named in beats (and pulses in compound meters); "count" replaced by beat.
+- Revision 6, 14 Nov 2026: the six bad libraries are files in `songs_canonical/rhythm_notation_test/`, each with a comment saying what is wrong, instead of text inside the program; the lines in the expected messages moved down by the two comment lines.

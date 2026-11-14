@@ -1,0 +1,16 @@
+# Canonical test song (deliberately wrong): crates/song_text/src/song_file.rs, test `voice_layer_used_but_not_named`.
+# A line for voice_layer 2 of Keys whose track block says voice_layer 2 with no name. The loader must refuse it: asks for voice_layer 2 "Name".
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+  voice_layer 2
+track "Bass"
+  type mono_voice
+  clef bass
+section "A"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Keys"  | I:w |

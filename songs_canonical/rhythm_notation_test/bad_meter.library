@@ -1,0 +1,6 @@
+# Canonical test rhythm library (deliberately wrong): crates/song_text/examples/rhythm_notation_test/main.rs, case "a meter that is not one".
+# The loader must refuse it with one message: 4/3 is not a time signature.
+rhythm "X"
+ group "G"
+ meter 4/3
+ | w |

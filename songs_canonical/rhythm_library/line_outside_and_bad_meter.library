@@ -1,0 +1,7 @@
+# Canonical test rhythm library (deliberately wrong): crates/song_text/src/rhythm_library.rs, test `lines_outside_a_rhythm_and_bad_meters_are_reported`.
+# A bar line before any rhythm, then meter 4/3. The loader must refuse it: both are reported.
+| q q q q |
+rhythm "X"
+  group "G"
+  meter 4/3
+  | w |

@@ -47,104 +47,80 @@ struct MistakeCase {
     expected_message: &'static str,
 }
 
-/// The tracks every song case starts with; each case adds its own sections.
-const SONG_HEAD: &str = "song \"T\"\ntrack \"Clock\"\n type clock_and_transport\n\
-                         track \"Keys\"\n type poly_voice\n clef grand\n lead\n\
-                         track \"Bass\"\n type mono_voice\n clef bass\n";
-
+// Each bad file is in songs_canonical/song_notation_test/. It starts with two
+// comment lines, so a line number in a message is the number the file shows.
 const MISTAKE_CASES: [MistakeCase; 9] = [
     MistakeCase {
         what: "a line for a track the song does not have",
         kind: Kind::Song,
-        text: concat!(
-            "song \"T\"\ntrack \"Clock\"\n type clock_and_transport\n",
-            "section \"A\"\n meter 4/4  tempo 120 beats/min\n line \"Drums\" | C4:q D4 E4 F4 |\n"
-        ),
-        expected_message: "mistake.song line 6: \"Drums\" is not a track of the song. Declare it \
+        text: include_str!("../../../../songs_canonical/song_notation_test/unknown_track.song"),
+        expected_message: "mistake.song line 8: \"Drums\" is not a track of the song. Declare it \
                            with track \"Drums\" before the sections, or fix the name",
     },
     MistakeCase {
         what: "a chord on the mono bass",
         kind: Kind::Song,
-        text: concat!(
-            "song \"T\"\ntrack \"Clock\"\n type clock_and_transport\n",
-            "track \"Keys\"\n type poly_voice\n clef grand\n lead\n",
-            "track \"Bass\"\n type mono_voice\n clef bass\n",
-            "section \"A\"\n key C major  meter 4/4  tempo 120 beats/min\n",
-            " line \"Bass\" | C2:q / / V7 |\n"
+        text: include_str!(
+            "../../../../songs_canonical/song_notation_test/chord_on_mono_bass.song"
         ),
-        expected_message: "mistake.song line 13: line \"Bass\": bar 1 beat 4: track \"Bass\" cannot \
+        expected_message: "mistake.song line 15: line \"Bass\": bar 1 beat 4: track \"Bass\" cannot \
                            play that: a mono voice plays one note at a time; write a single note \
                            such as C2",
     },
     MistakeCase {
         what: "a first note with no length",
         kind: Kind::Song,
-        text: concat!(
-            "song \"T\"\ntrack \"Clock\"\n type clock_and_transport\n",
-            "track \"Keys\"\n type poly_voice\n clef grand\n lead\n",
-            "section \"A\"\n key C major  meter 4/4  tempo 120 beats/min\n",
-            " line \"Keys\" | I / / / |\n"
+        text: include_str!(
+            "../../../../songs_canonical/song_notation_test/first_note_without_length.song"
         ),
-        expected_message: "mistake.song line 10: line \"Keys\": \"I\" has no length, and nothing \
+        expected_message: "mistake.song line 12: line \"Keys\": \"I\" has no length, and nothing \
                            before it in this line gives one. Write it, e.g. I:q",
     },
     MistakeCase {
         what: "a line in the old order, length first",
         kind: Kind::Song,
-        text: concat!(
-            "song \"T\"\ntrack \"Clock\"\n type clock_and_transport\n",
-            "track \"Keys\"\n type poly_voice\n clef grand\n lead\n",
-            "section \"A\"\n key C major  meter 4/4  tempo 120 beats/min\n",
-            " line \"Keys\" | q:I q q q |\n"
-        ),
-        expected_message: "mistake.song line 10: line \"Keys\": \"q:I\": a song line writes what it \
+        text: include_str!("../../../../songs_canonical/song_notation_test/length_first.song"),
+        expected_message: "mistake.song line 12: line \"Keys\": \"q:I\": a song line writes what it \
                            plays first, then its length, e.g. C4:q, I:q or r:q, not q:C4",
     },
     MistakeCase {
         what: "chords in a section with no key",
         kind: Kind::Song,
-        text: concat!(
-            "song \"T\"\ntrack \"Clock\"\n type clock_and_transport\n",
-            "track \"Keys\"\n type poly_voice\n clef grand\n lead\n",
-            "section \"A\"\n meter 4/4  tempo 120 beats/min\n line \"Keys\" | I:q / / / |\n"
+        text: include_str!(
+            "../../../../songs_canonical/song_notation_test/chords_without_key.song"
         ),
-        expected_message: "mistake.song line 8: section \"A\" has chords but no key. Add key to the \
+        expected_message: "mistake.song line 10: section \"A\" has chords but no key. Add key to the \
                            section, e.g. key C major",
     },
     MistakeCase {
         what: "a song with no clock and transport track",
         kind: Kind::Song,
-        text: concat!(
-            "song \"T\"\ntrack \"Beat\"\n type mono_voice\n clef treble\n",
-            "section \"A\"\n meter 4/4  tempo 120 beats/min\n line \"Beat\" | C4:q / / / |\n"
-        ),
-        expected_message: "mistake.song line 1: the song has 0 clock and transport tracks. It needs \
+        text: include_str!("../../../../songs_canonical/song_notation_test/no_clock_track.song"),
+        expected_message: "mistake.song line 3: the song has 0 clock and transport tracks. It needs \
                            exactly 1: add a track with type clock_and_transport",
     },
     MistakeCase {
         what: "a chord the notation does not know",
         kind: Kind::Song,
-        text: concat!(
-            "song \"T\"\ntrack \"Clock\"\n type clock_and_transport\n",
-            "track \"Keys\"\n type poly_voice\n clef grand\n lead\n",
-            "section \"A\"\n key C major  meter 4/4  tempo 120 beats/min\n",
-            " line \"Keys\" | IV9b:q / / / |\n"
-        ),
-        expected_message: "mistake.song line 10: line \"Keys\": bar 1 beat 1: \"IV9b\" is not a chord. \
+        text: include_str!("../../../../songs_canonical/song_notation_test/unknown_chord.song"),
+        expected_message: "mistake.song line 12: line \"Keys\": bar 1 beat 1: \"IV9b\" is not a chord. \
                            After an upper case numeral write nothing, 7, M7 or maj7, + or 7b9",
     },
     MistakeCase {
         what: "a studio block with no port",
         kind: Kind::Studio,
-        text: "studio \"S\"\ntrack \"Keys\"\n  channel 1\n",
-        expected_message: "mistake.studio line 2: \"Keys\" has no port. Add a line such as port \"Harmony\"",
+        text: include_str!(
+            "../../../../songs_canonical/song_notation_test/studio_block_without_port.studio"
+        ),
+        expected_message: "mistake.studio line 4: \"Keys\" has no port. Add a line such as port \"Harmony\"",
     },
     MistakeCase {
         what: "a duration without its unit",
         kind: Kind::Studio,
-        text: "studio \"S\"\nport \"P\"\ntrack \"Bass\"\n  port \"P\"  channel 2  retrigger_gap 2\n",
-        expected_message: "mistake.studio line 4: write retrigger_gap with its unit, e.g. \
+        text: include_str!(
+            "../../../../songs_canonical/song_notation_test/duration_without_unit.studio"
+        ),
+        expected_message: "mistake.studio line 6: write retrigger_gap with its unit, e.g. \
                            retrigger_gap 2 ms",
     },
 ];
@@ -505,14 +481,9 @@ fn check_mistakes() -> bool {
     let mut all_ok: bool = true;
     for case in &MISTAKE_CASES {
         let errors: Vec<ParseError> = match case.kind {
-            Kind::Song => {
-                let text: String = if case.text.starts_with("song") {
-                    case.text.to_string()
-                } else {
-                    format!("{SONG_HEAD}{}", case.text)
-                };
-                parse_song("mistake.song", &text).err().unwrap_or_default()
-            }
+            Kind::Song => parse_song("mistake.song", case.text)
+                .err()
+                .unwrap_or_default(),
             Kind::Studio => parse_studio("mistake.studio", case.text)
                 .err()
                 .unwrap_or_default(),

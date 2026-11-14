@@ -1,0 +1,12 @@
+# Canonical test studio for legato_mark.song. Tests expect exactly this.
+studio "Legato mark studio"
+
+port "Clock"
+port "Bass"
+
+track "Clock"
+  port "Clock"  channel 16
+
+track "Bass"
+  port "Bass"  channel 1
+  velocity normal 90  accent 115

@@ -1,0 +1,11 @@
+# Canonical test song (deliberately wrong): crates/song_text/src/song_file.rs, test `cue_not_defined`.
+# A cue (Stop) that the cue track does not define. The loader must refuse it: names the missing cue.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Cues"
+  type cue_control
+  cue "Go" destination "X" start
+section "A"
+  meter 4/4  tempo 120 beats/min
+  line "Cues" | "Stop":w |

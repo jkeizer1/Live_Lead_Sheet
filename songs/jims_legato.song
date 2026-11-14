@@ -1,0 +1,42 @@
+# ALL NT
+# NT Nov12_Song_PlayTest
+# Router Nov12
+# FH-2 Nov12_Song
+# Note Launch Ctl sets volume for the 3 tracks
+# cargo run --release -p song_text --example song_play_test -- songs/jims_legato.song songs/jims_legato.studio
+
+song "Nov 12 General Testing"
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  clef treble
+
+track "Beat"
+  type mono_voice
+  clef treble
+
+track "Bass"
+  type mono_voice
+  clef bass
+  lead
+
+track "Cymbol"
+  type mono_voice
+  clef treble
+
+section "Count-in"  count-in repeat 1
+  meter 4/4  tempo 80 beats/min
+  line "Beat" | B3:q>> B3:q< B3:q< B3:q<< |  
+
+section "Bass 1"  repeat 12
+  key C major
+  line "Keys"                   | ii:w                  | IV:w                  |  r:w                | ii:w                     | I:w                   | r:w                   | I:w                   |
+  line "Bass" sample_source     | D2 E2 F2 G2           |  D2 E2 F2 G2 A2       |  D2 E2 F2 G2        | D2 E2 F2 G2 A2 B3        | C3 E2 G2 D2 E2        | C3 E2 G2 D2 E2        | C3 E2 G2 D2 E3 D3 G4  |                  
+  line "Bass"                   | :q :q :q :q           | :q :q :q :q           | :q :q :q :q         | :q :q :q :q              | :h :h                 | :h :h                 | :h :h                 |  
+  line "Beat"                   | B3:q G2:q G2:q G2:q   | B3:q G2:q G2:q G2:q   | B3:q G2:q G2:q G2:q | B3:q G2:q G2:q G2:q      |  B3:q G2:q G2:q G2:q  | B3:q G2:q G2:q G2:q   | B3:q G2:q G2:q r:q    |
+  line "Cymbol"                 | r:q C2:q r:q C2:q     | r:q C2:q r:q C2:q     | r:q C2:q r:q C2:    | r:q C2:q r:q C2:q        | r:q C2:q r:q C2:q     | r:q C2:q r:q C2:q     | r:q C2:q r:q C2:q     |
+ 
+

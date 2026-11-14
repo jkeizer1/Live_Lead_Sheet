@@ -1,0 +1,6 @@
+# Canonical test studio (deliberately wrong): crates/song_text/src/studio_file.rs, test `undeclared_port`.
+# Track A uses port "Q", which the studio does not declare. The loader must refuse it: says the port is not declared.
+studio "S"
+port "P"
+track "A"
+  port "Q"  channel 1

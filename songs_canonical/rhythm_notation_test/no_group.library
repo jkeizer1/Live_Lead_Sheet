@@ -1,0 +1,5 @@
+# Canonical test rhythm library (deliberately wrong): crates/song_text/examples/rhythm_notation_test/main.rs, case "a rhythm without a group".
+# The loader must refuse it with one message: the rhythm has no group.
+rhythm "X"
+ meter 4/4
+ | w |

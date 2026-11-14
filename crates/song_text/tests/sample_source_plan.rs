@@ -12,36 +12,50 @@ use song_text::song_file::parse_song;
 use song_text::studio_file::parse_studio;
 use vocabulary::song::{Line, LineRole, Song, VoiceLayerNumber};
 
-const SAMPLE_SOURCE_SONG: &str = include_str!("../../../songs/Sample_source.song");
-const DEMO_STUDIO: &str = include_str!("../../../songs/Demo.studio");
+// Every song and studio here is a file in songs_canonical/, so each can be
+// read and played; this test expects exactly what they say.
+const SAMPLE_SOURCE_SONG: &str =
+    include_str!("../../../songs_canonical/sample_source/sample_source.song");
+const DEMO_STUDIO: &str =
+    include_str!("../../../songs_canonical/sample_source/sample_source.studio");
+const CASES_SONG: &str =
+    include_str!("../../../songs_canonical/sample_source/sample_source_cases.song");
+
+const NO_SOURCE_FILE: &str = "sample_source_error_no_source.song";
+const NO_SOURCE: &str =
+    include_str!("../../../songs_canonical/sample_source/sample_source_error_no_source.song");
+const NO_RHYTHM_FILE: &str = "sample_source_error_no_rhythm.song";
+const NO_RHYTHM: &str =
+    include_str!("../../../songs_canonical/sample_source/sample_source_error_no_rhythm.song");
+const CHORD_WITHOUT_LENGTH_FILE: &str = "sample_source_error_chord_without_length.song";
+const CHORD_WITHOUT_LENGTH: &str = include_str!(
+    "../../../songs_canonical/sample_source/sample_source_error_chord_without_length.song"
+);
 
 /// Ticks in a quarter note, and in a 4/4 bar.
 const QUARTER: u64 = 5040;
 const BAR: u64 = 4 * QUARTER;
 
-/// A one-track song in C major 4/4 with `lines` in its one section.
-fn song_with(lines: &str) -> String {
-    format!(
-        "song \"T\"\ntrack \"Clock\"\n  type clock_and_transport\n\
-         track \"Keys\"\n  type poly_voice\n  clef grand\n  lead\n\
-         section \"A\"\n  key C major  meter 4/4  tempo 120 beats/min\n{lines}"
-    )
-}
+// The sections of sample_source_cases.song: (index, first bar counted from 0,
+// number of bars).
+const SHARED_BAR: usize = 0;
+const ONE_CHORD_PER_ELEMENT: usize = 1;
+const CHANGE_INSIDE_A_NOTE: (u64, u64) = (4, 1);
+const REST_CLOSES_THE_GATE: (u64, u64) = (5, 2);
+const TIED_HALF_NOTES: (u64, u64) = (7, 1);
 
-fn errors_of(text: &str) -> Vec<String> {
-    parse_song("test.song", text)
+fn errors_of(file_name: &str, text: &str) -> Vec<String> {
+    parse_song(file_name, text)
         .unwrap_err()
         .iter()
         .map(ToString::to_string)
         .collect()
 }
 
-fn source_line(source_bars: &str) -> Line {
-    let text: String = song_with(&format!(
-        "  line \"Keys\" sample_source {source_bars}\n  line \"Keys\" | :w | :w |\n"
-    ));
-    let song: Song = parse_song("test.song", &text).unwrap();
-    song.sections()[0]
+/// The sample source line of section `section_index` of the cases song.
+fn source_line(section_index: usize) -> Line {
+    let song: Song = parse_song("sample_source_cases.song", CASES_SONG).unwrap();
+    song.sections()[section_index]
         .lines()
         .iter()
         .find(|line: &&Line| line.role() == LineRole::SampleSource(VoiceLayerNumber::FIRST))
@@ -49,10 +63,28 @@ fn source_line(source_bars: &str) -> Line {
         .clone()
 }
 
+/// The Keys notes of the cases song's bars from `first_bar` (counted from
+/// 0) for `bar_count` bars, with starts counted from the first of them.
+fn case_keys_notes((first_bar, bar_count): (u64, u64)) -> Vec<TimedNote> {
+    let song: Song = parse_song("sample_source_cases.song", CASES_SONG).unwrap();
+    let studio = parse_studio("sample_source.studio", DEMO_STUDIO).unwrap();
+    let plan: SongPlan = plan_song(&song, &studio).unwrap();
+    let from_ticks: u64 = first_bar * BAR;
+    let to_ticks: u64 = (first_bar + bar_count) * BAR;
+    notes_of(&plan, "Keys")
+        .iter()
+        .filter(|note: &&TimedNote| (from_ticks..to_ticks).contains(&note.start_ticks))
+        .map(|note: &TimedNote| TimedNote {
+            start_ticks: note.start_ticks - from_ticks,
+            ..*note
+        })
+        .collect()
+}
+
 #[test]
 fn a_source_bar_is_shared_evenly_between_its_elements() {
     // 20160 ticks/bar ÷ 3 = 6720 ticks each.
-    let source: Line = source_line("| I | IV IV V |");
+    let source: Line = source_line(SHARED_BAR);
     let places: Vec<(u64, u64)> = source
         .elements()
         .iter()
@@ -76,7 +108,7 @@ fn a_source_bar_is_shared_evenly_between_its_elements() {
 
 #[test]
 fn an_element_over_one_chord_is_one_stretch() {
-    let source: Line = source_line("| I | IV |");
+    let source: Line = source_line(ONE_CHORD_PER_ELEMENT);
     let stretches: Vec<HeldStretch> = held_stretches(&source, 0, BAR);
     assert_eq!(stretches.len(), 1);
     assert_eq!(stretches[0].length_ticks, BAR);
@@ -86,7 +118,7 @@ fn an_element_over_one_chord_is_one_stretch() {
 fn an_element_follows_the_source_when_it_changes_while_sounding() {
     // A half note from beat 3 of bar 2 (10080 ticks into the bar) runs from
     // the second IV into V, which starts 13440 ticks into the bar.
-    let source: Line = source_line("| I | IV IV V |");
+    let source: Line = source_line(SHARED_BAR);
     let start_ticks: u64 = BAR + 2 * QUARTER;
     let stretches: Vec<HeldStretch> = held_stretches(&source, start_ticks, 2 * QUARTER);
     assert_eq!(stretches.len(), 2, "{stretches:?}");
@@ -103,7 +135,7 @@ fn an_element_follows_the_source_when_it_changes_while_sounding() {
 
 #[test]
 fn the_same_chord_twice_is_not_a_change() {
-    let source: Line = source_line("| I | IV IV V |");
+    let source: Line = source_line(SHARED_BAR);
     let stretches: Vec<HeldStretch> = held_stretches(&source, BAR, 13_440);
     assert_eq!(stretches.len(), 1, "{stretches:?}");
     assert_eq!(stretches[0].length_ticks, 13_440);
@@ -113,7 +145,7 @@ fn the_same_chord_twice_is_not_a_change() {
 fn an_element_takes_the_chord_held_when_it_starts() {
     // A quarter note on beat 4 of bar 2 is inside V, which started at 13440
     // ticks into the bar.
-    let source: Line = source_line("| I | IV IV V |");
+    let source: Line = source_line(SHARED_BAR);
     let start_ticks: u64 = BAR + 3 * QUARTER;
     let stretches: Vec<HeldStretch> = held_stretches(&source, start_ticks, QUARTER);
     assert_eq!(stretches.len(), 1);
@@ -260,12 +292,7 @@ fn a_pitch_shared_by_the_old_and_new_chord_is_held_not_struck_again() {
     // IV (F4 A4 C5) over the first half of the bar, vi (A4 C5 E5) over the
     // second: A4 and C5 are held through the whole bar, F4 ends legato where
     // E5 starts.
-    let text: String =
-        song_with("  line \"Keys\" sample_source | IV vi |\n  line \"Keys\" | :w |\n");
-    let song: Song = parse_song("test.song", &text).unwrap();
-    let studio = parse_studio("Demo.studio", DEMO_STUDIO).unwrap();
-    let plan: SongPlan = plan_song(&song, &studio).unwrap();
-    let mut found: Vec<(u8, u64, u64, bool)> = notes_of(&plan, "Keys")
+    let mut found: Vec<(u8, u64, u64, bool)> = case_keys_notes(CHANGE_INSIDE_A_NOTE)
         .iter()
         .map(|note: &TimedNote| {
             (
@@ -291,7 +318,7 @@ fn a_pitch_shared_by_the_old_and_new_chord_is_held_not_struck_again() {
 
 #[test]
 fn a_rhythm_element_with_no_source_is_refused() {
-    let errors: Vec<String> = errors_of(&song_with("  line \"Keys\" | :w |\n"));
+    let errors: Vec<String> = errors_of(NO_SOURCE_FILE, NO_SOURCE);
     assert_eq!(errors.len(), 1, "{errors:?}");
     assert!(
         errors[0].contains("takes what it plays from a"),
@@ -302,46 +329,71 @@ fn a_rhythm_element_with_no_source_is_refused() {
 
 #[test]
 fn a_source_with_no_rhythm_line_is_refused() {
-    let errors: Vec<String> = errors_of(&song_with("  line \"Keys\" sample_source | I |\n"));
+    let errors: Vec<String> = errors_of(NO_RHYTHM_FILE, NO_RHYTHM);
     assert_eq!(errors.len(), 1, "{errors:?}");
     assert!(errors[0].contains("no rhythm line"), "{}", errors[0]);
 }
 
 #[test]
 fn a_length_a_mark_a_tie_or_a_rest_on_a_source_is_refused() {
-    for (written, expected) in [
-        ("| I:q |", "no lengths, marks or ties"),
-        ("| I> |", "no lengths, marks or ties"),
-        ("| I~ |", "no lengths, marks or ties"),
-        ("| r |", "not rests"),
+    let length: &str = include_str!(
+        "../../../songs_canonical/sample_source/sample_source_error_source_with_length.song"
+    );
+    let accent: &str = include_str!(
+        "../../../songs_canonical/sample_source/sample_source_error_source_with_accent.song"
+    );
+    let tie: &str = include_str!(
+        "../../../songs_canonical/sample_source/sample_source_error_source_with_tie.song"
+    );
+    let rest: &str = include_str!(
+        "../../../songs_canonical/sample_source/sample_source_error_source_with_rest.song"
+    );
+    for (file_name, text, expected) in [
+        (
+            "sample_source_error_source_with_length.song",
+            length,
+            "no lengths, marks or ties",
+        ),
+        (
+            "sample_source_error_source_with_accent.song",
+            accent,
+            "no lengths, marks or ties",
+        ),
+        (
+            "sample_source_error_source_with_tie.song",
+            tie,
+            "no lengths, marks or ties",
+        ),
+        (
+            "sample_source_error_source_with_rest.song",
+            rest,
+            "not rests",
+        ),
     ] {
-        let errors: Vec<String> = errors_of(&song_with(&format!(
-            "  line \"Keys\" sample_source {written}\n  line \"Keys\" | :w |\n"
-        )));
-        assert_eq!(errors.len(), 1, "{written}: {errors:?}");
-        assert!(errors[0].contains(expected), "{written}: {}", errors[0]);
-        assert!(errors[0].starts_with("test.song line 10:"), "{}", errors[0]);
+        let errors: Vec<String> = errors_of(file_name, text);
+        assert_eq!(errors.len(), 1, "{file_name}: {errors:?}");
+        assert!(errors[0].contains(expected), "{file_name}: {}", errors[0]);
+        // The source line is line 16 of each of these files.
+        assert!(
+            errors[0].starts_with(&format!("{file_name} line 16:")),
+            "{}",
+            errors[0]
+        );
     }
 }
 
 #[test]
 fn a_chord_with_no_length_on_an_ordinary_line_is_still_an_error() {
-    let errors: Vec<String> = errors_of(&song_with("  line \"Keys\" | I IV V I |\n"));
+    let errors: Vec<String> = errors_of(CHORD_WITHOUT_LENGTH_FILE, CHORD_WITHOUT_LENGTH);
     assert_eq!(errors.len(), 1, "{errors:?}");
     assert!(errors[0].contains("has no length"), "{}", errors[0]);
 }
 
 #[test]
 fn a_rest_on_the_rhythm_line_closes_the_gate_so_a_change_inside_it_is_not_heard() {
-    let text: String = song_with(
-        "  line \"Keys\" sample_source | I | V |\n  line \"Keys\" | :q :q r:h | r:h :h |\n",
-    );
-    let song: Song = parse_song("test.song", &text).unwrap();
-    let studio = parse_studio("Demo.studio", DEMO_STUDIO).unwrap();
-    let plan: SongPlan = plan_song(&song, &studio).unwrap();
-    let keys: &[TimedNote] = notes_of(&plan, "Keys");
+    let keys: Vec<TimedNote> = case_keys_notes(REST_CLOSES_THE_GATE);
     assert_eq!(
-        places(keys),
+        places(&keys),
         vec![
             (0, QUARTER),
             (QUARTER, QUARTER),
@@ -355,13 +407,8 @@ fn a_tied_rhythm_element_samples_once_then_holds_one_gate_and_follows_the_source
     // Two tied half notes make one whole-bar note over IV IV V. It samples
     // the source once, at its start, and the tie adds no second start: the
     // only other note is the follow to V at 13440 ticks into the bar.
-    let text: String =
-        song_with("  line \"Keys\" sample_source | IV IV V |\n  line \"Keys\" | :h~ :h |\n");
-    let song: Song = parse_song("test.song", &text).unwrap();
-    let studio = parse_studio("Demo.studio", DEMO_STUDIO).unwrap();
-    let plan: SongPlan = plan_song(&song, &studio).unwrap();
     assert_eq!(
-        places(notes_of(&plan, "Keys")),
+        places(&case_keys_notes(TIED_HALF_NOTES)),
         vec![(0, 13_440), (13_440, BAR - 13_440)]
     );
 }

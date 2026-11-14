@@ -1,0 +1,15 @@
+# Canonical test song (valid): crates/song_text/src/song_file.rs, test `fractional_tempo_per_second`.
+# One bar of 4/4 at tempo 0.5 beats/s: 30000 milli-quarters per minute.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+track "Bass"
+  type mono_voice
+  clef bass
+section "A"
+  key C major  meter 4/4  tempo 0.5 beats/s
+  line "Keys" | I:w |

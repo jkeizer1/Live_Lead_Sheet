@@ -1,0 +1,6 @@
+# Canonical test rhythm library (deliberately wrong): crates/song_text/examples/rhythm_notation_test/main.rs, case "a letter that is not a note value".
+# The loader must refuse it with one message: z is not a note value.
+rhythm "X"
+ group "G"
+ meter 4/4
+ | q q q z |

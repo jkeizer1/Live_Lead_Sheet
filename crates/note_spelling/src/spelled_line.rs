@@ -203,20 +203,11 @@ mod tests {
     use song_text::song_file::parse_song;
     use vocabulary::song::Song;
 
-    /// A song with a poly voice "Keys" and one section whose Keys line is
-    /// `bars`, in C major 4/4.
-    fn song_of(bars: &str) -> Song {
-        let text: String = format!(
-            "song \"T\"\ntrack \"Clock\"\n  type clock_and_transport\n\
-             track \"Keys\"\n  type poly_voice\n  clef grand\n  lead\n\
-             section \"A\"\n  key C major  meter 4/4  tempo 120 beats/min\n\
-             \x20 line \"Keys\"  {bars}\n"
-        );
-        parse_song("test.song", &text).unwrap()
-    }
+    // Each song below is a file in songs_canonical/note_spelling/, a poly
+    // voice "Keys" with one section in C major 4/4 and one Keys line.
 
-    fn spelled(bars: &str) -> Result<Vec<SpelledBar>, SpellingError> {
-        let song: Song = song_of(bars);
+    fn spelled(text: &str) -> Result<Vec<SpelledBar>, SpellingError> {
+        let song: Song = parse_song("test.song", text).unwrap();
         let section: &Section = &song.sections()[0];
         spell_line(&song.tracks()[1], section, &section.lines()[0])
     }
@@ -233,7 +224,10 @@ mod tests {
 
     #[test]
     fn plain_and_dotted_values_are_spelled_bar_by_bar() {
-        let bars: Vec<SpelledBar> = spelled("| C4:q D4:e. E4:sx F4:h | G4:w |").unwrap();
+        let bars: Vec<SpelledBar> = spelled(include_str!(
+            "../../../songs_canonical/note_spelling/plain_and_dotted_values.song"
+        ))
+        .unwrap();
         assert_eq!(bars.len(), 2);
         let first: Vec<Vec<(u64, u8)>> = bars[0].items.iter().map(values).collect();
         assert_eq!(
@@ -249,7 +243,10 @@ mod tests {
 
     #[test]
     fn triplets_are_grouped_and_written_at_their_unsqueezed_value() {
-        let bars: Vec<SpelledBar> = spelled("| trp (C4:q D4 E4) trp (F4:e G4 A4) B4:q |").unwrap();
+        let bars: Vec<SpelledBar> = spelled(include_str!(
+            "../../../songs_canonical/note_spelling/triplets.song"
+        ))
+        .unwrap();
         assert_eq!(bars[0].items.len(), 3);
         assert!(matches!(&bars[0].items[0], SpelledItem::Triplet(notes) if notes.len() == 3));
         assert_eq!(values(&bars[0].items[0]), vec![(4, 0); 3]);
@@ -259,7 +256,10 @@ mod tests {
 
     #[test]
     fn five_in_a_quarter_is_reported_in_musical_terms() {
-        let error: SpellingError = spelled("| fitQ(C4:e D4 E4 F4 G4) A4:q B4:h |").unwrap_err();
+        let error: SpellingError = spelled(include_str!(
+            "../../../songs_canonical/note_spelling/five_in_a_quarter.song"
+        ))
+        .unwrap_err();
         assert_eq!(
             error.to_string(),
             "section \"A\", track \"Keys\", bar 1: a note 1/5 of a quarter note long cannot \
@@ -270,7 +270,10 @@ mod tests {
 
     #[test]
     fn a_chord_is_spelled_as_its_voiced_notes_and_keeps_its_name() {
-        let bars: Vec<SpelledBar> = spelled("| I:h ii7 |").unwrap();
+        let bars: Vec<SpelledBar> = spelled(include_str!(
+            "../../../songs_canonical/note_spelling/chords.song"
+        ))
+        .unwrap();
         let SpelledItem::Single(second) = &bars[0].items[1] else {
             panic!("ii7 is a single chord");
         };
@@ -287,7 +290,10 @@ mod tests {
 
     #[test]
     fn rests_marks_and_ties_are_kept() {
-        let bars: Vec<SpelledBar> = spelled("| r:q C4:q> D4~ D4^ |").unwrap();
+        let bars: Vec<SpelledBar> = spelled(include_str!(
+            "../../../songs_canonical/note_spelling/rests_marks_and_ties.song"
+        ))
+        .unwrap();
         let elements: Vec<&SpelledElement> = bars[0]
             .items
             .iter()

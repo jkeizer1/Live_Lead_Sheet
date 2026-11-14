@@ -1,0 +1,10 @@
+# Canonical test studio (deliberately wrong): crates/song_text/src/studio_file.rs, test `units_and_ranges`.
+# Three mistakes: channel 17, retrigger_gap with no unit, velocity 0. The loader must refuse it: all three are reported.
+studio "S"
+port "P"
+track "A"
+  port "P"  channel 17
+track "B"
+  port "P"  retrigger_gap 2
+track "C"
+  port "P"  velocity normal 0

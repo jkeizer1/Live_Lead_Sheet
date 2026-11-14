@@ -1,0 +1,18 @@
+# Canonical test rhythm library (valid): crates/song_text/src/rhythm_library.rs, test `a_good_file_loads_every_entry`.
+# Three rhythms in two groups, one with a tie across the barline.
+
+# Starter rhythms
+rhythm "Charleston"
+  group "Swing"
+  meter 4/4
+  | q. e hr |
+
+rhythm "Anticipation"
+  group "Swing"
+  meter 4/4
+  | hr qr er e~ | q hr. |
+
+rhythm "Backbeat"
+  group "Rock"
+  meter 4/4
+  | q q> q q> |

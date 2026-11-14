@@ -896,7 +896,9 @@ mod tests {
     use super::*;
     use vocabulary::song::ElementContents;
 
-    const DEMO: &str = include_str!("../../../songs/song_test_count_in_and_verse.song");
+    const DEMO: &str = include_str!(
+        "../../../songs_canonical/count_in_and_verse/song_test_count_in_and_verse.song"
+    );
 
     fn errors_of(text: &str) -> Vec<String> {
         parse_song("test.song", text)
@@ -904,16 +906,6 @@ mod tests {
             .iter()
             .map(ToString::to_string)
             .collect()
-    }
-
-    /// A song with one section; `tail` replaces the section's lines.
-    fn song_with(tail: &str) -> String {
-        format!(
-            "song \"T\"\ntrack \"Clock\"\n  type clock_and_transport\n\
-             track \"Keys\"\n  type poly_voice\n  clef grand\n  lead\n\
-             track \"Bass\"\n  type mono_voice\n  clef bass\n\
-             section \"A\"\n  key C major  meter 4/4  tempo 120 beats/min\n{tail}"
-        )
     }
 
     #[test]
@@ -950,18 +942,24 @@ mod tests {
         assert_eq!(first_four, vec!["I"; 4]);
     }
 
+    // Every song below is a file in songs_canonical/song_file/. Each file
+    // starts with two comment lines, so a line number in a message is the
+    // number the file shows.
+
     #[test]
     fn a_line_for_an_undeclared_track_names_the_track() {
-        let errors: Vec<String> = errors_of(&song_with("  line \"Drums\"  | C4:q D4 E4 F4 |\n"));
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/undeclared_track.song"
+        ));
         assert_eq!(errors.len(), 1);
-        assert!(errors[0].contains("test.song line 13:"));
+        assert!(errors[0].contains("test.song line 15:"));
         assert!(errors[0].contains("\"Drums\" is not a track of the song"));
     }
 
     #[test]
     fn a_chord_on_the_bass_is_refused_with_the_place() {
-        let errors: Vec<String> = errors_of(&song_with(
-            "  line \"Keys\"  | I:q / / / |\n  line \"Bass\"  | C2:q / / V7 |\n",
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/chord_on_bass.song"
         ));
         assert_eq!(errors.len(), 1);
         assert!(errors[0].contains("bar 1 beat 4:"), "{}", errors[0]);
@@ -969,65 +967,52 @@ mod tests {
 
     #[test]
     fn lines_of_different_length_are_reported_at_the_section() {
-        let errors: Vec<String> = errors_of(&song_with(
-            "  line \"Keys\"  | I:q / / / |\n  line \"Bass\"  | C2:q / / / | / / / / |\n",
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/lines_of_different_length.song"
         ));
         assert!(errors[0].contains("same number of bars"), "{}", errors[0]);
     }
 
     #[test]
     fn a_song_without_a_lead_or_clock_is_refused() {
-        let text: &str = "song \"T\"\ntrack \"Keys\"\n  type poly_voice\n  clef treble\n\
-                          section \"A\"\n  key C major  meter 4/4  tempo 120 beats/min\n  line \"Keys\" | I:q / / / |\n";
-        let errors: Vec<String> = errors_of(text);
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/no_lead_or_clock.song"
+        ));
         assert!(errors[0].contains("clock and transport"), "{}", errors[0]);
     }
 
     #[test]
     fn a_missing_meter_and_tempo_are_asked_for() {
-        let text: &str = "song \"T\"\ntrack \"Clock\"\n  type clock_and_transport\n\
-                          section \"A\"\n";
-        let errors: Vec<String> = errors_of(text);
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/missing_meter_and_tempo.song"
+        ));
         assert!(errors[0].contains("has no meter"), "{}", errors[0]);
     }
 
     #[test]
     fn mistakes_in_a_track_block_are_all_reported() {
-        let text: &str = "song \"T\"\ntrack \"A\"\n  clef treble\n  type poly_voice\n  wobble\n\
-                          track \"B\"\n  type bass_synth\n";
-        let errors: Vec<String> = errors_of(text);
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/track_block_mistakes.song"
+        ));
         assert_eq!(errors.len(), 2, "{errors:?}");
-        assert!(errors[0].contains("test.song line 5:"));
+        assert!(errors[0].contains("test.song line 7:"));
         assert!(errors[1].contains("\"bass_synth\" is not a track type"));
     }
 
     #[test]
     fn chords_in_a_section_without_a_key_are_refused() {
-        let text: &str = "song \"T\"\ntrack \"Clock\"\n  type clock_and_transport\n\
-                          track \"Keys\"\n  type poly_voice\n  clef treble\n  lead\n\
-                          section \"A\"\n  meter 4/4  tempo 120 beats/min\n  line \"Keys\" | I:q / / / |\n";
-        let errors: Vec<String> = errors_of(text);
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/chords_without_key.song"
+        ));
         assert!(errors[0].contains("has chords but no key"), "{}", errors[0]);
     }
 
     #[test]
     fn a_cue_not_defined_is_refused() {
-        let text: &str = "song \"T\"\ntrack \"Clock\"\n  type clock_and_transport\n\
-                          track \"Cues\"\n  type cue_control\n  cue \"Go\" destination \"X\" start\n\
-                          section \"A\"\n  meter 4/4  tempo 120 beats/min\n  line \"Cues\" | \"Stop\":w |\n";
-        let errors: Vec<String> = errors_of(text);
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/cue_not_defined.song"
+        ));
         assert!(errors[0].contains("no cue named \"Stop\""), "{}", errors[0]);
-    }
-
-    /// Two Keys sections. Each is one bar, holding one chord: `first_bar`
-    /// and `second_bar` must fill the bar of `first` and `second`'s meter.
-    fn two_sections(first: &str, first_bar: &str, second: &str, second_bar: &str) -> String {
-        format!(
-            "song \"T\"\ntrack \"Clock\"\n  type clock_and_transport\n\
-             track \"Keys\"\n  type poly_voice\n  clef grand\n  lead\n\
-             section \"A\"\n  key C major  {first}\n  line \"Keys\" | {first_bar} |\n\
-             section \"B\"\n  {second}\n  line \"Keys\" | {second_bar} |\n"
-        )
     }
 
     fn tempos_of(text: &str) -> Vec<u64> {
@@ -1044,21 +1029,15 @@ mod tests {
         // 4/4: quarter-note beats. 120 beats/min = 120 q/min.
         // 6/8: dotted-quarter beats. 60 beats/min × 1.5 q/beat = 90 q/min.
         assert_eq!(
-            tempos_of(&two_sections(
-                "meter 4/4  tempo 120 beats/min",
-                "I:w",
-                "meter 6/8  tempo 60 beats/min",
-                "I:h."
+            tempos_of(include_str!(
+                "../../../songs_canonical/song_file/tempo_4_4_and_6_8.song"
             )),
             vec![120_000, 90_000]
         );
         // 3/8: eighth-note beats. 30 beats/min × 0.5 q/beat = 15 q/min.
         assert_eq!(
-            tempos_of(&two_sections(
-                "meter 3/8  tempo 30 beats/min",
-                "I:q.",
-                "meter 9/8  tempo 60 beats/min",
-                "I:h. /:q."
+            tempos_of(include_str!(
+                "../../../songs_canonical/song_file/tempo_3_8_and_9_8.song"
             )),
             vec![15_000, 90_000]
         );
@@ -1068,11 +1047,8 @@ mod tests {
     fn a_tempo_may_come_before_its_meter_and_in_beats_per_second() {
         // 2 beats/s × 60 s/min = 120 dotted quarters/min × 1.5 q = 180 q/min.
         assert_eq!(
-            tempos_of(&two_sections(
-                "tempo 120 beats/min  meter 4/4",
-                "I:w",
-                "tempo 2 beats/s  meter 6/8",
-                "I:h."
+            tempos_of(include_str!(
+                "../../../songs_canonical/song_file/tempo_before_meter_and_per_second.song"
             )),
             vec![120_000, 180_000]
         );
@@ -1083,11 +1059,8 @@ mod tests {
         // B writes no tempo: the quarter note stays at 120 q/min in 6/8
         // (80 dotted-quarter beats/min), not 120 dotted quarters/min.
         assert_eq!(
-            tempos_of(&two_sections(
-                "meter 4/4  tempo 120 beats/min",
-                "I:w",
-                "meter 6/8",
-                "I:h."
+            tempos_of(include_str!(
+                "../../../songs_canonical/song_file/tempo_carried_across_meter_change.song"
             )),
             vec![120_000, 120_000]
         );
@@ -1095,8 +1068,9 @@ mod tests {
 
     #[test]
     fn a_note_value_tempo_says_to_write_beats() {
-        let errors: Vec<String> =
-            errors_of(&song_with("").replace("tempo 120 beats/min", "tempo 30 e/min"));
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/tempo_in_note_values.song"
+        ));
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert!(
             errors[0].contains(
@@ -1109,42 +1083,69 @@ mod tests {
 
     #[test]
     fn a_tempo_without_a_beat_number_and_a_unit_is_refused() {
-        for written in [
-            "tempo 120",
-            "tempo 112.1234 beats/min",
-            "tempo .5 beats/min",
-            "tempo 112. beats/min",
-            "tempo 120 bpm",
-            "tempo 0 beats/min",
+        // "tempo 120", "tempo 112.1234 beats/min", "tempo .5 beats/min",
+        // "tempo 112. beats/min", "tempo 120 bpm" and "tempo 0 beats/min".
+        for (written, text) in [
+            (
+                "tempo 120",
+                include_str!("../../../songs_canonical/song_file/tempo_refused_1.song"),
+            ),
+            (
+                "tempo 112.1234 beats/min",
+                include_str!("../../../songs_canonical/song_file/tempo_refused_2.song"),
+            ),
+            (
+                "tempo .5 beats/min",
+                include_str!("../../../songs_canonical/song_file/tempo_refused_3.song"),
+            ),
+            (
+                "tempo 112. beats/min",
+                include_str!("../../../songs_canonical/song_file/tempo_refused_4.song"),
+            ),
+            (
+                "tempo 120 bpm",
+                include_str!("../../../songs_canonical/song_file/tempo_refused_5.song"),
+            ),
+            (
+                "tempo 0 beats/min",
+                include_str!("../../../songs_canonical/song_file/tempo_refused_6.song"),
+            ),
         ] {
-            let errors: Vec<String> =
-                errors_of(&song_with("").replace("tempo 120 beats/min", written));
+            let errors: Vec<String> = errors_of(text);
             assert_eq!(errors.len(), 1, "{written}: {errors:?}");
-            assert!(errors[0].starts_with("test.song line 12:"), "{}", errors[0]);
+            assert!(errors[0].starts_with("test.song line 14:"), "{}", errors[0]);
         }
     }
 
     #[test]
     fn a_fractional_tempo_is_held_exactly() {
-        // (written, meter, mq/min). 4/4: 112.5 beats/min × 1 q/beat = 112500
-        // mq/min. 6/8: 100.5 beats/min × 1.5 q/beat = 150.75 q/min = 150750
-        // mq/min.
-        for (written, meter, expected_milli_quarters_per_minute) in [
-            ("tempo 112.5 beats/min", "4/4", 112_500_u64),
-            ("tempo 112.125 beats/min", "4/4", 112_125),
-            ("tempo 100.5 beats/min", "6/8", 150_750),
-            ("tempo 0.5 beats/s", "4/4", 30_000),
+        // 4/4: 112.5 beats/min × 1 q/beat = 112500 mq/min. 6/8: 100.5
+        // beats/min × 1.5 q/beat = 150.75 q/min = 150750 mq/min.
+        for (text, expected_milli_quarters_per_minute) in [
+            (
+                include_str!("../../../songs_canonical/song_file/fractional_tempo_4_4_112_5.song"),
+                112_500_u64,
+            ),
+            (
+                include_str!(
+                    "../../../songs_canonical/song_file/fractional_tempo_4_4_112_125.song"
+                ),
+                112_125,
+            ),
+            (
+                include_str!("../../../songs_canonical/song_file/fractional_tempo_6_8_100_5.song"),
+                150_750,
+            ),
+            (
+                include_str!("../../../songs_canonical/song_file/fractional_tempo_per_second.song"),
+                30_000,
+            ),
         ] {
-            // One bar of a chord, filling the bar of the meter.
-            let bar: &str = if meter == "6/8" { "I:q. /" } else { "I:w" };
-            let text: String = song_with(&format!("  line \"Keys\" | {bar} |\n"))
-                .replace("tempo 120 beats/min", written)
-                .replace("meter 4/4", &format!("meter {meter}"));
-            let song: Song = parse_song("test.song", &text).unwrap();
+            let song: Song = parse_song("test.song", text).unwrap();
             assert_eq!(
                 song.sections()[0].tempo().milli_quarters_per_minute(),
                 expected_milli_quarters_per_minute,
-                "{written} in {meter}"
+                "{text}"
             );
         }
     }
@@ -1153,21 +1154,21 @@ mod tests {
     fn a_fractional_tempo_that_is_not_whole_milli_quarters_is_refused() {
         // 16th-note beats (x/16 meters): 0.001 beats/min × 0.25 q/beat is
         // 0.25 mq/min, not whole.
-        let errors: Vec<String> = errors_of(
-            &song_with("  line \"Keys\" | I:q |\n")
-                .replace("tempo 120 beats/min", "tempo 100.001 beats/min")
-                .replace("meter 4/4", "meter 4/16"),
-        );
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/fractional_tempo_not_whole.song"
+        ));
         assert_eq!(errors.len(), 1, "{errors:?}");
         // Reported at the section's line, where the meter and tempo meet.
-        assert!(errors[0].starts_with("test.song line 11:"), "{}", errors[0]);
+        assert!(errors[0].starts_with("test.song line 13:"), "{}", errors[0]);
     }
 
     #[test]
     fn a_compound_meter_above_twelve_is_refused_at_its_line() {
-        let errors: Vec<String> = errors_of(&song_with("").replace("meter 4/4", "meter 15/8"));
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/meter_15_8.song"
+        ));
         assert_eq!(errors.len(), 1, "{errors:?}");
-        assert!(errors[0].starts_with("test.song line 12:"), "{}", errors[0]);
+        assert!(errors[0].starts_with("test.song line 14:"), "{}", errors[0]);
         assert!(errors[0].contains("15/8 is not read yet"), "{}", errors[0]);
     }
 
@@ -1182,28 +1183,25 @@ mod tests {
 
     #[test]
     fn a_line_goes_on_over_the_text_lines_below_it() {
-        // Lines 13 to 16: the Keys line over two text lines with a comment
-        // between, the Bass line written under its bare name.
-        let text: String = song_with(
-            "  line \"Keys\"  | I:w | V |\n\
-             # the turnaround\n\
-             \x20              | vi | IV |\n\
-             \x20 line \"Bass\"\n\
-             \x20   | C2:w | G2 | A2 | F2 |\n",
+        // The Keys line over two text lines with a comment between, the Bass
+        // line written under its bare name.
+        assert_eq!(
+            bar_counts_of(include_str!(
+                "../../../songs_canonical/song_file/line_continues_below.song"
+            )),
+            vec![4]
         );
-        assert_eq!(bar_counts_of(&text), vec![4]);
     }
 
     #[test]
     fn a_mistake_in_a_continuation_names_its_own_text_line() {
-        // Bar 3, on line 14, is short; the message counts bars along the line.
-        let errors: Vec<String> = errors_of(&song_with(
-            "  line \"Keys\"  | I:w | V |\n\
-             \x20              | vi:h | IV:w |\n",
+        // Bar 3, on line 16, is short; the message counts bars along the line.
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/continuation_bar_short.song"
         ));
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert!(
-            errors[0].starts_with("test.song line 14: line \"Keys\": bar 3 is short"),
+            errors[0].starts_with("test.song line 16: line \"Keys\": bar 3 is short"),
             "{}",
             errors[0]
         );
@@ -1211,17 +1209,9 @@ mod tests {
 
     #[test]
     fn bars_not_under_a_line_are_refused() {
-        // Before any line in the section (line 13).
-        let errors: Vec<String> = errors_of(&song_with("  | I:w |\n"));
-        assert_eq!(errors.len(), 1, "{errors:?}");
-        assert!(
-            errors[0].starts_with("test.song line 13: bars with no line above them"),
-            "{}",
-            errors[0]
-        );
-        // After a setting (line 14), which ends the line above it.
-        let errors: Vec<String> = errors_of(&song_with(
-            "  line \"Keys\"  | I:w |\n  repeat 2\n  | V:w |\n",
+        // Before any line in the section (line 15).
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/bars_before_any_line.song"
         ));
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert!(
@@ -1229,14 +1219,22 @@ mod tests {
             "{}",
             errors[0]
         );
+        // After a setting (line 17), which ends the line above it.
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/bars_after_a_setting.song"
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(
+            errors[0].starts_with("test.song line 17: bars with no line above them"),
+            "{}",
+            errors[0]
+        );
     }
 
     #[test]
     fn joined_lines_of_different_lengths_are_reported() {
-        let errors: Vec<String> = errors_of(&song_with(
-            "  line \"Keys\"  | I:w | V |\n\
-             \x20              | vi |\n\
-             \x20 line \"Bass\"  | C2:w | G2 |\n",
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/joined_lines_different_lengths.song"
         ));
         assert_eq!(errors.len(), 1, "{errors:?}");
     }
@@ -1245,16 +1243,7 @@ mod tests {
     fn voice_layers_are_lines_of_their_own_on_one_track() {
         let song: Song = parse_song(
             "test.song",
-            &song_with(
-                "  line \"Keys\"  voice_layer 1  | G4:q G4 F4 Eb4 |\n\
-                 \x20 line \"Keys\"  voice_layer 2  | Eb4:sx D4 Eb4:e~ Eb4:sx F4 Eb4 D4 C4:e D4~ D4 C4 |\n\
-                 \x20 line \"Keys\"  voice_layer 3\n\
-                 \x20   | r:h A3~ |\n\
-                 \x20   | A3 r |\n\
-                 \x20 line \"Bass\"  | C3:w | / |\n",
-            )
-            .replace("| G4:q G4 F4 Eb4 |", "| G4:q G4 F4 Eb4 | C5:w |")
-            .replace("D4~ D4 C4 |\n", "D4~ D4 C4 | C4:w |\n"),
+            include_str!("../../../songs_canonical/song_file/voice_layers.song"),
         )
         .unwrap();
         let roles: Vec<String> = song.sections()[0]
@@ -1275,8 +1264,8 @@ mod tests {
 
     #[test]
     fn a_line_without_voice_layer_is_layer_one_and_two_such_lines_are_refused() {
-        let errors: Vec<String> = errors_of(&song_with(
-            "  line \"Keys\"  | I:w |\n  line \"Keys\"  voice_layer 1  | V:w |\n",
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/voice_layer_1_twice.song"
         ));
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert!(
@@ -1288,42 +1277,46 @@ mod tests {
 
     #[test]
     fn voice_layer_mistakes_say_what_to_write() {
-        let errors: Vec<String> =
-            errors_of(&song_with("  line \"Keys\"  voice_layer two  | I:w |\n"));
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/voice_layer_not_a_number.song"
+        ));
         assert!(
             errors[0].contains("\"two\" is not a voice layer number"),
             "{}",
             errors[0]
         );
-        let errors: Vec<String> = errors_of(&song_with("  line \"Keys\"  layer 2  | I:w |\n"));
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/voice_layer_misspelt.song"
+        ));
         assert!(
             errors[0].contains("after the track's name is not understood"),
             "{}",
             errors[0]
         );
-        let errors: Vec<String> =
-            errors_of(&song_with("  line \"Bass\"  voice_layer 2  | C2:w |\n"));
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/voice_layer_on_bass.song"
+        ));
         assert!(errors[0].contains("only voice layer 1"), "{}", errors[0]);
-        let errors: Vec<String> =
-            errors_of(&song_with("  line \"Keys\"  voice_layer 0  | I:w |\n"));
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/voice_layer_zero.song"
+        ));
         assert!(errors[0].contains("counted from 1"), "{}", errors[0]);
     }
 
     #[test]
     fn a_voice_layer_may_be_named_in_its_track() {
-        let text: String = song_with("  line \"Keys\"  voice_layer 2  | C4:w |\n").replace(
-            "  clef grand\n  lead\n",
-            "  clef grand\n  lead\n  voice_layer 2 \"Inner\"\n",
-        );
-        let song: Song = parse_song("test.song", &text).unwrap();
+        let song: Song = parse_song(
+            "test.song",
+            include_str!("../../../songs_canonical/song_file/voice_layer_named.song"),
+        )
+        .unwrap();
         let keys: &Track = &song.tracks()[1];
         let two: VoiceLayerNumber = VoiceLayerNumber::new(2).unwrap();
         let three: VoiceLayerNumber = VoiceLayerNumber::new(3).unwrap();
         assert_eq!(keys.voice_layer_display_name(two), "Inner");
         assert_eq!(keys.voice_layer_display_name(three), "3");
-        let unnamed: Vec<String> = errors_of(&song_with("  line \"Keys\"  | I:w |\n").replace(
-            "  clef grand\n  lead\n",
-            "  clef grand\n  lead\n  voice_layer 2\n",
+        let unnamed: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/voice_layer_used_but_not_named.song"
         ));
         assert!(
             unnamed[0].contains("voice_layer 2 \"Inner\""),

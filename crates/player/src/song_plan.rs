@@ -326,7 +326,8 @@ fn line_notes(
                         length_ticks: stretch_length_ticks,
                         note,
                         velocity,
-                        legato_to_next: false,
+                        // The `_` mark; NoteTrack::new settles it.
+                        legato_to_next: element.marks().legato(),
                     });
                 }
             }

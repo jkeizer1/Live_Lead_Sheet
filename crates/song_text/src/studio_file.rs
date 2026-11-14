@@ -395,7 +395,9 @@ mod tests {
     use super::*;
     use vocabulary::rhythm_pattern::AccentLevel;
 
-    const DEMO: &str = include_str!("../../../songs/song_test_count_in_and_verse.studio");
+    const DEMO: &str = include_str!(
+        "../../../songs_canonical/count_in_and_verse/song_test_count_in_and_verse.studio"
+    );
 
     fn errors_of(text: &str) -> Vec<String> {
         parse_studio("test.studio", text)
@@ -428,21 +430,25 @@ mod tests {
         );
     }
 
+    // The studios and songs below are files in songs_canonical/studio_file/.
+    // Each starts with two comment lines, so a line number in a message is
+    // the number the file shows.
+
     #[test]
     fn a_block_without_a_port_is_reported_at_its_name() {
-        let errors: Vec<String> = errors_of("studio \"S\"\ntrack \"Keys\"\n  channel 1\n");
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/studio_file/block_without_port.studio"
+        ));
         assert_eq!(errors.len(), 1);
-        assert!(errors[0].starts_with("test.studio line 2:"));
+        assert!(errors[0].starts_with("test.studio line 4:"));
         assert!(errors[0].contains("has no port"));
     }
 
     #[test]
     fn units_and_ranges_are_checked() {
-        let errors: Vec<String> = errors_of(
-            "studio \"S\"\nport \"P\"\ntrack \"A\"\n  port \"P\"  channel 17\n\
-             track \"B\"\n  port \"P\"  retrigger_gap 2\n\
-             track \"C\"\n  port \"P\"  velocity normal 0\n",
-        );
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/studio_file/units_and_ranges.studio"
+        ));
         assert_eq!(errors.len(), 3, "{errors:?}");
         assert!(errors[0].contains("channel 17"));
         assert!(errors[1].contains("retrigger_gap 2 ms"));
@@ -453,8 +459,7 @@ mod tests {
     fn a_track_without_a_normal_velocity_plays_at_64() {
         let studio: StudioConfiguration = parse_studio(
             "s.studio",
-            "studio \"S\"\nport \"P\"\ntrack \"A\"\n  port \"P\"  channel 1\n  velocity accent 100\n\
-             track \"B\"\n  port \"P\"  channel 2\n",
+            include_str!("../../../songs_canonical/studio_file/no_normal_velocity.studio"),
         )
         .unwrap();
         for track_name in ["A", "B"] {
@@ -465,16 +470,17 @@ mod tests {
 
     #[test]
     fn strong_is_now_written_marcato() {
-        let errors: Vec<String> = errors_of(
-            "studio \"S\"\nport \"P\"\ntrack \"A\"\n  port \"P\"  channel 1\n  velocity normal 90  strong 120\n",
-        );
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/studio_file/strong_instead_of_marcato.studio"
+        ));
         assert!(errors[0].contains("written marcato"), "{}", errors[0]);
     }
 
     #[test]
     fn an_undeclared_port_is_reported() {
-        let errors: Vec<String> =
-            errors_of("studio \"S\"\nport \"P\"\ntrack \"A\"\n  port \"Q\"  channel 1\n");
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/studio_file/undeclared_port.studio"
+        ));
         assert!(errors[0].contains("does not declare"), "{}", errors[0]);
     }
 
@@ -482,7 +488,9 @@ mod tests {
     fn the_demo_studio_covers_the_demo_song() {
         let song = crate::song_file::parse_song(
             "song_test_count_in_and_verse.song",
-            include_str!("../../../songs/song_test_count_in_and_verse.song"),
+            include_str!(
+                "../../../songs_canonical/count_in_and_verse/song_test_count_in_and_verse.song"
+            ),
         )
         .unwrap();
         let studio: StudioConfiguration =
@@ -494,12 +502,18 @@ mod tests {
     fn a_song_track_without_a_studio_entry_is_named() {
         let song = crate::song_file::parse_song(
             "song_test_count_in_and_verse.song",
-            include_str!("../../../songs/song_test_count_in_and_verse.song"),
+            include_str!(
+                "../../../songs_canonical/count_in_and_verse/song_test_count_in_and_verse.song"
+            ),
         )
         .unwrap();
-        let without_bass: String = DEMO.replace("track \"Bass\"", "track \"Not the bass\"");
-        let studio: StudioConfiguration =
-            parse_studio("song_test_count_in_and_verse.studio", &without_bass).unwrap();
+        let studio: StudioConfiguration = parse_studio(
+            "count_in_and_verse_without_bass_entry.studio",
+            include_str!(
+                "../../../songs_canonical/studio_file/count_in_and_verse_without_bass_entry.studio"
+            ),
+        )
+        .unwrap();
         let unmet: Vec<String> = studio
             .unmet_needs(&song)
             .iter()
@@ -512,9 +526,10 @@ mod tests {
     #[test]
     fn a_mark_the_song_uses_needs_no_studio_velocity() {
         let song = crate::song_file::parse_song(
-            "song_test_count_in_and_verse.song",
-            &include_str!("../../../songs/song_test_count_in_and_verse.song")
-                .replace("| C2:q / / / |", "| C2:q>> / / / |"),
+            "count_in_and_verse_with_marcato_bass.song",
+            include_str!(
+                "../../../songs_canonical/studio_file/count_in_and_verse_with_marcato_bass.song"
+            ),
         )
         .unwrap();
         let studio: StudioConfiguration =

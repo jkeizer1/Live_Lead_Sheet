@@ -1,0 +1,9 @@
+# Canonical test song (deliberately wrong): crates/song_text/examples/song_notation_test/main.rs, case "a song with no clock and transport track".
+# The loader must refuse it with one message: the song has 0 clock and transport tracks.
+song "T"
+track "Beat"
+ type mono_voice
+ clef treble
+section "A"
+ meter 4/4  tempo 120 beats/min
+ line "Beat" | C4:q / / / |

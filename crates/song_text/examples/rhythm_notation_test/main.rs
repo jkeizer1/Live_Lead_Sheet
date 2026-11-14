@@ -47,40 +47,44 @@ struct MistakeCase {
     expected_message: &'static str,
 }
 
+// Each bad library is a file in songs_canonical/rhythm_notation_test/, starting
+// with two comment lines: a line number in a message is the number the file shows.
 const MISTAKE_CASES: [MistakeCase; 6] = [
     MistakeCase {
         what: "a bar that is short",
-        text: "rhythm \"X\"\n group \"G\"\n meter 4/4\n | q q q e |\n",
-        expected_message: "mistake.library line 4: bar 1 is short by an eighth note. Add e or er.",
+        text: include_str!("../../../../songs_canonical/rhythm_notation_test/short_bar.library"),
+        expected_message: "mistake.library line 6: bar 1 is short by an eighth note. Add e or er.",
     },
     MistakeCase {
         what: "a bar that is long",
-        text: "rhythm \"X\"\n group \"G\"\n meter 3/4\n | q q q q |\n",
-        expected_message: "mistake.library line 4: bar 1 is over by a quarter note. \
+        text: include_str!("../../../../songs_canonical/rhythm_notation_test/long_bar.library"),
+        expected_message: "mistake.library line 6: bar 1 is over by a quarter note. \
                            Shorten or remove an element.",
     },
     MistakeCase {
         what: "a letter that is not a note value",
-        text: "rhythm \"X\"\n group \"G\"\n meter 4/4\n | q q q z |\n",
-        expected_message: "mistake.library line 4: 'z' is not a note value. Use w, h, q, e, sx \
+        text: include_str!(
+            "../../../../songs_canonical/rhythm_notation_test/bad_note_value.library"
+        ),
+        expected_message: "mistake.library line 6: 'z' is not a note value. Use w, h, q, e, sx \
                            or tx, e.g. q for a quarter note",
     },
     MistakeCase {
         what: "a rhythm without a group",
-        text: "rhythm \"X\"\n meter 4/4\n | w |\n",
-        expected_message: "mistake.library line 1: rhythm \"X\" has no group. \
+        text: include_str!("../../../../songs_canonical/rhythm_notation_test/no_group.library"),
+        expected_message: "mistake.library line 3: rhythm \"X\" has no group. \
                            Add a line such as group \"Swing\"",
     },
     MistakeCase {
         what: "a tie with nothing to join",
-        text: "rhythm \"X\"\n group \"G\"\n meter 4/4\n | hr qr er e~ |\n",
-        expected_message: "mistake.library line 1: rhythm \"X\": the tie at bar 1 beat 4 has no note \
+        text: include_str!("../../../../songs_canonical/rhythm_notation_test/dangling_tie.library"),
+        expected_message: "mistake.library line 3: rhythm \"X\": the tie at bar 1 beat 4 has no note \
                            after it to join. Remove the ~ or put a note after it",
     },
     MistakeCase {
         what: "a meter that is not one",
-        text: "rhythm \"X\"\n group \"G\"\n meter 4/3\n | w |\n",
-        expected_message: "mistake.library line 3: 4/3 is not a time signature. Use 1 or more \
+        text: include_str!("../../../../songs_canonical/rhythm_notation_test/bad_meter.library"),
+        expected_message: "mistake.library line 5: 4/3 is not a time signature. Use 1 or more \
                            on top, and 1, 2, 4, 8 or 16 below: e.g. 4/4, 6/8",
     },
 ];

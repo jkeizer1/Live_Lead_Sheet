@@ -1,0 +1,19 @@
+# Canonical test song (valid): crates/song_text/src/song_file.rs, test `line_continues_below`.
+# The Keys line goes on over the text lines below it (with a comment between); the Bass line is written under its bare name. Four bars.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+track "Bass"
+  type mono_voice
+  clef bass
+section "A"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Keys"  | I:w | V |
+# the turnaround
+               | vi | IV |
+  line "Bass"
+    | C2:w | G2 | A2 | F2 |

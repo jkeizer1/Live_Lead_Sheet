@@ -1031,9 +1031,9 @@ are part of this program's first version, not a later version.
 **Decided on 11 Nov 2026 and not yet in the code:**
 
 - The `dynamics` line.
-- Legato sent as overlapping notes (partly built: the overlap exists and
-  the sample source follow uses it; still to do: the `_` mark, and one
-  note for the same pitch in two voice layers).
+- Legato sent as overlapping notes (built for the sample source follow and
+  for the `_` mark, 14 Nov 2026; still to do: one note for the same pitch
+  in two voice layers).
 - `euclid(hits,steps)`.
 - Repeat signs `|%n ... %|`.
 - Octave annotations `+8va`, `-8va` and `loco`; the `home_octave`
@@ -1091,9 +1091,21 @@ voice layer (`voice_layer 2 sample_source` with the layer 2 rhythm line).
   to hear). When the source changes inside a sounding element, the new
   notes start before the old ones end, with no new gate (a legato note
   off, `crates/player/src/schedule.rs`); a pitch both chords play is held
-  through, not struck again. The `_` legato mark and one note for the
-  same pitch in two voice layers still use none of this. The LilyPond
+  through, not struck again. One note for the same pitch in two voice
+  layers still uses none of this. The `_` legato mark uses it from
+  14 Nov 2026 (below). The LilyPond
   export refuses a song with a sample source.
+- The `_` legato mark (14 Nov 2026; `crates/player/src/note_track.rs`,
+  `crates/player/src/song_plan.rs`; tested by
+  `crates/song_text/tests/legato_mark_plan.rs`). A note marked `_` whose
+  next note on the same track starts where it ends is released after that
+  next note starts, at the same instant, with no gap (the legato note off
+  of the sample source follow). A marked note with no note starting where
+  it ends (a rest follows, or staccato cut it short) ends as written. A
+  marked note followed by a note of the same pitch becomes one longer
+  note, because a note off for that pitch right after the second note on
+  would end the second note. Until 14 Nov 2026 the mark was read and
+  drawn but not sent.
 - Fractional tempos (11 Nov 2026): `tempo 112.5 beats/min`, up to three
   decimals, held exactly as whole milli-beats; a tempo that does not make
   a whole number of milli-quarters per minute is refused
@@ -1258,6 +1270,19 @@ sounding element is heard as legato?
     Launch Control CC). Any NT value input can be mapped to a CC, so the CC
     route is simple on the receiver; which algorithm parameters can take a
     pitch CC exactly, one step per semitone, is still to be checked.
+  - 14 Nov 2026 (Jim): System 35 chain: player to the Behringer CM1A
+    (MIDI to CV), its S-trig to the 911 envelope generator, the 911 to the
+    902 VCA, the CM1A's CV to the VCO and the VCO through the VCA to the
+    mixer. Played from the keyboard (NK), the CM1A takes the lowest held
+    note: a second note above the held one is ignored; a second note below
+    it changes the pitch with no new gate; after the first key is released
+    the second note sounds, with no new gate. The CM1A's manual says
+    nothing about this. The rear mono/duophonic switch was not looked at.
+    With the `_` mark built that day, the player's legato is heard on this
+    chain, with `retrigger_gap` at 100 ms and at 2 ms. (Before the mark was
+    built the player sent `_` notes like any others, so earlier listening
+    on that chain heard no difference.) So the System 35's MIDI converter
+    works with the player's legato, and that receiver is done.
 - To decide: how each receiver turns the CC into pitch (the Expert
   Sleepers NT, EX and FH-2 mappings, which Jim is checking); the CC to
   1 V/octave conversion an analog oscillator needs somewhere in the path
@@ -1299,7 +1324,8 @@ OPEN_QUESTION when its design starts.
   the next note on its track (a bass line or a chord alike, any pitch) at
   least 5 ms before it, and the note on stays on its beat. The studio's
   `retrigger_gap` can raise that lead above 5 ms as a stopgap. A legato
-  mark is a connected gate, with no gap; it is not built yet.
+  mark is a connected gate, with no gap (built 14 Nov 2026, see the
+  `_` entry below).
 - **Q22.** `#` is both the comment sign and the sharp. *Settled (Jim,
   8 Nov 2026):* a comment is a whole line starting with `#`, or the rest
   of a line after `---`; every other `#` is a sharp (section 2). Found
