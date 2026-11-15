@@ -23,13 +23,14 @@ use std::fmt::Write;
 use std::process::ExitCode;
 
 use player::schedule::{EventSource, OutputAction, ScheduledEvent, schedule};
-use player::song_plan::{SongPlan, plan_song};
+use player::song_plan::{SectionPass, SongPlan, plan_song};
 use player::studio_configuration::StudioConfiguration;
 use song_text::length_words::describe_place;
 use song_text::parse_error::ParseError;
 use song_text::song_file::parse_song;
 use song_text::studio_file::parse_studio;
 use vocabulary::song::Song;
+use vocabulary::ticks::TICKS_PER_QUARTER_NOTE;
 use vocabulary::time_signature::TimeSignature;
 
 const DEFAULT_SONG_FILE: &str = "songs/Demo.song";
@@ -83,11 +84,20 @@ fn run(song_file: &str, studio_file: &str) -> Result<(), String> {
         .map(vocabulary::song::Section::time_signature)
         .ok_or_else(|| String::from("ERROR: the song has no sections."))?;
     let mut last_announced: Option<(String, u64)> = None;
+    let mut next_pass: usize = 0;
     event_player::play(
         &output,
         &events,
         plan.tempo,
         &mut |event: &ScheduledEvent| {
+            // The first event at or after a pass's start says the pass begins.
+            while let Some(pass) = plan.section_passes.get(next_pass) {
+                if event.position.ticks() < pass.start_ticks {
+                    break;
+                }
+                println!("{}", describe_pass(pass, time_signature));
+                next_pass += 1;
+            }
             announce(event, time_signature, &mut last_announced);
         },
     )?;
@@ -117,6 +127,39 @@ fn load<T>(
         }
         message
     })
+}
+
+/// One line for the start of a play of a section: its name and pass, key,
+/// meter and tempo (in the meter's beats), and where it starts.
+fn describe_pass(pass: &SectionPass, first_time_signature: TimeSignature) -> String {
+    let key: String = pass
+        .key
+        .map_or_else(|| String::from("no key"), |key| key.to_string());
+    // milli-quarters/min × ticks/quarter ÷ ticks/beat → milli-beats/min.
+    let milli_beats_per_minute: u64 = pass.tempo.milli_quarters_per_minute()
+        * TICKS_PER_QUARTER_NOTE
+        / pass.time_signature.beat_length().ticks();
+    let tempo: String = if milli_beats_per_minute.is_multiple_of(1000) {
+        format!("{}", milli_beats_per_minute / 1000)
+    } else {
+        format!(
+            "{}.{:03}",
+            milli_beats_per_minute / 1000,
+            milli_beats_per_minute % 1000
+        )
+        .trim_end_matches('0')
+        .to_string()
+    };
+    format!(
+        "\nSection \"{}\"{}, pass {} of {}: {key}, {}/{}, {tempo} beats/min ({})",
+        pass.section_name,
+        if pass.count_in { " (count-in)" } else { "" },
+        pass.pass_number,
+        pass.pass_count,
+        pass.time_signature.pulses_per_bar(),
+        pass.time_signature.pulses_per_whole_note(),
+        describe_place(pass.start_ticks, first_time_signature)
+    )
 }
 
 /// Shows each voice's notes once per place and each cue as it is queued.

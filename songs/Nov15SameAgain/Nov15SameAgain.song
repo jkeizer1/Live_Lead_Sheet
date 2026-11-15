@@ -1,0 +1,36 @@
+# SameAgain Test
+
+# cargo run --release -p song_text --example song_play_test -- ~/Documents/Live_Lead_Sheet/songs/Nov15SameAgain/Nov15SameAgain.song ~/Documents/Live_Lead_Sheet/songs/Nov15SameAgain/Nov15SameAgain.studio
+
+song "Same Again Test"
+
+track "Clock"
+  type clock_and_transport
+
+track "NTBass"
+  type mono_voice
+  clef bass
+  lead
+
+
+section "A" repeat 2
+  key C major
+  meter 4/4  tempo 100 beats/min
+  line "NTBass"                   | D2:e_ A2:e_ F2:e_ D2:e  A2:e_ G2:e_ F2:e  r:e  | C3:h_  /  |  
+                                  | D2:e  A2:e  F2:e  D2:e  A2:e  r:e   F2:e  r:e  | C2:h   /  |  
+
+section "B" repeat 2
+  key C major
+  meter 4/4  tempo 100 beats/min
+  line "NTBass"  sample_source    | D2    A2   F2   D2  A3  G3  F3  F2             | C3     D2    |
+  line "NTBass"                   | :e_   :e_  :e_  :e  :e_  /  /   r:e            | C3:h_  D2:h  |  
+
+section "C" repeat 1
+  line "NTBass"                   | D2:e_  /    F2:e  D2:e  A2:e  r:e   F2:e  r:e  | C3:h   D3:h  |  
+
+
+#section "B" repeat 2
+section "A" repeat 2
+
+  
+                  

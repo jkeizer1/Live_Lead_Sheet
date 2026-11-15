@@ -96,7 +96,7 @@ pub fn build_line(
     let mut elements: Vec<LineElement> = Vec::new();
     // The contents of the last sounding element, for a `/` (Song Notation,
     // section 4). Voices only.
-    let mut carried: Option<ElementContents> = None;
+    let mut carried: Option<Carried> = None;
     for (bar_index, bar) in bars.iter().enumerate() {
         // bar index × ticks/bar → ticks since the start of the line; a line
         // is at most a section's bars, so this cannot overflow.
@@ -147,22 +147,34 @@ fn error_start_ticks(error: &SongError) -> Option<u64> {
     }
 }
 
+/// What a `/` plays again: what the sounding element before it wrote, or,
+/// when that element took its notes from the sample source (`:q`), the
+/// source again, sampled at the `/`'s own place.
+#[derive(Debug, Clone)]
+enum Carried {
+    Written(ElementContents),
+    FromSource,
+}
+
 /// What one element carries, by the kind of track; `carried` is updated.
 /// A sounding element with no contents is a `/`.
 fn contents_of(
     track: &Track,
     placed: &BarElement,
-    carried: &mut Option<ElementContents>,
+    carried: &mut Option<Carried>,
 ) -> Result<Option<ElementContents>, String> {
     if placed.kind == ElementKind::Rest {
         // The bar parser gives a rest no contents: `r` is all it writes.
         return Ok(None);
     }
     if placed.from_source {
-        // `:q` plays what the sample source holds when it starts. It is not
-        // a `/`, so what a later `/` repeats is left as it was.
+        // `:q` plays what the sample source holds when it starts. A later
+        // `/` plays again what this element did: it samples the source.
         return match track.kind() {
-            TrackKind::Voice { .. } => Ok(None),
+            TrackKind::Voice { .. } => {
+                *carried = Some(Carried::FromSource);
+                Ok(None)
+            }
             _ => Err(String::from(
                 "only a voice track has a sample_source. Name the cue instead, \
                  e.g. \"Start SQ-1\":w",
@@ -172,22 +184,26 @@ fn contents_of(
     match (track.kind(), &placed.contents_text) {
         (TrackKind::Voice { voice, .. }, Some(text)) => {
             let contents: ElementContents = parse_voice_contents(text, *voice)?;
-            *carried = Some(contents.clone());
+            *carried = Some(Carried::Written(contents.clone()));
             Ok(Some(contents))
         }
-        (TrackKind::Voice { voice, .. }, None) => carried.clone().map(Some).ok_or_else(|| {
-            match voice {
+        (TrackKind::Voice { voice, .. }, None) => match carried {
+            Some(Carried::Written(contents)) => Ok(Some(contents.clone())),
+            // Nothing is stored: the player samples the source here.
+            Some(Carried::FromSource) => Ok(None),
+            None => Err(match voice {
                 VoiceKind::Poly => {
                     "a / plays the chord or notes before it, and none comes before it in \
-                    this line. Write what it plays, e.g. I:q or [C3 E3 G3]:q"
+                    this line. Write what it plays, e.g. I:q or [C3 E3 G3]:q, or :q to take \
+                    it from a sample_source line"
                 }
                 VoiceKind::Mono => {
                     "a / plays the note before it, and none comes before it in this line. \
-                    Write the note, e.g. C2:q"
+                    Write the note, e.g. C2:q, or :q to take it from a sample_source line"
                 }
             }
-            .to_string()
-        }),
+            .to_string()),
+        },
         (TrackKind::CueControl { .. }, Some(text)) => match text
             .strip_prefix('"')
             .and_then(|rest: &str| rest.strip_suffix('"'))

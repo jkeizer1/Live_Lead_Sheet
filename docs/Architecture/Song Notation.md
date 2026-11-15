@@ -1,6 +1,6 @@
 # Live Lead Sheet — Song Notation
 
-Revision 21 — 11 Nov 2026 (Jim's decisions on Q29 to Q33 written into sections 3 to 7; crescendo and diminuendo decisions and a list of items to confirm added to section 8; section 9 holds only what is still open)
+Revision 22 — 15 Nov 2026 (`/` samples the source again on a rhythm line; `repeat 0`; sections played again by name)
 
 **Status: draft for trial.** *Decided* marks what Jim has decided;
 everything else is a proposal to try with a working player. Every open
@@ -329,10 +329,16 @@ sixteenth"), and the order LilyPond and ABC notation write it in.
   is an element of an uncoupled rhythm line; it takes what it plays from
   the track's `sample_source` line (section 5, "Sample sources and
   uncoupled lines"). The colon is always written here.
-- **The same again:** `/` plays what the sounding element before it in
-  the line played (a strum is several elements of one chord); rests in
-  between do not count. A `/` takes its own length and marks: `/`, `/:e`,
-  `/>`. A cue control track names every cue; `/` is refused there.
+- **The same again:** `/` does again what the sounding element before it
+  did; rests in between do not count. After an element that wrote its own
+  notes (`C2:q`, `I:q`) it plays them again (a strum is several elements
+  of one chord). After an element that took its notes from the sample
+  source (`:q`) it takes them from the source again, at its own place, so
+  the progression in the source is followed (section 5, "Sample sources
+  and uncoupled lines"). A `/` takes its own length and marks: `/`, `/:e`,
+  `/>`. A `/` with nothing before it is refused; on a rhythm line, write
+  `:q` first. A cue control track names every cue; `/` is refused there.
+  *Decided (Jim, 15 Nov 2026).*
 - A beat pulse needs no section of its own: it is a mono voice that writes
   the same note on each element, e.g. `| C4:q> / / / |`.
 
@@ -563,7 +569,28 @@ key changes, as standard notation requires (*decided, Jim, 11 Nov 2026*).
 - **Repeats** are written out in play order by the loader (EFS-1.6). A
   section with no `repeat` plays once. The number is the total number of
   times the section plays: `repeat 2` plays it twice, `repeat 3` three
-  times.
+  times. `repeat 0` leaves the section out. It is read and checked, then
+  played as if it were commented out, so it passes nothing on: the next
+  section carries its key, meter and tempo from the last section that
+  plays, and the initial tempo is that of the first section that plays. A
+  song whose sections are all `repeat 0` is refused. *Decided (Jim,
+  15 Nov 2026).*
+- **Playing a section again by name.** A `section "Name"` with no lines
+  and only `repeat n` plays the earlier section of that name n times, with
+  that section's key, meter and tempo. It must come below the section it
+  names, and it takes no `count-in`, `key`, `meter` or `tempo`. Section
+  names are therefore unique. Each such line is its own entry in the order
+  of play, and the section after it carries on from it. This is how a song
+  takes a form such as AABBAA, and `repeat 0` mutes one entry without
+  deleting it:
+
+  ```
+  section "A"  repeat 2   (with its key, meter, tempo and lines)
+  section "B"  repeat 2   (with its lines)
+  section "A"  repeat 2
+  ```
+
+  *Decided (Jim, 15 Nov 2026).*
 - **Repeat signs inside a section.** `|%` opens and `%|` closes a group
   of bars that is played again, as the repeat signs of standard notation
   do: `|% I:w | V %|` plays the two bars twice. A number after the
@@ -659,6 +686,11 @@ line "Keys"                 | :h :q :q | :q :q :q :q |
   starts, it plays what the source holds at that moment, with a new
   gate. In the example the four quarter notes of the second bar play IV,
   IV, IV, V.
+- **The same again, on the rhythm line.** A `/` after a `:q` is another
+  `:q` with the same length: the source is read again at the `/`'s own
+  place, not where the `:q` was. `| :q / / / |` over `| D2 A2 F2 D2 |`
+  plays D2, A2, F2, D2. After a note written on the rhythm line
+  (`G3:q /`), the `/` plays that note again. *Decided (Jim, 15 Nov 2026).*
 - **Track and hold.** If the source changes while an element is still
   sounding, the element changes to the new chord or note legato: the new
   notes are sent before the old ones are released, with no new gate and
@@ -1202,31 +1234,24 @@ Korg SQ-1? *Required, not yet designed.*
 - Raised: Jim, 11 Nov 2026.
 
 **Q34 (CLOSED, Jim, 14 Nov 2026 — see Status below):** How does a track send pitch to a device that
-gates again on every note on, so that a change of source note inside a
-sounding element is heard as legato?
-- Context: legato is built as overlapping notes (the new note on, then
-  the old note off). On 12 Nov 2026 Jim heard the Disting NT gate again on
-  every change of the sample source, so on that receiver the overlap is
-  not legato. MIDI 1.0 cannot change the pitch of a sounding note without
-  a note on, and the receiver decides whether a note on while another is
-  held fires a gate. Pitch bend would only slide or offset the pitch and
-  depends on the receiver's bend range, so Jim does not want it.
+gates on every note on, to be heard as **legato**?
+
+- **Context**: legato is built as overlapping notes (the new note on, then
+  the old note off).The Disting NT gates on every Note On, so no legato is heard.
 - Why it matters: with track and hold (section 5, "Sample sources and
   uncoupled lines") the rhythm must drive the gates and the source must
   drive only the pitch. The `_` mark, a tie, and one note for the same
   pitch in two voice layers need the same thing.
-- Deferred idea (Jim, 12 Nov 2026; deferred 14 Nov 2026, perhaps for
-  good): carry the pitch on control change (CC) numbers and use the note on
-  and note off for the gate only, as a modular system keeps pitch and gate
-  apart. Deferred because it would be brittle and specific to each device:
-  every receiver's note mapping and transposition settings would have to
-  match exactly, an endless source of future errors. On 12 Nov 2026 the
-  Disting NT's Poly FM did transpose a held note from a CC, so the idea is
-  workable on that receiver. The details drafted on 12 Nov (CC numbers, a
-  per-track delay, the root note on unused CCs) are dropped. A plugin for
-  the Disting NT that makes legato from overlapping notes was also thought
-  of and not pursued.
-- Findings (Jim, 12 Nov 2026, with `held_notes_test`: Bass note on at
+- **Decision (Jim, 14 Nov 2026): closed. Legato is solved in the player
+  as it is.** The `_` mark and the sample-source follow send legato as
+  overlapping notes (the new note on, then the old note off). A receiver
+  that cannot make legato from that, such as the Disting NT's own MIDI
+  algorithms, is fed through a MIDI to CV and gate converter (the FH-2, or
+  the Behringer CM1A on the System 35), which the tests above show works.
+- **Correct Legato Approach Disting NT**.  Use the Poly CV algorithm to output
+  CV/Gates to an Aux bus, then let the receiving algorithm process CV/Gates instead of MIDI. Jim/Nov 15.
+  **See Nov15_PolyCVLegato in Live_LeadSheet_MySongs*
+- **Findings** (Jim, 12 Nov 2026, with `held_notes_test`: Bass note on at
   beat 1, a second note on at beat 3 with the first still held, both
   note offs at the end of the bar; logged 12 Nov 2026 19:05 local time):
   - FH-2 making gate and CV, into an analog voice (CV to the oscillator,
@@ -1285,24 +1310,7 @@ sounding element is heard as legato?
     at 100 ms and at 2 ms. So on 14 Nov 2026 legato from the `_` mark works
     on the System 35 chain (CM1A, 911, 902) and on the FH-2's CV and gate
     into Poly FM, and does not work in the NT's own MIDI mode (Poly FM).
-- Raised: Jim, 12 Nov 2026; recorded 12 Nov 2026 16:18 (local time).
-- Status (Jim, 12 Nov 2026 19:26 local time): on hold. The result so far:
-  the FH-2 with an analog voice works with the player's legato, and so
-  does the NT's Poly FM on CV and gate; the NT's own MIDI mode gates again
-  on every note on. Nothing is to be built until the further tests are in.
-- **Decision (Jim, 14 Nov 2026): closed. Legato is solved in the player
-  as it is.** The `_` mark and the sample-source follow send legato as
-  overlapping notes (the new note on, then the old note off). A receiver
-  that cannot make legato from that, such as the Disting NT's own MIDI
-  algorithms, is fed through a MIDI to CV and gate converter (the FH-2, or
-  the Behringer CM1A on the System 35), which the tests above show works.
-  The control change (CC) idea is recorded above under "Deferred idea".
-  - One more observation (Jim, 14 Nov 2026): on the NT's Poly FM with its
-    MIDI path and the FH-2's CV and gate both enabled, the two paths
-    fight: the pitches differ, and both the legato and the extra gates
-    are heard at once. Patching one voice from both paths is not a valid
-    setup; use one path per voice.
-
+  
 ### Deferred (Jim, 11 Nov 2026)
 
 These are decisions to wait, not open questions. Each becomes its own

@@ -1,6 +1,6 @@
 # song_play_test
 
-Revision 5 — 12 Nov 2026 (what to hear brought into line with Demo.song and Demo.studio)
+Revision 6 — 15 Nov 2026 (a line at the start of each play of a section)
 
 ## What it proves
 
@@ -53,6 +53,14 @@ router or `aconnect`) and press Enter. The client is named `Lead Sheet`.
 The sending loop is `../support/event_player.rs`, shared with
 `rhythm_notation_test`.
 
+As the song plays, one line is printed at the start of each play of a
+section, so each repeat has its own: the section's name, its pass out of
+its repeat count, its key, meter and tempo (in the meter's beats), and the
+bar and beat where it starts, for example
+`Section "A", pass 2 of 3: C major, 4/4, 100 beats/min (bar 5 beat 1)`.
+A section played again by name (Song Notation, section 5) is announced
+the same way. A count-in section says so and has no key.
+
 ## Findings
 
 The unit and integration tests (`cargo test -p player -p song_text`)
@@ -96,3 +104,5 @@ Bass note without its gate. Not yet heard with this change.
   in the Demo" still describes the earlier Demo song, not the current one.
 - 12 Nov 2026, revision 5: "What to hear" rewritten for the current Demo;
   count-in velocities are 127 and 80 (the studio's normal and accent).
+- 15 Nov 2026, revision 6: a line is printed at the start of each play of
+  a section.

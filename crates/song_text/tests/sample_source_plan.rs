@@ -412,3 +412,63 @@ fn a_tied_rhythm_element_samples_once_then_holds_one_gate_and_follows_the_source
         vec![(0, 13_440), (13_440, BAR - 13_440)]
     );
 }
+
+const SLASH_SONG: &str =
+    include_str!("../../../songs_canonical/sample_source/sample_source_slash.song");
+const SLASH_FIRST_FILE: &str = "sample_source_error_slash_first.song";
+const SLASH_FIRST: &str =
+    include_str!("../../../songs_canonical/sample_source/sample_source_error_slash_first.song");
+
+/// (start in ticks from `first_bar` (counted from 0), MIDI note) of the Bass
+/// notes of the slash song in `bar_count` bars from `first_bar`.
+fn slash_bass(first_bar: u64, bar_count: u64) -> Vec<(u64, u8)> {
+    let song: Song = parse_song("sample_source_slash.song", SLASH_SONG).unwrap();
+    let studio = parse_studio("sample_source.studio", DEMO_STUDIO).unwrap();
+    let plan: SongPlan = plan_song(&song, &studio).unwrap();
+    let from_ticks: u64 = first_bar * BAR;
+    let to_ticks: u64 = (first_bar + bar_count) * BAR;
+    notes_of(&plan, "Bass")
+        .iter()
+        .filter(|note: &&TimedNote| (from_ticks..to_ticks).contains(&note.start_ticks))
+        .map(|note: &TimedNote| (note.start_ticks - from_ticks, note.note.value()))
+        .collect()
+}
+
+#[test]
+fn a_slash_on_a_rhythm_line_samples_the_source_again() {
+    // `:q / / /` over D2 A2 F2 D2, then `:w` over G2. The Bass octave_offset
+    // is 1 octave: D2 (MIDI 38) sounds as 50, A2 (45) as 57, F2 (41) as 53,
+    // G2 (43) as 55. Each `/` takes what the source holds at its own place.
+    assert_eq!(
+        slash_bass(0, 2),
+        vec![
+            (0, 50),
+            (QUARTER, 57),
+            (2 * QUARTER, 53),
+            (3 * QUARTER, 50),
+            (BAR, 55)
+        ]
+    );
+}
+
+#[test]
+fn a_slash_after_a_written_note_plays_that_note_again() {
+    // `G3:q / :q /` over D2 A2 F2 D2: G3 (MIDI 55, sounds as 67) twice, then
+    // `:q` samples F2 (53) and the `/` after it samples D2 (50).
+    assert_eq!(
+        slash_bass(2, 1),
+        vec![(0, 67), (QUARTER, 67), (2 * QUARTER, 53), (3 * QUARTER, 50)]
+    );
+}
+
+#[test]
+fn a_slash_first_on_a_rhythm_line_is_refused() {
+    let errors: Vec<String> = errors_of(SLASH_FIRST_FILE, SLASH_FIRST);
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    assert!(
+        errors[0].contains("a / plays the note before it")
+            && errors[0].contains(":q to take it from a sample_source line"),
+        "{}",
+        errors[0]
+    );
+}

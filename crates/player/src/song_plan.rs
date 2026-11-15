@@ -23,6 +23,7 @@ use vocabulary::song::{
     Section, Song, Track, TrackKind,
 };
 use vocabulary::tempo::Tempo;
+use vocabulary::time_signature::TimeSignature;
 
 use crate::note_track::{NoteTrack, NoteTrackError, TimedNote};
 use crate::sample_source::held_stretches;
@@ -45,6 +46,9 @@ pub struct SongPlan {
     pub control_tracks: Vec<ControlTrack>,
     pub stretch_length: ScoreLength,
     pub tempo: Tempo,
+    /// Each play of each section in play order, so a display can announce
+    /// the section, its key, meter and tempo, and its pass, as it starts.
+    pub section_passes: Vec<SectionPass>,
     /// Settings of the studio that the player does not apply yet, said
     /// aloud so nothing is silently ignored.
     pub not_yet_applied: Vec<String>,
@@ -53,7 +57,24 @@ pub struct SongPlan {
 /// One play of a section, with where it starts.
 struct Pass<'a> {
     section: &'a Section,
+    /// Counted from 1.
+    number: u32,
     start_ticks: u64,
+}
+
+/// What a display says when one play of a section starts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SectionPass {
+    pub section_name: String,
+    pub count_in: bool,
+    /// Counted from 1, out of `pass_count`.
+    pub pass_number: u32,
+    pub pass_count: u32,
+    pub key: Option<Key>,
+    pub time_signature: TimeSignature,
+    pub tempo: Tempo,
+    /// Ticks from the start of the song.
+    pub start_ticks: u64,
 }
 
 /// Plans `song` for `studio`.
@@ -100,8 +121,22 @@ pub fn plan_song(song: &Song, studio: &StudioConfiguration) -> Result<SongPlan, 
         control_tracks,
         stretch_length,
         tempo,
+        section_passes: passes.iter().map(section_pass_of).collect(),
         not_yet_applied: not_yet_applied(song, studio),
     })
+}
+
+fn section_pass_of(pass: &Pass) -> SectionPass {
+    SectionPass {
+        section_name: pass.section.name().to_string(),
+        count_in: pass.section.count_in(),
+        pass_number: pass.number,
+        pass_count: pass.section.repeat_count(),
+        key: pass.section.key(),
+        time_signature: pass.section.time_signature(),
+        tempo: pass.section.tempo(),
+        start_ticks: pass.start_ticks,
+    }
 }
 
 fn common_tempo(song: &Song) -> Result<Tempo, PlanError> {
@@ -127,9 +162,10 @@ fn order_passes(song: &Song) -> Result<(Vec<Pass<'_>>, ScoreLength), PlanError> 
         // bars × ticks/bar → ticks.
         let section_ticks: u64 =
             u64::from(section.bar_count()) * section.time_signature().bar_length().ticks();
-        for _ in 0..section.repeat_count() {
+        for number in 1..=section.repeat_count() {
             passes.push(Pass {
                 section,
+                number,
                 start_ticks: position_ticks,
             });
             position_ticks = position_ticks

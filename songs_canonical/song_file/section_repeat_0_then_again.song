@@ -1,0 +1,17 @@
+# Canonical test song: crates/song_text/src/song_file.rs, test `a_section_with_repeat_0_can_be_played_by_name_later`.
+# "A" is written with repeat 0 (not played), then written again by name with repeat 2: it plays twice.
+song "Repeat 0 then again"
+
+track "Clock"
+  type clock_and_transport
+
+track "Bass"
+  type mono_voice
+  clef bass
+  lead
+
+section "A" repeat 0
+  key C major  meter 4/4  tempo 100 beats/min
+  line "Bass" | C2:w |
+
+section "A" repeat 2

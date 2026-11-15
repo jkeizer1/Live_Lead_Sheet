@@ -1,0 +1,20 @@
+# Canonical test song: crates/song_text/tests/sample_source_plan.rs, tests `a_slash_on_a_rhythm_line_samples_the_source_again` and `a_slash_after_a_written_note_plays_that_note_again`. Studio: sample_source.studio.
+# Section 1: `:q / / /` over D2 A2 F2 D2 samples the source on each beat. Section 2: `G3:q /` repeats the written G3, then `:q /` samples F2 and D2.
+song "Sample source slash"
+
+track "Clock"
+  type clock_and_transport
+
+track "Bass"
+  type mono_voice
+  clef bass
+  lead
+
+section "slash resamples"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Bass" sample_source | D2 A2 F2 D2 | G2 |
+  line "Bass"               | :q  /  /  /  | :w |
+
+section "slash after a written note"
+  line "Bass" sample_source | D2 A2 F2 D2 |
+  line "Bass"               | G3:q / :q /  |

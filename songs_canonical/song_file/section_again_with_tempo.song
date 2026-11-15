@@ -1,0 +1,18 @@
+# Canonical test song: crates/song_text/src/song_file.rs, test `a_section_written_again_takes_only_a_repeat`.
+# The loader must refuse the second "A": playing "A" again takes only repeat n, not a tempo.
+song "Again with tempo"
+
+track "Clock"
+  type clock_and_transport
+
+track "Bass"
+  type mono_voice
+  clef bass
+  lead
+
+section "A"
+  key C major  meter 4/4  tempo 100 beats/min
+  line "Bass" | C2:w |
+
+section "A" repeat 2
+  tempo 120 beats/min

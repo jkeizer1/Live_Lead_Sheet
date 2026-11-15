@@ -138,7 +138,11 @@ struct SongReader<'a> {
     /// also reported.
     failed_track_names: Vec<String>,
     track: Option<OpenTrack>,
+    /// The sections that play, in play order.
     sections: Vec<Section>,
+    /// Every section written with lines, repeat 0 ones too, so a later
+    /// section can play one again by name.
+    defined: Vec<Section>,
     section: Option<OpenSection>,
     carried: Carried,
 }
@@ -157,6 +161,7 @@ pub fn parse_song(file_name: &str, text: &str) -> Result<Song, Vec<ParseError>> 
         failed_track_names: Vec::new(),
         track: None,
         sections: Vec::new(),
+        defined: Vec::new(),
         section: None,
         carried: Carried::default(),
     };
@@ -404,6 +409,10 @@ impl SongReader<'_> {
         if self.errors.len() > open.errors_at_start {
             return;
         }
+        if open.lines.is_empty() {
+            self.finish_section_again(&open);
+            return;
+        }
         let Some(time_signature) = open.time_signature.or(self.carried.time_signature) else {
             self.report(
                 open.line_number,
@@ -445,20 +454,88 @@ impl SongReader<'_> {
         }
         // Repeating once is the plain reading of a section with no repeat.
         let repeat_count: u32 = open.repeat_count.unwrap_or(1);
+        // A section with repeat 0 is checked as written, as a section that
+        // plays once, and then left out of the song as if commented out.
+        let checked_count: u32 = repeat_count.max(1);
         match Section::new(
             &open.name,
             open.count_in,
-            repeat_count,
+            checked_count,
             key,
             time_signature,
             tempo,
             lines,
         ) {
             Ok(section) => {
+                if self.defined.iter().any(|d: &Section| d.name() == open.name) {
+                    self.report(
+                        open.line_number,
+                        format!(
+                            "two sections are named \"{0}\". To play \"{0}\" again, write \
+                             section \"{0}\" repeat 2 with no lines of its own",
+                            open.name
+                        ),
+                    );
+                    return;
+                }
+                self.defined.push(section.clone());
+                if repeat_count > 0 {
+                    self.carried = Carried {
+                        key,
+                        time_signature: Some(time_signature),
+                        tempo: Some(tempo),
+                    };
+                    self.sections.push(section);
+                }
+            }
+            Err(error) => self.report(open.line_number, error.to_string()),
+        }
+    }
+
+    /// A section written with no lines of its own plays the earlier section
+    /// of that name again, with that section's key, meter and tempo.
+    fn finish_section_again(&mut self, open: &OpenSection) {
+        let Some(earlier) = self
+            .defined
+            .iter()
+            .find(|defined: &&Section| defined.name() == open.name)
+            .cloned()
+        else {
+            self.report(
+                open.line_number,
+                format!(
+                    "section \"{0}\" has no lines, and no earlier section is named \"{0}\". \
+                     Write its lines, or define \"{0}\" above this",
+                    open.name
+                ),
+            );
+            return;
+        };
+        if open.count_in
+            || open.key.is_some()
+            || open.time_signature.is_some()
+            || open.tempo.is_some()
+        {
+            self.report(
+                open.line_number,
+                format!(
+                    "section \"{0}\" plays the earlier \"{0}\" again, so it takes only repeat \
+                     n, not count-in, key, meter or tempo",
+                    open.name
+                ),
+            );
+            return;
+        }
+        let repeat_count: u32 = open.repeat_count.unwrap_or(1);
+        if repeat_count == 0 {
+            return; // as if commented out
+        }
+        match earlier.played_again(repeat_count) {
+            Ok(section) => {
                 self.carried = Carried {
-                    key,
-                    time_signature: Some(time_signature),
-                    tempo: Some(tempo),
+                    key: section.key(),
+                    time_signature: Some(section.time_signature()),
+                    tempo: Some(section.tempo()),
                 };
                 self.sections.push(section);
             }
@@ -532,6 +609,17 @@ impl SongReader<'_> {
             return Err(self.errors);
         };
         if !self.errors.is_empty() {
+            return Err(self.errors);
+        }
+        if self.sections.is_empty() && !self.defined.is_empty() {
+            self.errors.push(ParseError::new(
+                self.file_name,
+                name_line,
+                String::from(
+                    "every section has repeat 0, so nothing plays. Give one of them repeat 1 \
+                     or more",
+                ),
+            ));
             return Err(self.errors);
         }
         match Song::new(&name, self.tracks, self.sections) {
@@ -1013,6 +1101,114 @@ mod tests {
             "../../../songs_canonical/song_file/cue_not_defined.song"
         ));
         assert!(errors[0].contains("no cue named \"Stop\""), "{}", errors[0]);
+    }
+
+    /// (name, repeat count, tempo in milli-quarters/min) of each section that plays.
+    fn plays_of(text: &str) -> Vec<(String, u32, u64)> {
+        parse_song("test.song", text)
+            .unwrap()
+            .sections()
+            .iter()
+            .map(|section: &Section| {
+                (
+                    section.name().to_string(),
+                    section.repeat_count(),
+                    section.tempo().milli_quarters_per_minute(),
+                )
+            })
+            .collect()
+    }
+
+    fn named_plays(plays: &[(&str, u32, u64)]) -> Vec<(String, u32, u64)> {
+        plays
+            .iter()
+            .map(|&(name, repeats, tempo)| (name.to_string(), repeats, tempo))
+            .collect()
+    }
+
+    #[test]
+    fn a_section_with_repeat_0_is_left_out_as_if_commented_out() {
+        // B (140 beats/min) is not played and does not carry its tempo on:
+        // C plays at A's 100 beats/min = 100000 milli-quarters/min.
+        assert_eq!(
+            plays_of(include_str!(
+                "../../../songs_canonical/song_file/section_repeat_0.song"
+            )),
+            named_plays(&[("A", 2, 100_000), ("C", 1, 100_000)])
+        );
+    }
+
+    #[test]
+    fn a_section_written_again_by_name_plays_the_earlier_one() {
+        assert_eq!(
+            plays_of(include_str!(
+                "../../../songs_canonical/song_file/section_played_again.song"
+            )),
+            named_plays(&[
+                ("A", 1, 100_000),
+                ("B", 1, 140_000),
+                ("A", 3, 100_000),
+                ("D", 1, 100_000),
+            ])
+        );
+    }
+
+    #[test]
+    fn a_section_with_repeat_0_can_be_played_by_name_later() {
+        assert_eq!(
+            plays_of(include_str!(
+                "../../../songs_canonical/song_file/section_repeat_0_then_again.song"
+            )),
+            named_plays(&[("A", 2, 100_000)])
+        );
+    }
+
+    #[test]
+    fn a_section_written_again_must_be_defined_above() {
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/section_again_not_defined.song"
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(
+            errors[0].contains("no earlier section is named \"B\""),
+            "{}",
+            errors[0]
+        );
+    }
+
+    #[test]
+    fn a_section_written_again_takes_only_a_repeat() {
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/section_again_with_tempo.song"
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(errors[0].contains("takes only repeat n"), "{}", errors[0]);
+    }
+
+    #[test]
+    fn two_sections_with_lines_may_not_share_a_name() {
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/section_two_with_one_name.song"
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(
+            errors[0].contains("two sections are named \"A\""),
+            "{}",
+            errors[0]
+        );
+    }
+
+    #[test]
+    fn a_song_whose_sections_all_have_repeat_0_is_refused() {
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/section_all_repeat_0.song"
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(
+            errors[0].contains("every section has repeat 0"),
+            "{}",
+            errors[0]
+        );
     }
 
     fn tempos_of(text: &str) -> Vec<u64> {

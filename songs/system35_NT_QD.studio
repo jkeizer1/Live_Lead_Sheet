@@ -1,0 +1,28 @@
+# System35 NT Test
+studio "System35 Studio"
+
+port "Clock"
+port "Bass"
+port "VPME_Blue"
+port "MCO_SID"
+
+track "Clock"
+  port "Clock" channel 16
+
+track "Bass"
+  port "Bass"  channel 1
+  octave_offset -1 octaves
+  velocity normal 90  accent 115
+  retrigger_gap 100 ms
+
+track "VPME_Blue"
+  port "VPME_Blue"  channel 2
+  octave_offset 0 octaves
+  velocity normal 90  accent 115
+  retrigger_gap  2 ms
+
+track "MCO_SID"
+  port "MCO_SID"  channel 3
+  octave_offset -1 octaves
+  velocity normal 90  accent 115
+  retrigger_gap  2 ms

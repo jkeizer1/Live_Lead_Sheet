@@ -1,0 +1,15 @@
+# NT PolyCV aux bus test
+studio "NT PolyCV PolyFM"
+
+port "Clock"
+port "NTBass"
+
+track "Clock"
+  port "Clock" channel 16
+
+track "NTBass"
+  port "NTBass"  channel 1
+  octave_offset 1 octaves
+  velocity normal 80  accent 115
+  retrigger_gap 100 ms
+

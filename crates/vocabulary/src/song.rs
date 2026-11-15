@@ -637,6 +637,24 @@ impl Section {
         self.repeat_count
     }
 
+    /// The same section played `repeat_count` times: a section written again
+    /// by name in a song (Song Notation, section 5, "Sections").
+    ///
+    /// # Errors
+    ///
+    /// When the repeat count is 0; a section that plays is played at least once.
+    pub fn played_again(&self, repeat_count: u32) -> Result<Section, SongError> {
+        if repeat_count == 0 {
+            return Err(SongError::RepeatCountZero {
+                section_name: self.name.clone(),
+            });
+        }
+        Ok(Section {
+            repeat_count,
+            ..self.clone()
+        })
+    }
+
     #[must_use]
     pub fn key(&self) -> Option<Key> {
         self.key

@@ -1,9 +1,9 @@
 # Live Lead Sheet — Experience Functional Specification
 
-Revision 17 — 8 Nov 2026 (EFS-2.6: the beat pulse example in the song notation's new order, Song Notation Revision 15)
+Revision 18 — 15 Nov 2026 (EFS-5.2b: a section played again by name; repeat 0; EFS-1.2, EFS-1.3, EFS-2.2 and EFS-5.2 adjusted; Song Notation, Revision 22)
 
 Builds on the Concept Brief, Revision 13, Architecture D-10 and D-11, and
-Song Notation, Revision 9. Covers
+Song Notation, Revision 22. Covers
 **V1: the leader** — a chordal song with its own slash rhythm and a bass
 accompaniment, with a beat pulse voice and a control track for phrase cues,
 on one screen. Requirements are in the musician's terms; nothing here chooses a
@@ -16,7 +16,10 @@ counter, the tempo, the cues panel, and the voice tracks.
 
 **EFS-1.2 Song overview.** A strip across the top shows every section in
 order, by name, with its repeat count. The current section and the
-position within it are marked.
+position within it are marked. A section played again by name (EFS-5.2b)
+is its own entry in the strip, in its place in the order, so a song of
+the form AABBAA shows six entries. A section with a repeat count of 0 is
+not shown.
 
 **EFS-1.3 Counter.** Large and plain: `Repeat: 3 of 4   Bar: 2   Beat: 1`.
 Beat follows the time signature as the rudiments define it, the same beat
@@ -25,7 +28,9 @@ the tempo counts. In simple time it is one unit of the lower number:
 2/2 (cut time) counts 1–2. In compound time (6, 9 or 12 on top) it is a
 dotted note, three units of the lower number: 6/8 counts 1–2, 9/8 counts
 1–3, 12/8 counts 1–4. In a count-in section the counter says so:
-`Count-in   Bar: 1   Beat: 3`. *Decided (Jim, 7 Nov 2026).*
+`Count-in   Bar: 1   Beat: 3`. `Repeat: 3 of 4` counts the passes of the
+entry being played, so each entry of the strip (EFS-1.2) counts from its
+own first pass. *Decided (Jim, 7 Nov 2026).*
 
 **EFS-1.3a Playhead.** The playhead glides smoothly through the bar and
 flashes brightly on each beat, as the counter counts it (7 Nov 2026).
@@ -137,8 +142,10 @@ Stop sends MIDI Stop and silences every track
 (All Notes Off) on every output port in use.
 
 **EFS-2.2 Tempo.** Each section has a written tempo, or carries on the
-previous section's tempo. The first section's tempo is the song's initial
-tempo; a tempo or time-signature change happens at a section boundary.
+previous section's tempo. The tempo of the first section that plays is the
+song's initial tempo; a tempo or time-signature change happens at a
+section boundary. A section played again by name has the tempo of the
+section it repeats, and the section after it carries on from that tempo.
 Later: tempo marks inside a section, a step or a ramp between two
 points in the song (an accelerando, or a ritardando at the end), written in
 rhythm notation (Song Notation, section 5).
@@ -336,12 +343,24 @@ tempo (EFS-2.5).
 **EFS-5.2 Sections.** Add, name, reorder and remove sections, and mark
 the first as a count-in section. For each:
 repeat count, key (twelve roots, major or minor, chosen from a list),
-meter with its beat grouping, and tempo (written, or carry on).
+meter with its beat grouping, and tempo (written, or carry on). A repeat
+count of 0 is allowed: the song plays as if that section were commented
+out, which is how a musician skips it while testing.
 
 **EFS-5.2a Minor keys.** A minor key uses the natural-minor key
 signature, as in standard notation. Chords that use the raised sixth or
 seventh degree (*e.g.* E7 in A minor) are written with accidentals,
 named by their actual notes. A section never has to choose a minor form.
+
+**EFS-5.2b Playing a section again.** A song can play a section it has
+already defined, by name, with its own repeat count: `section "A"` written
+again with `repeat 3` and no lines of its own. The repeated section keeps
+the original's key, meter, tempo and bars, and cannot be changed where it
+is repeated. In this way sections are composed into the usual song forms,
+such as AABBAA, without copying their bars. Each entry may have a repeat
+count of 0, which leaves it out, so the player can mute and restore an
+entry by changing one number. The notation is in Song Notation, section 5,
+"Sections". *Decided (Jim, 15 Nov 2026).*
 
 **EFS-5.3 Chords.** Start a section from a library progression, then
 change any chord, or the rhythm element it starts on.

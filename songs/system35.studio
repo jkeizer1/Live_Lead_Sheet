@@ -10,7 +10,7 @@ track "Clock"
 
 track "Bass"
   port "Bass"  channel 1
-  octave_offset -1 octaves
+  octave_offset -2 octaves
   velocity normal 90  accent 115
   retrigger_gap 100 ms
 
