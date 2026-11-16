@@ -27,13 +27,17 @@ const PLAYS_WITHOUT_NUMBER: u32 = 2;
 pub fn write_out_repeat_signs(text: &str) -> Result<String, String> {
     let mut written: String = String::new();
     let mut rest: &str = text;
-    while let Some(open_at) = find_opening(rest) {
+    // True right after a closing `%|`: its `|` is also the bar line of an
+    // opening that follows at once (`%|%2`), as one bar line ends a bar and
+    // starts the next.
+    let mut bar_line_shared: bool = false;
+    while let Some((open_at, open_length)) = find_opening(rest, bar_line_shared) {
         let (before, from_open): (&str, &str) = rest.split_at(open_at);
         if before.contains("%|") {
             return Err(closing_without_opening());
         }
-        // Past "|%".
-        let after_open: &str = &from_open[2..];
+        // Past "|%", or past "%" when the closing sign's "|" is shared.
+        let after_open: &str = &from_open[open_length..];
         let (plays, after_number): (u32, &str) = read_plays(after_open)?;
         let Some(close_at) = after_number.find("%|") else {
             return Err(String::from(
@@ -42,7 +46,7 @@ pub fn write_out_repeat_signs(text: &str) -> Result<String, String> {
             ));
         };
         let group: &str = &after_number[..close_at];
-        if find_opening(group).is_some() {
+        if find_opening(group, false).is_some() {
             return Err(String::from(
                 "a repeat sign |% is opened inside another. Repeat signs do not nest; close the \
                  first with %| before opening the next",
@@ -54,7 +58,10 @@ pub fn write_out_repeat_signs(text: &str) -> Result<String, String> {
             ));
         }
         written.push_str(before);
-        written.push('|');
+        // The bar line before the group, unless a closing sign just wrote it.
+        if open_length == 2 {
+            written.push('|');
+        }
         for play in 0..plays {
             if play > 0 {
                 written.push('|');
@@ -63,6 +70,7 @@ pub fn write_out_repeat_signs(text: &str) -> Result<String, String> {
         }
         written.push('|');
         rest = &after_number[close_at + 2..];
+        bar_line_shared = rest.starts_with('%');
     }
     if rest.contains("%|") {
         return Err(closing_without_opening());
@@ -71,10 +79,15 @@ pub fn write_out_repeat_signs(text: &str) -> Result<String, String> {
     Ok(written)
 }
 
-/// Where the next `|%` starts. A `%|` is found by its own search, so `%||%`
-/// (a close, then an open) reads as two signs.
-fn find_opening(text: &str) -> Option<usize> {
-    text.find("|%")
+/// Where the next opening sign starts and how long it is up to its `%`:
+/// `|%` (2 characters), or just `%` (1 character) at the very start of
+/// `text` when `bar_line_shared` says the bar line before it was written by
+/// the closing sign before it (`%|%2`).
+fn find_opening(text: &str, bar_line_shared: bool) -> Option<(usize, usize)> {
+    if bar_line_shared && text.starts_with('%') && !text.starts_with("%|") {
+        return Some((0, 1));
+    }
+    text.find("|%").map(|open_at: usize| (open_at, 2))
 }
 
 /// The number after an opening `|%` (`|%3`), or two plays when there is

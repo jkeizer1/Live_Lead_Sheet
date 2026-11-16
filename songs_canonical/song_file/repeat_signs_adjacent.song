@@ -1,0 +1,12 @@
+# Canonical test song (valid): crates/song_text/src/song_file.rs, test `adjacent_repeat_signs_share_a_bar_line`.
+# Two repeat groups side by side, `%|%2`: the closing sign's bar line is also the next opening's. Plays I, V, I, V, ii, V, ii, V.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+section "A"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Keys" |%2 I:w | V:w %|%2 ii:w | V:w %|

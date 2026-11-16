@@ -1597,6 +1597,17 @@ mod tests {
         assert_eq!(bass[2], vec!["C2", "C2", "C2"]);
     }
 
+    #[test]
+    fn adjacent_repeat_signs_share_a_bar_line() {
+        let song: Song = parse_song(
+            "test.song",
+            include_str!("../../../songs_canonical/song_file/repeat_signs_adjacent.song"),
+        )
+        .unwrap();
+        let keys: Vec<Vec<String>> = contents_of_track(&song, "Keys");
+        assert_eq!(keys[0], vec!["I", "V", "I", "V", "ii", "V", "ii", "V"]);
+    }
+
     fn repeat_sign_error(text: &str) -> String {
         let errors: Vec<String> = errors_of(text);
         assert_eq!(errors.len(), 1, "{errors:?}");

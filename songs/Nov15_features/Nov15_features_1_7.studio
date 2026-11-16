@@ -13,6 +13,7 @@ track "Clock"
 track "Keys"
   port "Harmony"  channel 1
   velocity normal 64  accent 100
+  octave_offset 1 octaves
 
 track "Bass"
   port "Bass"  channel 2
