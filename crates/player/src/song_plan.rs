@@ -25,10 +25,12 @@ use vocabulary::song::{
 use vocabulary::tempo::Tempo;
 use vocabulary::time_signature::TimeSignature;
 
+use crate::dynamics_timeline::DynamicsTimeline;
+use crate::layer_merge::{LayerNote, merge_equal_pitches_across_layers};
 use crate::note_track::{NoteTrack, NoteTrackError, TimedNote};
 use crate::sample_source::held_stretches;
 use crate::studio_configuration::{StudioConfiguration, TrackOutput, UnmetNeed};
-use crate::voicing::{VoicingError, plain_voicing};
+use crate::voicing::{VoicingError, inverted_voicing, plain_voicing};
 
 /// A staccato note sounds for half its written length (Song Notation,
 /// section 6).
@@ -45,13 +47,26 @@ pub struct SongPlan {
     /// the first position and Stop at the end.
     pub control_tracks: Vec<ControlTrack>,
     pub stretch_length: ScoreLength,
+    /// The tempo the song starts at.
     pub tempo: Tempo,
+    /// Where the written tempo changes later, in position order. The player
+    /// makes a new anchor at each (Musical Time and Clock, section 8): the
+    /// instant of its position is computed from the anchor before it.
+    pub tempo_changes: Vec<TempoChange>,
     /// Each play of each section in play order, so a display can announce
     /// the section, its key, meter and tempo, and its pass, as it starts.
     pub section_passes: Vec<SectionPass>,
     /// Settings of the studio that the player does not apply yet, said
     /// aloud so nothing is silently ignored.
     pub not_yet_applied: Vec<String>,
+}
+
+/// The written tempo changing at a score position: a section whose tempo
+/// differs from the section played before it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TempoChange {
+    pub position: ScorePosition,
+    pub tempo: Tempo,
 }
 
 /// One play of a section, with where it starts.
@@ -81,8 +96,7 @@ pub struct SectionPass {
 ///
 /// # Errors
 ///
-/// When the studio does not give the song what it needs; the sections have
-/// different tempi (a tempo change is not played yet); a chord or note
+/// When the studio does not give the song what it needs; a chord or note
 /// lies outside the MIDI range; a tie runs into a different chord or note;
 /// or a position cannot be counted.
 pub fn plan_song(song: &Song, studio: &StudioConfiguration) -> Result<SongPlan, PlanError> {
@@ -90,8 +104,8 @@ pub fn plan_song(song: &Song, studio: &StudioConfiguration) -> Result<SongPlan, 
     if !unmet.is_empty() {
         return Err(PlanError::StudioDoesNotCover { unmet });
     }
-    let tempo: Tempo = common_tempo(song)?;
     let (passes, stretch_length): (Vec<Pass>, ScoreLength) = order_passes(song)?;
+    let (tempo, tempo_changes): (Tempo, Vec<TempoChange>) = tempo_map_of(&passes)?;
 
     let mut note_tracks: Vec<NoteTrack> = Vec::new();
     let mut control_tracks: Vec<ControlTrack> = Vec::new();
@@ -121,6 +135,7 @@ pub fn plan_song(song: &Song, studio: &StudioConfiguration) -> Result<SongPlan, 
         control_tracks,
         stretch_length,
         tempo,
+        tempo_changes,
         section_passes: passes.iter().map(section_pass_of).collect(),
         not_yet_applied: not_yet_applied(song, studio),
     })
@@ -139,19 +154,26 @@ fn section_pass_of(pass: &Pass) -> SectionPass {
     }
 }
 
-fn common_tempo(song: &Song) -> Result<Tempo, PlanError> {
-    let mut sections = song.sections().iter();
-    let Some(first) = sections.next() else {
+/// The tempo the song starts at, and each later place where a section's
+/// tempo differs from the one played before it. A section carried over from
+/// the one before keeps its tempo, so it makes no change.
+fn tempo_map_of(passes: &[Pass]) -> Result<(Tempo, Vec<TempoChange>), PlanError> {
+    let Some(first) = passes.first() else {
         return Err(PlanError::NoSections);
     };
-    for section in sections {
-        if section.tempo() != first.tempo() {
-            return Err(PlanError::TempoChange {
-                section_name: section.name().to_string(),
+    let mut changes: Vec<TempoChange> = Vec::new();
+    let mut in_force: Tempo = first.section.tempo();
+    for pass in &passes[1..] {
+        let tempo: Tempo = pass.section.tempo();
+        if tempo != in_force {
+            changes.push(TempoChange {
+                position: ScorePosition::from_ticks(pass.start_ticks),
+                tempo,
             });
+            in_force = tempo;
         }
     }
-    Ok(first.tempo())
+    Ok((first.section.tempo(), changes))
 }
 
 /// The sections in play order, each repeat written out, and the total length.
@@ -243,10 +265,7 @@ fn voice_track(
     studio: &StudioConfiguration,
     passes: &[Pass],
 ) -> Result<NoteTrack, PlanError> {
-    let TrackKind::Voice {
-        clef, home_octave, ..
-    } = track.kind()
-    else {
+    let TrackKind::Voice { clef, .. } = track.kind() else {
         return Err(PlanError::NoClockTrack);
     };
     let output: &TrackOutput = output_of(studio, track)?;
@@ -257,8 +276,9 @@ fn voice_track(
             }],
         });
     };
-    let home_octave: i8 = home_octave.unwrap_or_else(|| clef.default_home_octave());
-    let mut notes: Vec<TimedNote> = Vec::new();
+    // The clef sets the octave; `+8va` and `-8va` move a passage.
+    let home_octave: i8 = clef.default_home_octave();
+    let mut layer_notes: Vec<LayerNote> = Vec::new();
     for pass in passes {
         for line in pass.section.lines() {
             if line.track_name() != track.name() {
@@ -272,17 +292,35 @@ fn voice_track(
             let source: Option<&Line> = pass.section.lines().iter().find(|other: &&Line| {
                 other.track_name() == track.name() && other.role() == LineRole::SampleSource(layer)
             });
-            notes.extend(line_notes(
-                track,
-                line,
+            // The track's dynamics line in this section, if it has one.
+            let dynamics: DynamicsTimeline = pass
+                .section
+                .lines()
+                .iter()
+                .find(|other: &&Line| {
+                    other.track_name() == track.name() && other.role() == LineRole::Dynamics
+                })
+                .map_or_else(
+                    || DynamicsTimeline::flat(output.velocity.normal()),
+                    |dynamics_line: &Line| {
+                        DynamicsTimeline::from_line(dynamics_line, output.velocity.normal())
+                    },
+                );
+            let around: LineSurroundings = LineSurroundings {
                 source,
-                pass,
-                output,
+                dynamics: &dynamics,
                 home_octave,
-                pass.section.key(),
-            )?);
+                key: pass.section.key(),
+            };
+            layer_notes.extend(
+                line_notes(track, line, &around, pass, output)?
+                    .into_iter()
+                    .map(|note: TimedNote| LayerNote::new(layer.value(), note)),
+            );
         }
     }
+    // One note for the same pitch in two voice layers.
+    let notes: Vec<TimedNote> = merge_equal_pitches_across_layers(layer_notes);
     NoteTrack::new(
         track.name(),
         OutputPortName::new(&output.port_name).map_err(PlanError::Cue)?,
@@ -293,6 +331,17 @@ fn voice_track(
     .map_err(PlanError::NoteTrack)
 }
 
+/// What a line is planned against besides the track and the pass: the
+/// `sample_source` of its voice layer, the section's dynamics for the track,
+/// the clef's home octave and the section's key.
+#[derive(Clone, Copy)]
+struct LineSurroundings<'a> {
+    source: Option<&'a Line>,
+    dynamics: &'a DynamicsTimeline,
+    home_octave: i8,
+    key: Option<Key>,
+}
+
 /// The notes of one line in one pass of a section: a note, or all of a
 /// chord's notes, at each sounding element that no tie leads into. An
 /// element with no contents of its own takes them from `source`, and follows
@@ -300,12 +349,16 @@ fn voice_track(
 fn line_notes(
     track: &Track,
     line: &Line,
-    source: Option<&Line>,
+    around: &LineSurroundings,
     pass: &Pass,
     output: &TrackOutput,
-    home_octave: i8,
-    key: Option<Key>,
 ) -> Result<Vec<TimedNote>, PlanError> {
+    let LineSurroundings {
+        source,
+        dynamics,
+        home_octave,
+        key,
+    } = *around;
     let elements: &[LineElement] = line.elements();
     let mut notes: Vec<TimedNote> = Vec::new();
     for (index, line_element) in elements.iter().enumerate() {
@@ -323,9 +376,14 @@ fn line_notes(
         } else {
             written_ticks
         };
-        let velocity: Velocity = output.velocity.for_level(element.marks().accent());
         // Ticks from the start of the line, then from the start of the song.
         let line_start_ticks: u64 = element.start().ticks();
+        // The loudness the dynamics line has reached where the element
+        // starts; the element's own mark is measured from it.
+        let velocity: Velocity = output.velocity.for_level_from(
+            dynamics.velocity_at(line_start_ticks),
+            element.marks().accent(),
+        );
         let stretches: Vec<(u64, u64, &ElementContents)> =
             if let Some(contents) = line_element.contents() {
                 vec![(line_start_ticks, sounding_ticks, contents)]
@@ -344,7 +402,14 @@ fn line_notes(
         let mut sounding: Vec<usize> = Vec::new();
         for (stretch_start_ticks, stretch_length_ticks, contents) in stretches {
             let mut now_sounding: Vec<usize> = Vec::new();
-            for note in note_numbers(contents, key, home_octave, output, track)? {
+            for note in note_numbers(
+                contents,
+                key,
+                home_octave,
+                line_element.octave_shift_octaves(),
+                output,
+                track,
+            )? {
                 // A pitch the stretch before also plays is held, not struck
                 // again: on one channel a note off for it, right after its
                 // new note on, would end the new note.
@@ -407,12 +472,13 @@ fn tied_length(
     Ok(written_ticks)
 }
 
-/// The MIDI notes of a chord or of written notes, shifted by the device's
-/// octave offset.
+/// The MIDI notes of a chord or of written notes, shifted by the song's
+/// octave annotation (`+8va`) and the device's octave offset.
 fn note_numbers(
     contents: &ElementContents,
     key: Option<Key>,
     home_octave: i8,
+    annotation_octaves: i8,
     output: &TrackOutput,
     track: &Track,
 ) -> Result<Vec<NoteNumber>, PlanError> {
@@ -423,6 +489,12 @@ fn note_numbers(
             })?;
             plain_voicing(*chord, key, home_octave).map_err(PlanError::Voicing)?
         }
+        ElementContents::InvertedChord { chord, inversion } => {
+            let key: Key = key.ok_or_else(|| PlanError::NoKey {
+                track_name: track.name().to_string(),
+            })?;
+            inverted_voicing(*chord, key, home_octave, *inversion).map_err(PlanError::Voicing)?
+        }
         ElementContents::Notes(pitches)
         | ElementContents::ChordWithNotes { notes: pitches, .. } => pitches
             .iter()
@@ -432,9 +504,12 @@ fn note_numbers(
                     .map_err(|e| PlanError::Pitch(e.to_string()))
             })
             .collect::<Result<Vec<NoteNumber>, PlanError>>()?,
-        ElementContents::Cue(_) => Vec::new(),
+        // A cue sounds no note; a dynamics line is not planned as notes, so
+        // a level mark never gets here.
+        ElementContents::Cue(_) | ElementContents::Dynamic(_) => Vec::new(),
     };
-    let shift: i16 = SEMITONES_PER_OCTAVE * i16::from(output.octave_offset_octaves);
+    let shift: i16 = SEMITONES_PER_OCTAVE
+        * (i16::from(output.octave_offset_octaves) + i16::from(annotation_octaves));
     unshifted
         .into_iter()
         .map(|note: NoteNumber| {
@@ -568,9 +643,6 @@ pub enum PlanError {
     StudioDoesNotCover {
         unmet: Vec<UnmetNeed>,
     },
-    TempoChange {
-        section_name: String,
-    },
     TooLong,
     NoClockTrack,
     NoSections,
@@ -615,11 +687,6 @@ impl fmt::Display for PlanError {
                 }
                 Ok(())
             }
-            PlanError::TempoChange { section_name } => write!(
-                f,
-                "section \"{section_name}\" has a different tempo from the first. Tempo changes \
-                 between sections are not played yet; give every section the same tempo"
-            ),
             PlanError::TooLong => write!(f, "the song is too long to count in ticks"),
             PlanError::NoClockTrack => write!(f, "the song has no clock and transport track"),
             PlanError::NoSections => write!(f, "the song has no sections"),
@@ -654,7 +721,8 @@ impl fmt::Display for PlanError {
             } => write!(
                 f,
                 "track \"{track_name}\": MIDI note {note} shifted by the studio's octave_offset \
-                 is {shifted}, outside 0 to 127. Change the octave_offset"
+                 and the song's octave annotation is {shifted}, outside 0 to 127. Change the \
+                 octave_offset, or the +8va or -8va"
             ),
             PlanError::CueNeedsChannel { cue_name } => write!(
                 f,

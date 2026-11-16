@@ -10,7 +10,7 @@ use vocabulary::time_signature::TimeSignature;
 
 use crate::length_words::describe_place;
 use crate::parse_error::ParseError;
-use crate::rhythm_bar::{BarElement, BarNotation, LengthCarry, parse_bars};
+use crate::rhythm_bar::{BarElement, BarNotation, LineCarry, parse_bars};
 use crate::text_line::{keyword_rest, parse_meter, quoted, without_comment};
 
 /// A rhythm pattern with the group it is listed under.
@@ -150,7 +150,7 @@ fn read_block_line(block: &mut OpenBlock, line: &str) -> Result<(), String> {
             time_signature.bar_length().ticks(),
             BarNotation::Rhythm,
             // A rhythm writes every length; nothing is carried.
-            &mut LengthCarry::start_of_line(),
+            &mut LineCarry::start_of_line(),
         )?;
         block.bars.extend(bars);
     } else {

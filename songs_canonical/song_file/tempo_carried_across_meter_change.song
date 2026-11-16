@@ -1,5 +1,5 @@
 # Canonical test song (valid): crates/song_text/src/song_file.rs, test `tempo_carried_across_meter_change`.
-# Section B writes no tempo: the quarter note stays at 120 q/min in 6/8.
+# Sections B to D write no tempo: the beats per minute carry on (4/4 q 120, 3/4 q 120, 6/8 dotted q 120 = q 180, 4/4 q 120).
 song "T"
 track "Clock"
   type clock_and_transport
@@ -11,5 +11,11 @@ section "A"
   key C major  meter 4/4  tempo 120 beats/min
   line "Keys" | I:w |
 section "B"
+  meter 3/4
+  line "Keys" | I:h. |
+section "C"
   meter 6/8
   line "Keys" | I:h. |
+section "D"
+  meter 4/4
+  line "Keys" | I:w |

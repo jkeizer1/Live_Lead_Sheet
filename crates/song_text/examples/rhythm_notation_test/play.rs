@@ -175,9 +175,15 @@ pub fn play_rhythm(entries: &[RhythmLibraryEntry], request: &PlayRequest) -> Res
 
     let tempo: Tempo = Tempo::from_quarter_notes_per_minute(request.quarter_notes_per_minute)
         .map_err(|e| e.to_string())?;
-    event_player::play(&output, &events, tempo, &mut |event: &ScheduledEvent| {
-        announce(event, time_signature);
-    })?;
+    event_player::play(
+        &output,
+        &events,
+        tempo,
+        &[],
+        &mut |event: &ScheduledEvent| {
+            announce(event, time_signature);
+        },
+    )?;
     event_player::silence(&output, PULSE_PORT, request.channel)?;
     println!("Done.");
     Ok(())

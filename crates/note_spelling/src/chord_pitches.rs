@@ -7,7 +7,7 @@ use player::voicing::{VoicingError, plain_voicing};
 use vocabulary::key::Key;
 use vocabulary::midi_values::NoteNumber;
 use vocabulary::pitch::{Accidental, NoteLetter, NoteName, Pitch};
-use vocabulary::roman_chord::{ChordKind, RomanChord};
+use vocabulary::roman_chord::{ChordKind, Inversion, RomanChord};
 
 const SEMITONES_PER_OCTAVE: i16 = 12;
 const LETTERS_PER_OCTAVE: usize = 7;
@@ -44,6 +44,29 @@ pub fn chord_pitches(
             spelled_as(*note, letter).unwrap_or_else(|| by_pitch_class(*note, prefers_flats))
         })
         .collect())
+}
+
+/// The chord's notes in an inversion, lowest first: the notes that were
+/// below the new lowest note move up one octave.
+///
+/// # Errors
+///
+/// When the voicing falls outside the MIDI range.
+pub fn inverted_chord_pitches(
+    chord: RomanChord,
+    key: Key,
+    home_octave: i8,
+    inversion: Inversion,
+) -> Result<Vec<Pitch>, VoicingError> {
+    let pitches: Vec<Pitch> = chord_pitches(chord, key, home_octave)?;
+    let (below, rest): (&[Pitch], &[Pitch]) = pitches.split_at(usize::from(inversion.number()));
+    let mut inverted: Vec<Pitch> = rest.to_vec();
+    inverted.extend(
+        below
+            .iter()
+            .map(|pitch: &Pitch| Pitch::new(pitch.name(), pitch.octave() + 1)),
+    );
+    Ok(inverted)
 }
 
 /// Letters above the root for each note of the plain voicing, in its

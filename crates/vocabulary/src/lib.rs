@@ -1,8 +1,10 @@
 //! The musical language: chords, keys, meters, rhythm patterns, tracks,
 //! cues, songs (A-1, A-2).
 
+pub mod beat_grouping;
 pub mod control_track;
 pub mod duration;
+pub mod dynamics;
 pub mod instant;
 pub mod key;
 pub mod midi_values;

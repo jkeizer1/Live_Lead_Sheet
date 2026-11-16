@@ -1,0 +1,12 @@
+# Canonical test song (deliberately wrong): crates/song_text/src/song_file.rs, test `a_repeat_sign_with_no_bars_is_refused`.
+# A repeat sign with no bars between. The loader must refuse it at line 12 and say to write the bars.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+section "A"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Keys" | I:w |% %| IV:w |

@@ -8,7 +8,7 @@ use std::fmt;
 
 use vocabulary::key::{Key, Mode};
 use vocabulary::midi_values::NoteNumber;
-use vocabulary::roman_chord::{ChordKind, RomanChord, ScaleDegree};
+use vocabulary::roman_chord::{ChordKind, Inversion, RomanChord, ScaleDegree};
 
 const SEMITONES_PER_OCTAVE: i16 = 12;
 
@@ -47,6 +47,35 @@ pub fn plain_voicing(
                 .ok_or(VoicingError::OutOfRange { chord, value })
         })
         .collect()
+}
+
+/// The notes of a chord in an inversion, lowest first: the notes that were
+/// below the new lowest note move up one octave (Song Notation, section 4).
+/// `[60, 64, 67]` in the first inversion is `[64, 67, 72]`.
+///
+/// # Errors
+///
+/// When a note would lie outside the MIDI range 0 to 127.
+pub fn inverted_voicing(
+    chord: RomanChord,
+    key: Key,
+    home_octave: i8,
+    inversion: Inversion,
+) -> Result<Vec<NoteNumber>, VoicingError> {
+    let notes: Vec<NoteNumber> = plain_voicing(chord, key, home_octave)?;
+    let moved: usize = usize::from(inversion.number());
+    let (below, rest): (&[NoteNumber], &[NoteNumber]) = notes.split_at(moved);
+    let mut inverted: Vec<NoteNumber> = rest.to_vec();
+    for note in below {
+        let value: i16 = i16::from(note.value()) + SEMITONES_PER_OCTAVE;
+        inverted.push(
+            u8::try_from(value)
+                .ok()
+                .and_then(|byte: u8| NoteNumber::new(byte).ok())
+                .ok_or(VoicingError::OutOfRange { chord, value })?,
+        );
+    }
+    Ok(inverted)
 }
 
 /// The major scale: I 0, II 2, III 4, IV 5, V 7, VI 9, VII 11 semitones

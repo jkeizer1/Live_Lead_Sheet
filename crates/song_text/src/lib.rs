@@ -6,8 +6,10 @@
 //! So far: rhythm patterns and the rhythm library file.
 
 pub mod contents_text;
+pub mod euclid_pattern;
 pub mod length_words;
 pub mod parse_error;
+pub mod repeat_signs;
 pub mod rhythm_bar;
 pub mod rhythm_library;
 pub mod song_file;

@@ -103,6 +103,10 @@ fn spell_song(song: &Song) -> Result<SpelledSong, ExportError> {
                     track_name: line.track_name().to_string(),
                 });
             }
+            // A dynamics line holds levels, not notes: nothing to draw.
+            if line.role() == LineRole::Dynamics {
+                continue;
+            }
             let Some(track_index) = song
                 .tracks()
                 .iter()
@@ -204,7 +208,7 @@ fn roles_of(track_index: usize, spelled: &SpelledSong) -> Vec<LineRole> {
     roles.sort_by_key(|role: &LineRole| match role {
         // A sample source never gets here: `spell_song` refuses it.
         LineRole::VoiceLayer(number) | LineRole::SampleSource(number) => number.value(),
-        LineRole::CuePlacement => 0,
+        LineRole::CuePlacement | LineRole::Dynamics => 0,
     });
     roles
 }
@@ -360,7 +364,7 @@ fn voice_music(
         LineRole::VoiceLayer(number) | LineRole::SampleSource(number) => {
             number == VoiceLayerNumber::FIRST
         }
-        LineRole::CuePlacement => true,
+        LineRole::CuePlacement | LineRole::Dynamics => true,
     });
     let mut music: String = String::new();
     let mut previous: Option<&Section> = None;

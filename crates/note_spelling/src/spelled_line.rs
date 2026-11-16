@@ -9,7 +9,7 @@ use vocabulary::rhythm_pattern::{ElementKind, ElementMarks, RhythmElement};
 use vocabulary::roman_chord::RomanChord;
 use vocabulary::song::{ElementContents, Line, LineElement, Section, Track, TrackKind};
 
-use crate::chord_pitches::chord_pitches;
+use crate::chord_pitches::{chord_pitches, inverted_chord_pitches};
 use crate::note_value::{BaseValue, NoteValue};
 use crate::spelling_error::{SpellingError, SpellingProblem};
 
@@ -64,9 +64,7 @@ pub fn spell_line(
 ) -> Result<Vec<SpelledBar>, SpellingError> {
     let bar_length_ticks: u64 = section.time_signature().bar_length().ticks();
     let home_octave: Option<i8> = match track.kind() {
-        TrackKind::Voice {
-            clef, home_octave, ..
-        } => Some(home_octave.unwrap_or_else(|| clef.default_home_octave())),
+        TrackKind::Voice { clef, .. } => Some(clef.default_home_octave()),
         TrackKind::ClockAndTransport | TrackKind::CueControl { .. } => None,
     };
     let error_at = |bar_index: usize, problem: SpellingProblem| SpellingError {
@@ -107,6 +105,9 @@ pub fn spell_line(
         let (sound, chord): (Sound, Option<RomanChord>) =
             sound_of(line_element, section.key(), home_octave)
                 .map_err(|problem| error_at(bar_index, problem))?;
+        // The staff shows the sounding pitch, so `+8va` or `-8va` moves the
+        // notes. (Drawing the ottava sign is not built.)
+        let sound: Sound = shifted_by_octaves(sound, line_element.octave_shift_octaves());
 
         let plain: Option<NoteValue> = NoteValue::from_ticks(length_ticks);
         // A triplet note plays 2/3 of its written value: written = played × 3/2.
@@ -169,6 +170,21 @@ fn is_undotted_value(length_ticks: u64) -> bool {
     .any(|base: &BaseValue| base.ticks() == length_ticks)
 }
 
+/// The sound with every pitch moved `octaves` octaves.
+fn shifted_by_octaves(sound: Sound, octaves: i8) -> Sound {
+    match sound {
+        Sound::Pitches(pitches) if octaves != 0 => Sound::Pitches(
+            pitches
+                .into_iter()
+                .map(|pitch: Pitch| {
+                    Pitch::new(pitch.name(), pitch.octave().saturating_add(octaves))
+                })
+                .collect(),
+        ),
+        other => other,
+    }
+}
+
 /// What an element sounds, and the chord it names if any.
 fn sound_of(
     line_element: &LineElement,
@@ -179,12 +195,20 @@ fn sound_of(
         return Ok((Sound::Rest, None));
     }
     match line_element.contents() {
-        None => Err(SpellingProblem::NothingWritten),
+        // A dynamics line holds no notes; the LilyPond view leaves it out.
+        None | Some(ElementContents::Dynamic(_)) => Err(SpellingProblem::NothingWritten),
         Some(ElementContents::Notes(pitches)) => Ok((Sound::Pitches(pitches.clone()), None)),
         Some(ElementContents::ChordWithNotes { chord, notes }) => {
             Ok((Sound::Pitches(notes.clone()), Some(*chord)))
         }
         Some(ElementContents::Cue(name)) => Ok((Sound::Cue(name.clone()), None)),
+        Some(ElementContents::InvertedChord { chord, inversion }) => {
+            let key: Key = key.ok_or(SpellingProblem::ChordWithoutKey)?;
+            let home_octave: i8 = home_octave.ok_or(SpellingProblem::NothingWritten)?;
+            let pitches: Vec<Pitch> = inverted_chord_pitches(*chord, key, home_octave, *inversion)
+                .map_err(SpellingProblem::Voicing)?;
+            Ok((Sound::Pitches(pitches), Some(*chord)))
+        }
         Some(ElementContents::Chord(chord)) => {
             let key: Key = key.ok_or(SpellingProblem::ChordWithoutKey)?;
             // A chord on a track with no home octave: the song file only

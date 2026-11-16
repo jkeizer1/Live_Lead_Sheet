@@ -1,0 +1,16 @@
+# Canonical test song: crates/song_text/tests/dynamics_plan.rs reads this file.
+# A dynamics line with a word that is not a level: the loader must refuse it and list the marks that exist.
+song "Dynamics word not known"
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+section "word"
+  key C major  meter 4/4  tempo 100 beats/min
+  line "Keys"  | C4:w |
+  line "Keys"  dynamics  | loud:w |

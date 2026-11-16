@@ -1,0 +1,18 @@
+# Canonical test song: crates/song_text/tests/chord_inversion_plan.rs reads this
+# file and expects exactly this content. One bar each: I plain, I first inversion, I second inversion, ii7 plain, ii7 third inversion.
+# To hear it:
+#   cargo run --release -p song_text --example song_play_test -- \
+#     songs_canonical/chord_inversion/chord_inversion.song songs_canonical/chord_inversion/chord_inversion.studio
+song "Chord inversion cases"
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+section "inversions"
+  key C major  meter 4/4  tempo 100 beats/min
+  line "Keys"  | I:w | I[1stInversion]:w | I[2ndInversion]:w | ii7:w | ii7[3rdInversion]:w |

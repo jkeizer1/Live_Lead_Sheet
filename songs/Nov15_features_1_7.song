@@ -1,0 +1,111 @@
+# One section per new feature (Nov 15 list, items 1 to 7). Adjust anything and listen.
+# To hear it (connect the ports Clock, Harmony, Bass and Beat pulse first):
+#   cargo run --release -p song_text --example song_play_test -- songs/Nov15_features_1_7.song songs/Nov15_features_1_7.studio
+# Keys is the chord instrument, Bass plays single notes, Beat plays the euclid rhythms.
+song "Nov 15 features 1 to 7"
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+track "Bass"
+  type mono_voice
+  clef bass
+
+track "Beat"
+  type mono_voice
+  clef treble
+
+# 1. GROUPING. 7/8 grouped 2+2+3 eighths: three beats, two short and one long. Played twice.
+#    In 7/8 the beat is an eighth note, so 200 beats/min is a quarter note at 100.
+#    Listen: the bass steps fall on the groups (short, short, long).
+section "1 grouping"  repeat 2
+  key C major  meter 7/8  grouping 2+2+3  tempo 200 beats/min
+  line "Keys"  | I:q ii:q V:q. |
+  line "Bass"  | C2:q D2:q G2:q. |
+
+# 2. INVERSIONS. The same C chord four ways, then ii7 in third inversion.
+#    Listen: the lowest note of the chord changes: C, E, G, then C7... (ii7 = D F A C: C lowest).
+section "2 inversions"
+  meter 4/4  tempo 100 beats/min
+  line "Keys"  | I:w | I[1stInversion]:w | I[2ndInversion]:w | ii7[3rdInversion]:w |
+  line "Bass"  | C2:w | / | / | / |
+
+# 3. REPEAT SIGNS. |% ... %| plays the two bars inside twice: I, IV, V, IV, V, I.
+section "3 repeat signs"
+  line "Keys"  | I:w |% IV:w | V:w %| I:w |
+  line "Bass"  | C2:w |% F2:w | G2:w %| C2:w |
+
+# 4. EUCLID. Three hits spread over eight steps, then five over eight: Bjorklund's patterns
+#    (x..x..x. and x.xx.xx.). Listen: the Beat track.
+section "4 euclid"
+  line "Keys"  | I:w | I:w |
+  line "Bass"  | C2:w | / |
+  line "Beat"  | G2:euclid(3,8) | G2:euclid(5,8) |
+
+# 5. SAME PITCH IN TWO LAYERS. Bar 1: layer 1 holds C4 on beats 1-2, layer 2 on beats 2-3:
+#    one C4 sounds from beat 1 to the end of beat 3. Bar 2: the C4s only touch (beat 1, then beat 2):
+#    two separate notes.
+section "5 layer merge"
+  line "Keys" voice_layer 1  | C4:h r:h | C4:q r:h. |
+  line "Keys" voice_layer 2  | r:q C4:h r:q | r:q C4:q r:h |
+  line "Bass"  | C2:w | / |
+
+# 6. DYNAMICS. A line "Keys" dynamics: the six levels, one bar each: pp p mp mf f ff.
+#    Listen: the chord on Keys gets louder bar by bar (Bass stays the same).
+section "6 dynamic levels"
+  line "Keys"  | I:w | / | / | / | / | / |
+  line "Keys"  dynamics  | pp:w | p | mp | mf | f | ff |
+  line "Bass"  | C2:w | / | / | / | / | / |
+
+# 6b. CRESCENDO AND DIMINUENDO. p, then a crescendo over two bars to f, then a diminuendo over
+#     two bars to p, then mf. The < and > end where the next level starts.
+section "6b crescendo diminuendo"
+  line "Keys"  | I:w | / | / | / | / | / | / | / |
+  line "Keys"  dynamics  | p:w | <:w | r:w | f:w | >:w | r:w | p:w | mf:w |
+  line "Bass"  | C2:w | / | / | / | / | / | / | / |
+
+# 6c. ACCENT UNDER p. The studio's accent (velocity 100) is absolute: the first chord in the
+#     bar is loud though the line says p. The next bar's < marks are softer than p.
+section "6c accent under p"
+  line "Keys"  | I:q> / / / | I:q< / / / |
+  line "Keys"  dynamics  | p:w | r:w |
+  line "Bass"  | C2:w | / |
+
+# 7. OCTAVE ANNOTATIONS. C E G C each bar: plain, then +8va (an octave up, stays on), then plain
+#    text still up, then -8va (an octave down), then loco (back to the clef's octave).
+section "7 octaves"
+  line "Keys"  | C4:q E4 G4 C5 | +8va C4:q E4 G4 C5 | C4:q E4 G4 C5 | -8va C4:q E4 G4 C5 | loco C4:q E4 G4 C5 |
+  line "Bass"  | C2:w | / | / | / | / |
+
+# 8. TEMPO BETWEEN SECTIONS (and the meter change). 100 beats/min, then 140, then 3/4 keeps
+#    140 beats/min (same beat speed), then 6/8 keeps 140 beats/min (the beat is now a dotted
+#    quarter, so it feels faster), then back to 4/4 at 100.
+section "8a slow"
+  meter 4/4  tempo 100 beats/min
+  line "Keys"  | I:w | IV:w |
+  line "Bass"  | C2:w | F2:w |
+
+section "8b faster"
+  tempo 140 beats/min
+  line "Keys"  | V:w | I:w |
+  line "Bass"  | G2:w | C2:w |
+
+section "8c three four"
+  meter 3/4
+  line "Keys"  | I:h. | IV:h. | V:h. | I:h. |
+  line "Bass"  | C2:h. | F2:h. | G2:h. | C2:h. |
+
+section "8d six eight"
+  meter 6/8
+  line "Keys"  | I:h. | IV:h. | V:h. | I:h. |
+  line "Bass"  | C2:h. | F2:h. | G2:h. | C2:h. |
+
+section "8e back to slow"
+  meter 4/4  tempo 100 beats/min
+  line "Keys"  | I:w |
+  line "Bass"  | C2:w |

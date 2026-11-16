@@ -1,0 +1,12 @@
+# Canonical test studio for chord_inversion.song. Tests expect exactly this.
+studio "Chord inversion studio"
+
+port "Clock"
+port "Keys"
+
+track "Clock"
+  port "Clock"
+
+track "Keys"
+  port "Keys"  channel 1
+  velocity normal 90  accent 115

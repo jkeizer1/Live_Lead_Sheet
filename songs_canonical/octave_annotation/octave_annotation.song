@@ -1,0 +1,18 @@
+# Canonical test song: crates/song_text/tests/octave_annotation_plan.rs reads this file and expects exactly this content.
+# Octave annotations: +8va and -8va at the start of a bar stay in effect until changed; loco returns to the clef's octave.
+# To hear it:
+#   cargo run --release -p song_text --example song_play_test -- \
+#     songs_canonical/octave_annotation/octave_annotation.song songs_canonical/octave_annotation/octave_annotation.studio
+song "Octave annotation cases"
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+section "octaves"
+  key C major  meter 4/4  tempo 100 beats/min
+  line "Keys"  | C4:w | +8va C4:w | C4:w | -8va C4:w | loco C4:w | I:w | +8va I:w | +8va C4:w | +8va C4:w |

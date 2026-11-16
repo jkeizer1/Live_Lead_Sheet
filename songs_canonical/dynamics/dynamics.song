@@ -1,0 +1,33 @@
+# Canonical test song: crates/song_text/tests/dynamics_plan.rs reads this file and expects exactly this content.
+# A dynamics line: six levels, a crescendo over two bars, a section with no dynamics line, and accents under p.
+# To hear it:
+#   cargo run --release -p song_text --example song_play_test -- \
+#     songs_canonical/dynamics/dynamics.song songs_canonical/dynamics/dynamics.studio
+song "Dynamics cases"
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+section "levels"
+  key C major  meter 4/4  tempo 100 beats/min
+  line "Keys"  | C4:w | / | / | / | / | / |
+  line "Keys"  dynamics  | pp:w | p | mp | mf | f | ff |
+
+section "ramp"
+  key C major  meter 4/4  tempo 100 beats/min
+  line "Keys"  | C4:w | / | / | / |
+  line "Keys"  dynamics  | p:w | <:w | r:w | f:w |
+
+section "plain"
+  key C major  meter 4/4  tempo 100 beats/min
+  line "Keys"  | C4:w |
+
+section "marks"
+  key C major  meter 4/4  tempo 100 beats/min
+  line "Keys"  | C4:w | C4:w> | C4:w< |
+  line "Keys"  dynamics  | p:w | r | r |

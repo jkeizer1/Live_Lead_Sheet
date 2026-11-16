@@ -48,29 +48,36 @@ impl VelocityLevels {
         self.normal
     }
 
-    /// The velocity for a level (Song Notation, section 6). The studio's
-    /// `accent` and `marcato` are absolute velocities. Without them, and for
-    /// the soft marks (which have no studio word), a mark moves the normal
-    /// velocity a share of the way toward 127 or 1: 3/8 of the way for `>`
-    /// and `<`, 3/4 for `>>` and `<<`. No loudness curve is applied.
+    /// The velocity for a level (Song Notation, section 6) with no dynamics
+    /// line: measured from the normal velocity.
     #[must_use]
     pub fn for_level(self, level: AccentLevel) -> Velocity {
+        self.for_level_from(self.normal, level)
+    }
+
+    /// The velocity for a level on a note sounding at the loudness `base`
+    /// (the level a dynamics line has reached there; `normal` without one).
+    /// The studio's `accent` and `marcato` are absolute velocities, even
+    /// under `p`. Without them, and for the soft marks (which have no studio
+    /// word), a mark moves `base` a share of the way toward 127 or 1: 3/8 of
+    /// the way for `>` and `<`, 3/4 for `>>` and `<<`. No loudness curve is
+    /// applied.
+    #[must_use]
+    pub fn for_level_from(self, base: Velocity, level: AccentLevel) -> Velocity {
         match level {
-            AccentLevel::Normal => self.normal,
+            AccentLevel::Normal => base,
             AccentLevel::Accent => self.accent.unwrap_or_else(|| {
-                self.normal
-                    .eighths_of_the_way_to(VelocityLimit::Loudest, ONE_MARK_EIGHTHS)
+                base.eighths_of_the_way_to(VelocityLimit::Loudest, ONE_MARK_EIGHTHS)
             }),
             AccentLevel::Marcato => self.marcato.unwrap_or_else(|| {
-                self.normal
-                    .eighths_of_the_way_to(VelocityLimit::Loudest, TWO_MARKS_EIGHTHS)
+                base.eighths_of_the_way_to(VelocityLimit::Loudest, TWO_MARKS_EIGHTHS)
             }),
-            AccentLevel::Soft => self
-                .normal
-                .eighths_of_the_way_to(VelocityLimit::Softest, ONE_MARK_EIGHTHS),
-            AccentLevel::Softer => self
-                .normal
-                .eighths_of_the_way_to(VelocityLimit::Softest, TWO_MARKS_EIGHTHS),
+            AccentLevel::Soft => {
+                base.eighths_of_the_way_to(VelocityLimit::Softest, ONE_MARK_EIGHTHS)
+            }
+            AccentLevel::Softer => {
+                base.eighths_of_the_way_to(VelocityLimit::Softest, TWO_MARKS_EIGHTHS)
+            }
         }
     }
 }

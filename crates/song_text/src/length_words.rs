@@ -96,12 +96,24 @@ pub fn describe_length(length_ticks: u64) -> LengthWords {
 /// says what is wrong there, which is enough to find it (Jim, 7 Nov 2026).
 #[must_use]
 pub fn describe_place(start_ticks: u64, time_signature: TimeSignature) -> String {
+    describe_place_after_bars(start_ticks, time_signature, 0)
+}
+
+/// The same, for a place in a section that follows `bars_before` bars of the
+/// song, which may be in other meters: `start_ticks` counts from the start of
+/// the section, and the bar number goes on from the bars before it.
+#[must_use]
+pub fn describe_place_after_bars(
+    start_ticks: u64,
+    time_signature: TimeSignature,
+    bars_before: u64,
+) -> String {
     let bar_length_ticks: u64 = time_signature.bar_length().ticks();
     let beat_length_ticks: u64 = time_signature.beat_length().ticks();
     let pulse_length_ticks: u64 = time_signature.pulse_length().ticks();
     // ticks ÷ ticks/bar → bars; the rest ÷ ticks/beat → beats into the bar;
     // what is left ÷ ticks/pulse → pulses into the beat. Each counts from 1.
-    let bar: u64 = start_ticks / bar_length_ticks + 1;
+    let bar: u64 = bars_before + start_ticks / bar_length_ticks + 1;
     let within_bar_ticks: u64 = start_ticks % bar_length_ticks;
     let beat: u64 = within_bar_ticks / beat_length_ticks + 1;
     let pulse: u64 = within_bar_ticks % beat_length_ticks / pulse_length_ticks + 1;

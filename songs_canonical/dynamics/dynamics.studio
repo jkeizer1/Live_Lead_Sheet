@@ -1,0 +1,12 @@
+# Canonical test studio for dynamics.song. Tests expect exactly this.
+studio "Dynamics studio"
+
+port "Clock"
+port "Keys"
+
+track "Clock"
+  port "Clock"
+
+track "Keys"
+  port "Keys"  channel 1
+  velocity normal 64  accent 115

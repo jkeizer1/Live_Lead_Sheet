@@ -92,26 +92,38 @@ impl Velocity {
     /// Notation, section 6: `>` and `<` are 3 eighths of the way, `>>` and
     /// `<<` 6 eighths (3/4). More than 8 eighths is taken as 8, the limit
     /// itself, so the result is always a valid velocity.
-    ///
-    /// Units: `(8 eighths/step × velocity ± eighths × room) eighths ÷ 8
-    /// eighths/step` → velocity steps, with `room` the steps between this
-    /// velocity and the limit.
     #[must_use]
     pub fn eighths_of_the_way_to(self, limit: VelocityLimit, eighths: u8) -> Velocity {
+        // n eighths = 2n sixteenths; saturating keeps a large number a limit.
+        self.sixteenths_of_the_way_to(limit, eighths.saturating_mul(2))
+    }
+
+    /// The velocity `sixteenths` sixteenths of the way from this one to
+    /// `limit`, rounded to the nearest whole velocity (a tie rounds up).
+    /// `mp` is 3 sixteenths of the way to the softest velocity. More than 16
+    /// sixteenths is taken as 16, the limit itself, so the result is always a
+    /// valid velocity.
+    ///
+    /// Units: `(16 sixteenths/step × velocity ± sixteenths × room)
+    /// sixteenths ÷ 16 sixteenths/step` → velocity steps, with `room` the
+    /// steps between this velocity and the limit.
+    #[must_use]
+    pub fn sixteenths_of_the_way_to(self, limit: VelocityLimit, sixteenths: u8) -> Velocity {
         let from: u32 = u32::from(self.velocity);
-        let eighths: u32 = u32::from(eighths).min(EIGHTHS_PER_ONE);
-        let moved_eighth_velocities: u32 = match limit {
+        let sixteenths: u32 = u32::from(sixteenths).min(SIXTEENTHS_PER_ONE);
+        let moved_sixteenth_velocities: u32 = match limit {
             VelocityLimit::Loudest => {
                 let room: u32 = u32::from(LARGEST_DATA_VALUE) - from;
-                EIGHTHS_PER_ONE * from + eighths * room
+                SIXTEENTHS_PER_ONE * from + sixteenths * room
             }
             VelocityLimit::Softest => {
                 let room: u32 = from - u32::from(SMALLEST_VELOCITY);
-                EIGHTHS_PER_ONE * from - eighths * room
+                SIXTEENTHS_PER_ONE * from - sixteenths * room
             }
         };
-        // + 4 eighth-velocities is half a velocity: rounds half up.
-        let rounded: u32 = (moved_eighth_velocities + EIGHTHS_PER_ONE / 2) / EIGHTHS_PER_ONE;
+        // + 8 sixteenth-velocities is half a velocity: rounds half up.
+        let rounded: u32 =
+            (moved_sixteenth_velocities + SIXTEENTHS_PER_ONE / 2) / SIXTEENTHS_PER_ONE;
         // Between the two velocities by construction, so 1 to 127 fits a u8.
         let rounded_velocity: u8 = u8::try_from(rounded).unwrap_or(LARGEST_DATA_VALUE);
         Velocity {
@@ -131,7 +143,7 @@ pub enum VelocityLimit {
 
 const SMALLEST_VELOCITY: u8 = 1;
 /// Eighths in one whole: 3/8 and 3/4 are written as 3 and 6 eighths.
-const EIGHTHS_PER_ONE: u32 = 8;
+const SIXTEENTHS_PER_ONE: u32 = 16;
 
 /// A controller (CC) number, 0 to 127.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

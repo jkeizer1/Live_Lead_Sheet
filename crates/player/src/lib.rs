@@ -2,6 +2,8 @@
 
 pub mod anchor;
 pub mod counter;
+pub mod dynamics_timeline;
+pub mod layer_merge;
 pub mod note_track;
 pub mod sample_source;
 pub mod schedule;

@@ -1,0 +1,35 @@
+# Canonical test song: crates/song_text/tests/layer_merge_plan.rs reads this file and expects exactly this content.
+# One bar per section: C4 overlapping in two voice layers (one note), C4 only touching (two notes), C4 identical (one note), C4 and E4 (two notes).
+# To hear it:
+#   cargo run --release -p song_text --example song_play_test -- \
+#     songs_canonical/layer_merge/layer_merge.song songs_canonical/layer_merge/layer_merge.studio
+song "Layer merge cases"
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+# Bar 1: layer 1 holds C4 on beats 1 and 2, layer 2 on beats 2 and 3: one C4 from beat 1 to the end of beat 3.
+section "overlapping"
+  key C major  meter 4/4  tempo 100 beats/min
+  line "Keys" voice_layer 1  | C4:h r:h |
+  line "Keys" voice_layer 2  | r:q C4:h r:q |
+
+# Bar 2: layer 1 holds C4 on beat 1, layer 2 on beat 2: they only touch, so two notes.
+section "touching"
+  line "Keys" voice_layer 1  | C4:q r:h. |
+  line "Keys" voice_layer 2  | r:q C4:q r:h |
+
+# Bar 3: both layers hold C4 for the whole bar: one note.
+section "identical"
+  line "Keys" voice_layer 1  | C4:w |
+  line "Keys" voice_layer 2  | C4:w |
+
+# Bar 4: C4 in layer 1 and E4 in layer 2, overlapping: two notes, as they are different pitches.
+section "different pitches"
+  line "Keys" voice_layer 1  | C4:h r:h |
+  line "Keys" voice_layer 2  | r:q E4:h r:q |

@@ -15,6 +15,7 @@ use alsa_output::sequencer_output::{FlushOutcome, OutputPort, SequencerOutput};
 use alsa_output::warning::OutputWarning;
 use player::anchor::Anchor;
 use player::schedule::{OutputAction, ScheduledEvent};
+use player::song_plan::TempoChange;
 use vocabulary::duration::Duration;
 use vocabulary::instant::Instant;
 use vocabulary::midi_values::MidiChannel;
@@ -73,8 +74,8 @@ pub fn wait_for_enter() -> Result<(), String> {
     Ok(())
 }
 
-/// Plays `events` at `tempo`, starting `START_DELAY` from now, calling
-/// `announce` for each event as it is queued, and returns once the last
+/// Plays `events` at `tempo`, which changes as `tempo_changes` say, starting
+/// `START_DELAY` from now, calling `announce` for each event as it is queued, and returns once the last
 /// event has been delivered.
 ///
 /// # Errors
@@ -84,6 +85,7 @@ pub fn play(
     output: &SequencerOutput,
     events: &[ScheduledEvent],
     tempo: Tempo,
+    tempo_changes: &[TempoChange],
     announce: &mut dyn FnMut(&ScheduledEvent),
 ) -> Result<(), String> {
     let first_instant: Instant = output
@@ -92,7 +94,7 @@ pub fn play(
         .checked_add(START_DELAY)
         .map_err(|e| e.to_string())?;
     let anchor: Anchor = Anchor::new(ScorePosition::ZERO, first_instant, tempo);
-    let last_instant: Instant = send_all(output, events, anchor, announce)?;
+    let last_instant: Instant = send_all(output, events, anchor, tempo_changes, announce)?;
     // Let the last events be delivered before the queue closes with the
     // program.
     wait_until(
@@ -118,15 +120,22 @@ pub fn silence(
 }
 
 /// Hands every event to the queue up to `LEAD` ahead of its instant, each
-/// instant computed from `anchor`. Returns the last event's instant.
+/// instant computed from the anchor in effect at its position. A written
+/// tempo change makes a new anchor at its position, its instant computed from
+/// the anchor before (Musical Time and Clock, section 8); it is made when the
+/// first event at or after that position comes up, so nothing queued before
+/// it moves. Returns the last event's instant.
 fn send_all(
     output: &SequencerOutput,
     events: &[ScheduledEvent],
-    anchor: Anchor,
+    first_anchor: Anchor,
+    tempo_changes: &[TempoChange],
     announce: &mut dyn FnMut(&ScheduledEvent),
 ) -> Result<Instant, String> {
     let mut late_events: u64 = 0;
-    let mut last_instant: Instant = anchor.instant();
+    let mut anchors: Vec<Anchor> = vec![first_anchor];
+    let mut next_change: usize = 0;
+    let mut last_instant: Instant = first_anchor.instant();
     let mut next: usize = 0;
     // True while the kernel's output pool is full: queue nothing new until
     // a flush hands everything over.
@@ -141,16 +150,25 @@ fn send_all(
             if pool_full {
                 break;
             }
-            let at: Instant = anchor
-                .instant_at(event.position)
-                .map_err(|e| e.to_string())?;
+            while let Some(change) = tempo_changes.get(next_change) {
+                if change.position > event.position {
+                    break;
+                }
+                let before: Anchor = anchors[anchors.len() - 1];
+                let instant: Instant = before
+                    .instant_at(change.position)
+                    .map_err(|e| e.to_string())?;
+                anchors.push(Anchor::new(change.position, instant, change.tempo));
+                next_change += 1;
+            }
+            let at: Instant = instant_in(&anchors, event.position)?;
             if at > horizon {
                 break;
             }
             if at < now {
                 late_events += 1;
             }
-            send(output, event, at, anchor)?;
+            send(output, event, at, &anchors)?;
             announce(event);
             last_instant = at;
             next += 1;
@@ -171,7 +189,7 @@ fn send(
     output: &SequencerOutput,
     event: &ScheduledEvent,
     at: Instant,
-    anchor: Anchor,
+    anchors: &[Anchor],
 ) -> Result<(), String> {
     let port: &OutputPort = find_port(output, event.port.as_str())?;
     let result: Result<(), AlsaOutputError> = match event.action {
@@ -196,9 +214,7 @@ fn send(
             note_on_position,
             retrigger_gap,
         } => {
-            let note_on_at: Instant = anchor
-                .instant_at(note_on_position)
-                .map_err(|e| e.to_string())?;
+            let note_on_at: Instant = instant_in(anchors, note_on_position)?;
             output.queue_note_off_before_note_on(
                 port,
                 note_on_at,
@@ -227,6 +243,17 @@ fn send(
         OutputAction::Transport(TransportMessage::Continue) => output.queue_continue(port, at),
     };
     result.map_err(|e| e.to_string())
+}
+
+/// The instant of `position`, from the last anchor at or before it.
+fn instant_in(anchors: &[Anchor], position: ScorePosition) -> Result<Instant, String> {
+    let anchor: &Anchor = anchors
+        .iter()
+        .rev()
+        .find(|anchor: &&Anchor| anchor.position() <= position)
+        .or_else(|| anchors.first())
+        .ok_or_else(|| String::from("no anchor to count a position from"))?;
+    anchor.instant_at(position).map_err(|e| e.to_string())
 }
 
 fn find_port<'a>(output: &'a SequencerOutput, name: &str) -> Result<&'a OutputPort, String> {

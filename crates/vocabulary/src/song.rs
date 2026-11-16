@@ -9,13 +9,15 @@
 
 use std::fmt;
 
+use crate::beat_grouping::{BeatGrouping, BeatGroupingError};
+use crate::dynamics::DynamicMark;
 use crate::key::Key;
 use crate::midi_values::{ControllerNumber, ControllerValue, NoteNumber, ProgramNumber, Velocity};
 use crate::pitch::Pitch;
 use crate::rhythm_pattern::{
     ElementKind, RhythmElement, RhythmPatternError, check_elements_fill_bars,
 };
-use crate::roman_chord::RomanChord;
+use crate::roman_chord::{Inversion, RomanChord};
 use crate::tempo::Tempo;
 use crate::time_signature::TimeSignature;
 
@@ -203,6 +205,10 @@ pub enum LineRole {
     /// lines"). Its elements carry contents and no lengths of their own: the
     /// elements of a bar share the bar evenly. It plays nothing itself.
     SampleSource(VoiceLayerNumber),
+    /// The loudness of a voice track's elements, in rhythm notation (Song
+    /// Notation, section 5, "Dynamics, in rhythm notation"). One per track
+    /// in a section; it covers all the track's voice layers.
+    Dynamics,
 }
 
 impl fmt::Display for LineRole {
@@ -210,6 +216,7 @@ impl fmt::Display for LineRole {
         match self {
             LineRole::VoiceLayer(number) => write!(f, "voice layer {}", number.value()),
             LineRole::CuePlacement => write!(f, "cue placement"),
+            LineRole::Dynamics => write!(f, "dynamics"),
             LineRole::SampleSource(number) => {
                 write!(f, "sample source of voice layer {}", number.value())
             }
@@ -253,7 +260,6 @@ pub enum TrackKind {
         clef: Clef,
         /// The song's harmony track: the chord symbols show its chords.
         lead: bool,
-        home_octave: Option<i8>,
         /// Names given to some of its voice layers; a layer without one is
         /// called by its number.
         voice_layer_names: Vec<VoiceLayerName>,
@@ -335,6 +341,13 @@ pub enum ElementContents {
         chord: RomanChord,
         notes: Vec<Pitch>,
     },
+    /// A chord by name, in an inversion (`ii7[1stInversion]`).
+    InvertedChord {
+        chord: RomanChord,
+        inversion: Inversion,
+    },
+    /// A level, crescendo or diminuendo on a dynamics line.
+    Dynamic(DynamicMark),
     /// The name of a cue defined on a cue control track.
     Cue(String),
 }
@@ -344,6 +357,10 @@ pub enum ElementContents {
 pub struct LineElement {
     element: RhythmElement,
     contents: Option<ElementContents>,
+    /// The octave annotation in force at the element (`+8va` is 1, `-8va` is
+    /// -1, `loco` and none are 0): every pitch it plays moves this many
+    /// octaves (Song Notation, section 4).
+    octave_shift_octaves: i8,
 }
 
 impl LineElement {
@@ -359,7 +376,24 @@ impl LineElement {
                 start_ticks: element.start().ticks(),
             });
         }
-        Ok(LineElement { element, contents })
+        Ok(LineElement {
+            element,
+            contents,
+            octave_shift_octaves: 0,
+        })
+    }
+
+    /// The element under an octave annotation.
+    #[must_use]
+    pub fn with_octave_shift_octaves(mut self, octave_shift_octaves: i8) -> LineElement {
+        self.octave_shift_octaves = octave_shift_octaves;
+        self
+    }
+
+    /// Octaves every pitch of the element moves, from `+8va`, `-8va` or `loco`.
+    #[must_use]
+    pub const fn octave_shift_octaves(&self) -> i8 {
+        self.octave_shift_octaves
     }
 
     #[must_use]
@@ -427,9 +461,20 @@ impl Line {
                 (LineRole::VoiceLayer(_), ElementKind::Sounding)
                     if line_element.contents().is_none()
                         && matches!(track.kind(), TrackKind::Voice { .. }) => {}
+                (LineRole::Dynamics, ElementKind::Sounding) => {
+                    if !matches!(line_element.contents(), Some(ElementContents::Dynamic(_))) {
+                        return Err(SongError::DynamicsNeedsAMark {
+                            track_name: track.name().to_string(),
+                            start_ticks: line_element.element().start().ticks(),
+                        });
+                    }
+                }
                 (_, ElementKind::Sounding) => check_contents(track, line_element)?,
                 (_, ElementKind::Rest) => {}
             }
+        }
+        if role == LineRole::Dynamics {
+            check_ramps_have_targets(track, &elements)?;
         }
         Ok(Line {
             track_name: track.name().to_string(),
@@ -478,7 +523,10 @@ fn check_role(track: &Track, role: LineRole) -> Result<(), SongError> {
             track_name: track.name().to_string(),
             number: number.value(),
         }),
-        (TrackKind::Voice { .. }, LineRole::VoiceLayer(_) | LineRole::SampleSource(_))
+        (
+            TrackKind::Voice { .. },
+            LineRole::VoiceLayer(_) | LineRole::SampleSource(_) | LineRole::Dynamics,
+        )
         | (TrackKind::CueControl { .. }, LineRole::CuePlacement) => Ok(()),
         (TrackKind::Voice { .. } | TrackKind::CueControl { .. }, _) => {
             Err(SongError::RoleNotForTrack {
@@ -486,6 +534,40 @@ fn check_role(track: &Track, role: LineRole) -> Result<(), SongError> {
                 role,
             })
         }
+    }
+}
+
+/// A crescendo or diminuendo ends where the next level begins, which may be
+/// bars later (`r` stretches in between do not change that). One with no
+/// level written after it, or followed directly by another crescendo or
+/// diminuendo, is refused (Song Notation, section 8, "Decided for the marks
+/// and the dynamics line").
+fn check_ramps_have_targets(track: &Track, elements: &[LineElement]) -> Result<(), SongError> {
+    let mut open_ramp_ticks: Option<u64> = None;
+    for line_element in elements {
+        let Some(ElementContents::Dynamic(mark)) = line_element.contents() else {
+            continue;
+        };
+        if let Some(start_ticks) = open_ramp_ticks
+            && mark.is_ramp()
+        {
+            return Err(SongError::DynamicRampWithoutTarget {
+                track_name: track.name().to_string(),
+                start_ticks,
+            });
+        }
+        open_ramp_ticks = if mark.is_ramp() {
+            Some(line_element.element().start().ticks())
+        } else {
+            None
+        };
+    }
+    match open_ramp_ticks {
+        Some(start_ticks) => Err(SongError::DynamicRampWithoutTarget {
+            track_name: track.name().to_string(),
+            start_ticks,
+        }),
+        None => Ok(()),
     }
 }
 
@@ -508,6 +590,9 @@ fn check_contents(track: &Track, line_element: &LineElement) -> Result<(), SongE
         (TrackKind::ClockAndTransport, _) => Ok(()),
         (TrackKind::Voice { voice, .. }, Some(contents)) => match (voice, contents) {
             (_, ElementContents::Cue(_)) => Err(wrong("a cue belongs on a cue control track")),
+            (_, ElementContents::Dynamic(_)) => Err(wrong(
+                "a level or crescendo belongs on a dynamics line, e.g. line \"Keys\" dynamics | p:w | f |",
+            )),
             (VoiceKind::Mono, ElementContents::Notes(notes)) if notes.len() == 1 => Ok(()),
             (VoiceKind::Mono, _) => Err(wrong(
                 "a mono voice plays one note at a time; write a single note such as C2",
@@ -545,6 +630,9 @@ pub struct Section {
     /// given (a count-in section needs none).
     key: Option<Key>,
     time_signature: TimeSignature,
+    /// How the pulses of an irregular bar are grouped (`grouping 2+2+3`);
+    /// `None` when the song writes none. It changes nothing played.
+    beat_grouping: Option<BeatGrouping>,
     tempo: Tempo,
     lines: Vec<Line>,
 }
@@ -617,8 +705,26 @@ impl Section {
             repeat_count,
             key,
             time_signature,
+            beat_grouping: None,
             tempo,
             lines,
+        })
+    }
+
+    /// The section with a beat grouping for its meter.
+    ///
+    /// # Errors
+    ///
+    /// When the groups do not add up to the pulses in the section's bar.
+    pub fn with_beat_grouping(self, group_pulses: Vec<u8>) -> Result<Section, SongError> {
+        let beat_grouping: BeatGrouping = BeatGrouping::new(group_pulses, self.time_signature)
+            .map_err(|error: BeatGroupingError| SongError::BeatGrouping {
+                section_name: self.name.clone(),
+                error,
+            })?;
+        Ok(Section {
+            beat_grouping: Some(beat_grouping),
+            ..self
         })
     }
 
@@ -663,6 +769,11 @@ impl Section {
     #[must_use]
     pub fn time_signature(&self) -> TimeSignature {
         self.time_signature
+    }
+
+    #[must_use]
+    pub fn beat_grouping(&self) -> Option<&BeatGrouping> {
+        self.beat_grouping.as_ref()
     }
 
     #[must_use]
@@ -719,7 +830,7 @@ fn check_sample_sources(section_name: &str, lines: &[Line]) -> Result<(), SongEr
                     });
                 }
             }
-            LineRole::CuePlacement => {}
+            LineRole::CuePlacement | LineRole::Dynamics => {}
         }
     }
     Ok(())
@@ -729,7 +840,11 @@ fn line_has_chord(line: &Line) -> bool {
     line.elements().iter().any(|line_element: &LineElement| {
         matches!(
             line_element.contents(),
-            Some(ElementContents::Chord(_) | ElementContents::ChordWithNotes { .. })
+            Some(
+                ElementContents::Chord(_)
+                    | ElementContents::ChordWithNotes { .. }
+                    | ElementContents::InvertedChord { .. }
+            )
         )
     })
 }
@@ -887,6 +1002,10 @@ pub enum SongError {
     LineOnClockTrack {
         track_name: String,
     },
+    BeatGrouping {
+        section_name: String,
+        error: BeatGroupingError,
+    },
     ChordsWithoutKey {
         section_name: String,
     },
@@ -907,6 +1026,14 @@ pub enum SongError {
         cue_name: String,
     },
     RestInSampleSource {
+        track_name: String,
+        start_ticks: u64,
+    },
+    DynamicsNeedsAMark {
+        track_name: String,
+        start_ticks: u64,
+    },
+    DynamicRampWithoutTarget {
         track_name: String,
         start_ticks: u64,
     },
@@ -998,6 +1125,11 @@ impl fmt::Display for SongError {
                      voice layer {}. Keep one",
                     number.value()
                 ),
+                LineRole::Dynamics => write!(
+                    f,
+                    "section {section_name:?} has two dynamics lines for {track_name:?}. Keep \
+                     one: it covers all the track's voice layers"
+                ),
             },
             SongError::VoiceLayerZero => write!(
                 f,
@@ -1035,6 +1167,10 @@ impl fmt::Display for SongError {
                 "{track_name:?} is the clock and transport track, which takes no line. \
                  Place Start and Stop with a cue control track"
             ),
+            SongError::BeatGrouping {
+                section_name,
+                error,
+            } => write!(f, "section {section_name:?}: {error}"),
             SongError::ChordsWithoutKey { section_name } => write!(
                 f,
                 "section {section_name:?} has chords but no key. Add key to the section, \
@@ -1074,6 +1210,16 @@ impl fmt::Display for SongError {
                 f,
                 "track {track_name:?}: a sample_source line holds chords or notes, not rests. \
                  Put the rests on the rhythm line below it, e.g. r:q"
+            ),
+            SongError::DynamicsNeedsAMark { track_name, .. } => write!(
+                f,
+                "track {track_name:?}: a dynamics line holds levels (pp, p, mp, mf, f, ff), \
+                 < and >, and r for no change"
+            ),
+            SongError::DynamicRampWithoutTarget { track_name, .. } => write!(
+                f,
+                "track {track_name:?}: a crescendo or diminuendo needs the level it ends on, \
+                 written after it. Write the target level, e.g. | < | f |"
             ),
             SongError::SampleSourceWithoutRhythm {
                 section_name,
@@ -1156,7 +1302,6 @@ mod tests {
                 voice: VoiceKind::Poly,
                 clef: Clef::Grand,
                 lead: true,
-                home_octave: None,
                 voice_layer_names: Vec::new(),
             },
         )
@@ -1169,7 +1314,6 @@ mod tests {
                 voice: VoiceKind::Mono,
                 clef: Clef::Bass,
                 lead: false,
-                home_octave: None,
                 voice_layer_names: Vec::new(),
             },
         )
@@ -1410,7 +1554,6 @@ mod tests {
                 voice: VoiceKind::Poly,
                 clef: Clef::Treble,
                 lead: false,
-                home_octave: None,
                 voice_layer_names: Vec::new(),
             },
         );
@@ -1554,7 +1697,6 @@ mod tests {
                 voice,
                 clef: Clef::Grand,
                 lead: true,
-                home_octave: None,
                 voice_layer_names: names,
             },
         )

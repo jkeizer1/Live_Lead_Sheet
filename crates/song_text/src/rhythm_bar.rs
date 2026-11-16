@@ -12,10 +12,12 @@
 //! steps, and rounded once, to the nearest tick (half up), so nothing
 //! drifts.
 
+use vocabulary::dynamics::DynamicMark;
 use vocabulary::rhythm_pattern::{AccentLevel, ElementKind, ElementMarks};
 use vocabulary::ticks::{TICKS_PER_QUARTER_NOTE, TICKS_PER_WHOLE_NOTE};
 
 use crate::contents_text::parse_chord;
+use crate::euclid_pattern::euclid_pattern;
 use crate::length_words::{MAX_DOTS, describe_length, dotted_length_subticks};
 
 const SUBTICKS_PER_TICK: u64 = 8;
@@ -39,6 +41,9 @@ pub struct BarElement {
     /// element has no `contents_text`, like `/`, but plays nothing of its own
     /// earlier in the line.
     pub from_source: bool,
+    /// Octaves the element moves, from `+8va` (1), `-8va` (-1) or `loco` (0)
+    /// written at the start of its bar or an earlier one on the line.
+    pub octave_shift_octaves: i8,
 }
 
 /// Which of the two spellings a bar is written in.
@@ -51,6 +56,9 @@ pub enum BarNotation {
     /// for a rest or `/` for the same again), then its length, then marks
     /// and tie (`Eb4:sx`, `C5e.>`, `I:q`, `r:h`, `/`).
     SongLine,
+    /// A dynamics line's: a level word (`pp p mp mf f ff`), `<`, `>` or `r`,
+    /// then its length (`p:w`, `<:h`, `r:q`). No marks, no tie.
+    Dynamics,
 }
 
 /// A note value with its dots, as written: what a song line's element
@@ -61,21 +69,44 @@ struct WrittenLength {
     dots: u32,
 }
 
-/// The length a song line carries forward: the last one written, dots
-/// included, across barlines and the text lines a line goes on over. In a
-/// group it is the written value, before the group squeezes it, so the
-/// element after `trp (C4:q D4 E4)` is a plain quarter (Song Notation,
-/// section 4).
+/// What a song line carries forward from one element and bar to the next:
+/// the last length written, dots included, across barlines and the text lines
+/// a line goes on over (in a group it is the written value, before the group
+/// squeezes it, so the element after `trp (C4:q D4 E4)` is a plain quarter,
+/// Song Notation, section 4); and the octave annotation in force.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LengthCarry {
+pub struct LineCarry {
     written: Option<WrittenLength>,
+    /// `+8va` is 1, `-8va` is -1, `loco` is 0, until the next annotation.
+    octave_shift_octaves: i8,
 }
 
-impl LengthCarry {
-    /// Nothing written yet: the first element of a line writes its length.
+impl LineCarry {
+    /// Nothing written yet: the first element of a line writes its length,
+    /// and the octave is the clef's.
     #[must_use]
-    pub fn start_of_line() -> LengthCarry {
-        LengthCarry { written: None }
+    pub fn start_of_line() -> LineCarry {
+        LineCarry {
+            written: None,
+            octave_shift_octaves: 0,
+        }
+    }
+}
+
+/// An octave annotation at the start of a bar's text, and the text after it:
+/// `+8va` and `-8va` move what follows one octave up or down from the
+/// clef's octave, `loco` returns to the clef's octave (Song Notation,
+/// section 4). The annotation says where the octave is, so writing `+8va`
+/// twice is still one octave up.
+fn split_octave_annotation(bar_text: &str) -> (Option<i8>, &str) {
+    let trimmed: &str = bar_text.trim_start();
+    let word_end: usize = trimmed.find(char::is_whitespace).unwrap_or(trimmed.len());
+    let (word, rest): (&str, &str) = trimmed.split_at(word_end);
+    match word {
+        "+8va" => (Some(1), rest),
+        "-8va" => (Some(-1), rest),
+        "loco" => (Some(0), rest),
+        _ => (None, bar_text),
     }
 }
 
@@ -112,7 +143,7 @@ pub fn parse_bar(
     bar_number: usize,
     bar_length_ticks: u64,
     notation: BarNotation,
-    carry: &mut LengthCarry,
+    carry: &mut LineCarry,
 ) -> Result<Vec<BarElement>, String> {
     let mut cursor: Cursor = Cursor::new(bar_text);
     let mut placed: Vec<BarElement> = Vec::new();
@@ -122,6 +153,15 @@ pub fn parse_bar(
         cursor.skip_whitespace();
         if cursor.peek().is_none() {
             break;
+        }
+        if notation == BarNotation::SongLine && cursor.element_text().contains(":euclid(") {
+            if !placed.is_empty() {
+                return Err(format!(
+                    "bar {bar_number}: euclid fills the whole bar. Write it alone in its bar, \
+                     e.g. | C2:euclid(3,8) |"
+                ));
+            }
+            return parse_euclid_bar(&mut cursor, bar_number, bar_length_ticks);
         }
         if cursor.starts_with("trp") || cursor.starts_with("fit") {
             let (group_length, inner): (GroupLength, Vec<WrittenElement>) =
@@ -163,6 +203,7 @@ pub fn parse_bar(
         let example: &str = match notation {
             BarNotation::Rhythm => "q q q q",
             BarNotation::SongLine => "C4:q D4 E4 r",
+            BarNotation::Dynamics => "p:q < f r",
         };
         return Err(format!(
             "bar {bar_number} is empty. Write its notes and rests, e.g. {example}"
@@ -174,7 +215,7 @@ pub fn parse_bar(
         let words = describe_length(short_ticks);
         let advice: String = match (words.letters, notation) {
             (Some(letters), BarNotation::Rhythm) => format!(" Add {letters} or {letters}r."),
-            (Some(letters), BarNotation::SongLine) => {
+            (Some(letters), BarNotation::SongLine | BarNotation::Dynamics) => {
                 format!(" Add a note or a rest of that length, e.g. r:{letters}.")
             }
             (None, _) => String::from(" Add a note or rest to fill the bar."),
@@ -194,6 +235,133 @@ pub fn parse_bar(
     Ok(placed)
 }
 
+/// `C2:euclid(3,8)>` or `:euclid(3,8)`: hits spread over the steps of the
+/// whole bar, which share it evenly (the same rounding as a sample
+/// source's elements). A hit is a one-step sounding element carrying what
+/// is written before the colon and the marks written after; the steps
+/// between hits are rests.
+/// The `euclid(3,8)` after the colon: its hits and its steps.
+fn read_euclid_hits_and_steps(
+    cursor: &mut Cursor,
+    bar_number: usize,
+    element_text: &str,
+) -> Result<(usize, usize), String> {
+    let example: &str = "euclid(3,8)";
+    if !cursor.starts_with("euclid(") {
+        return Err(format!(
+            "bar {bar_number}: \"{element_text}\": write euclid as hits and steps, e.g. {example}"
+        ));
+    }
+    for _ in 0.."euclid(".len() {
+        cursor.next();
+    }
+    let hits_text: String = cursor.take_while(char::is_ascii_digit);
+    let comma_follows: bool = cursor.peek() == Some(',');
+    cursor.next();
+    let steps_text: String = cursor.take_while(char::is_ascii_digit);
+    let closed: bool = cursor.peek() == Some(')');
+    cursor.next();
+    let (Ok(hits), Ok(steps), true, true) = (
+        hits_text.parse::<usize>(),
+        steps_text.parse::<usize>(),
+        comma_follows,
+        closed,
+    ) else {
+        return Err(format!(
+            "bar {bar_number}: \"{element_text}\": write euclid as hits and steps, e.g. {example}"
+        ));
+    };
+    if hits == 0 || hits > steps {
+        return Err(format!(
+            "bar {bar_number}: euclid({hits},{steps}) needs at least 1 hit and no more hits than \
+             steps. Write e.g. {example}: 3 hits over 8 steps"
+        ));
+    }
+    Ok((hits, steps))
+}
+
+fn parse_euclid_bar(
+    cursor: &mut Cursor,
+    bar_number: usize,
+    bar_length_ticks: u64,
+) -> Result<Vec<BarElement>, String> {
+    let element_text: String = cursor.element_text();
+    let contents: WrittenContents = parse_song_contents(cursor, &element_text)?;
+    if cursor.peek() == Some(':') {
+        cursor.next();
+    }
+    let (hits, steps): (usize, usize) =
+        read_euclid_hits_and_steps(cursor, bar_number, &element_text)?;
+    let marks: ElementMarks = parse_marks(cursor)?;
+    if cursor.peek() == Some('~') {
+        return Err(format!(
+            "bar {bar_number}: a tie cannot follow euclid. Tie notes one by one if you need one"
+        ));
+    }
+    cursor.skip_whitespace();
+    if cursor.peek().is_some() {
+        return Err(format!(
+            "bar {bar_number}: euclid fills the whole bar. Write nothing else after it in the bar"
+        ));
+    }
+    let (contents_text, from_source): (Option<String>, bool) = match contents {
+        WrittenContents::Rest => {
+            return Err(format!(
+                "bar {bar_number}: a rest cannot be spread with euclid. Write what the hits play \
+                 before the colon, e.g. C2:euclid(3,8)"
+            ));
+        }
+        WrittenContents::Same => (None, false),
+        WrittenContents::FromSource => (None, true),
+        WrittenContents::Text(text) => (Some(text), false),
+    };
+    // The place of step i is i × bar ÷ steps, rounded half up, so no rounded
+    // step is added to another: ticks × (steps ÷ steps) → ticks.
+    let steps_count: u64 = steps as u64;
+    let tick_of =
+        |index: u64| -> u64 { (2 * index * bar_length_ticks + steps_count) / (2 * steps_count) };
+    let mut placed: Vec<BarElement> = Vec::new();
+    for (index, hit) in euclid_pattern(hits, steps).into_iter().enumerate() {
+        let start_ticks: u64 = tick_of(index as u64);
+        let end_ticks: u64 = tick_of(index as u64 + 1);
+        if end_ticks <= start_ticks {
+            return Err(format!(
+                "bar {bar_number}: euclid has too many steps for the bar. Write fewer"
+            ));
+        }
+        if hit {
+            placed.push(BarElement {
+                start_ticks,
+                length_ticks: end_ticks - start_ticks,
+                kind: ElementKind::Sounding,
+                marks,
+                tied_to_next: false,
+                contents_text: contents_text.clone(),
+                from_source,
+                octave_shift_octaves: 0,
+            });
+        } else if let Some(last) = placed
+            .last_mut()
+            .filter(|last: &&mut BarElement| last.kind == ElementKind::Rest)
+        {
+            // Rests between hits are one rest.
+            last.length_ticks = end_ticks - last.start_ticks;
+        } else {
+            placed.push(BarElement {
+                start_ticks,
+                length_ticks: end_ticks - start_ticks,
+                kind: ElementKind::Rest,
+                marks: ElementMarks::NONE,
+                tied_to_next: false,
+                contents_text: None,
+                from_source: false,
+                octave_shift_octaves: 0,
+            });
+        }
+    }
+    Ok(placed)
+}
+
 /// `| q q q q | q q q q |` → the bars between the barlines. `bars_so_far`
 /// is how many bars came before, so a mistake names its bar in the whole line.
 ///
@@ -205,13 +373,14 @@ pub fn parse_bars(
     bars_so_far: usize,
     bar_length_ticks: u64,
     notation: BarNotation,
-    carry: &mut LengthCarry,
+    carry: &mut LineCarry,
 ) -> Result<Vec<Vec<BarElement>>, String> {
     let line: &str = line.trim();
     if !line.starts_with('|') || !line.ends_with('|') || line.len() < 2 {
         let example: &str = match notation {
             BarNotation::Rhythm => "| q q q q |",
             BarNotation::SongLine => "| C4:q D4 E4 F4 |",
+            BarNotation::Dynamics => "| p:w | < | f | mf |",
         };
         return Err(format!(
             "a line of bars starts and ends with |, e.g. {example}"
@@ -221,13 +390,21 @@ pub fn parse_bars(
     let mut bars: Vec<Vec<BarElement>> = Vec::new();
     for (offset, bar_text) in split_at_barlines(inside).into_iter().enumerate() {
         let bar_number: usize = bars_so_far + offset + 1;
-        bars.push(parse_bar(
-            bar_text,
-            bar_number,
-            bar_length_ticks,
-            notation,
-            carry,
-        )?);
+        let bar_text: &str = if notation == BarNotation::SongLine {
+            let (annotation, rest): (Option<i8>, &str) = split_octave_annotation(bar_text);
+            if let Some(octave_shift_octaves) = annotation {
+                carry.octave_shift_octaves = octave_shift_octaves;
+            }
+            rest
+        } else {
+            bar_text
+        };
+        let mut bar: Vec<BarElement> =
+            parse_bar(bar_text, bar_number, bar_length_ticks, notation, carry)?;
+        for element in &mut bar {
+            element.octave_shift_octaves = carry.octave_shift_octaves;
+        }
+        bars.push(bar);
     }
     Ok(bars)
 }
@@ -327,6 +504,7 @@ fn parse_source_bar(
             tied_to_next: false,
             contents_text: text,
             from_source: false,
+            octave_shift_octaves: 0,
         });
     }
     Ok(placed)
@@ -395,6 +573,7 @@ fn place(
             tied_to_next: element.tied_to_next,
             contents_text: element.contents_text.clone(),
             from_source: element.from_source,
+            octave_shift_octaves: 0,
         });
     }
     Ok(result)
@@ -405,7 +584,7 @@ fn parse_group(
     cursor: &mut Cursor,
     bar_length_ticks: u64,
     notation: BarNotation,
-    carry: &mut LengthCarry,
+    carry: &mut LineCarry,
 ) -> Result<(GroupLength, Vec<WrittenElement>), String> {
     let name: String = cursor.take_while(char::is_ascii_alphabetic);
     let group_length: GroupLength = match name.as_str() {
@@ -481,12 +660,74 @@ fn parse_group(
 fn parse_element(
     cursor: &mut Cursor,
     notation: BarNotation,
-    carry: &mut LengthCarry,
+    carry: &mut LineCarry,
 ) -> Result<WrittenElement, String> {
     match notation {
         BarNotation::Rhythm => parse_rhythm_element(cursor),
         BarNotation::SongLine => parse_song_element(cursor, carry),
+        BarNotation::Dynamics => parse_dynamics_element(cursor, carry),
     }
+}
+
+/// A dynamics line's element: a level word, `<`, `>` or `r`, then its length
+/// (the colon may be left off). `p:w`, `<:h`, `mf`, `r:q`. A length left off
+/// is the one before it, as on every song line.
+fn parse_dynamics_element(
+    cursor: &mut Cursor,
+    carry: &mut LineCarry,
+) -> Result<WrittenElement, String> {
+    let element_text: String = cursor.element_text();
+    let word: String = cursor.take_while(|character: &char| {
+        character.is_ascii_alphabetic() || *character == '<' || *character == '>'
+    });
+    // `r` alone is a stretch with no change; the letters of a level are
+    // taken as one word, so `pp` is not `p` then `p`.
+    let is_rest: bool = word == "r";
+    let is_mark: bool = DynamicMark::from_text(&word).is_some();
+    if !is_rest && !is_mark {
+        return Err(format!(
+            "\"{element_text}\" is not a dynamics mark. Write pp, p, mp, mf, f, ff, \
+             < (crescendo), > (diminuendo) or r (no change), then its length, e.g. p:w"
+        ));
+    }
+    if cursor.peek() == Some(':') {
+        cursor.next();
+    }
+    let written_length: Option<WrittenLength> = parse_written_length(cursor)?;
+    match cursor.peek() {
+        None | Some(')') => {}
+        Some(character) if character.is_whitespace() => {}
+        Some(character) => {
+            return Err(format!(
+                "'{character}' is not expected in \"{element_text}\". A dynamics mark takes \
+                 only its length, e.g. p:w. Accents and ties belong on a note line"
+            ));
+        }
+    }
+    let length: WrittenLength = match written_length {
+        Some(written) => {
+            carry.written = Some(written);
+            written
+        }
+        None => carry.written.ok_or_else(|| {
+            format!(
+                "\"{element_text}\" has no length, and nothing before it in this line \
+                 gives one. Write it, e.g. {word}:w"
+            )
+        })?,
+    };
+    Ok(WrittenElement {
+        length_subticks: dotted_length_subticks(length.base_ticks, length.dots, SUBTICKS_PER_TICK),
+        kind: if is_rest {
+            ElementKind::Rest
+        } else {
+            ElementKind::Sounding
+        },
+        marks: ElementMarks::NONE,
+        tied_to_next: false,
+        contents_text: if is_rest { None } else { Some(word) },
+        from_source: false,
+    })
 }
 
 /// A rhythm library's element: value, then `r` and dots in either order
@@ -571,7 +812,7 @@ enum WrittenContents {
 /// tie. `C4:q`, `Eb4sx`, `D4~`, `I:q>`, `[C3 E3 G3]h`, `r:h.`, `/>`.
 fn parse_song_element(
     cursor: &mut Cursor,
-    carry: &mut LengthCarry,
+    carry: &mut LineCarry,
 ) -> Result<WrittenElement, String> {
     let element_text: String = cursor.element_text();
     if element_text.starts_with(|character: char| "whqest".contains(character)) {
@@ -975,7 +1216,7 @@ mod tests {
             1,
             FOUR_FOUR_BAR_TICKS,
             BarNotation::Rhythm,
-            &mut LengthCarry::start_of_line(),
+            &mut LineCarry::start_of_line(),
         )
     }
 
@@ -985,7 +1226,7 @@ mod tests {
             1,
             FOUR_FOUR_BAR_TICKS,
             BarNotation::SongLine,
-            &mut LengthCarry::start_of_line(),
+            &mut LineCarry::start_of_line(),
         )
     }
 
@@ -1206,7 +1447,7 @@ mod tests {
 
     #[test]
     fn the_length_carries_across_barlines_but_starts_afresh_each_line() {
-        let mut carry: LengthCarry = LengthCarry::start_of_line();
+        let mut carry: LineCarry = LineCarry::start_of_line();
         let bars: Vec<Vec<BarElement>> = parse_bars(
             "| C4:h D4 | E4 F4 |",
             0,
@@ -1277,7 +1518,7 @@ mod tests {
             1,
             4 * 5040,
             BarNotation::SongLine,
-            &mut LengthCarry::start_of_line(),
+            &mut LineCarry::start_of_line(),
         )
         .unwrap();
         let from_source: Vec<bool> = bar.iter().map(|element| element.from_source).collect();

@@ -25,13 +25,12 @@ use std::process::ExitCode;
 use player::schedule::{EventSource, OutputAction, ScheduledEvent, schedule};
 use player::song_plan::{SectionPass, SongPlan, plan_song};
 use player::studio_configuration::StudioConfiguration;
-use song_text::length_words::describe_place;
+use song_text::length_words::describe_place_after_bars;
 use song_text::parse_error::ParseError;
 use song_text::song_file::parse_song;
 use song_text::studio_file::parse_studio;
 use vocabulary::song::Song;
 use vocabulary::ticks::TICKS_PER_QUARTER_NOTE;
-use vocabulary::time_signature::TimeSignature;
 
 const DEFAULT_SONG_FILE: &str = "songs/Demo.song";
 const DEFAULT_STUDIO_FILE: &str = "songs/Demo.studio";
@@ -77,28 +76,23 @@ fn run(song_file: &str, studio_file: &str) -> Result<(), String> {
     }
     event_player::wait_for_enter()?;
 
-    // Places are counted from the song's start in the first section's meter.
-    let time_signature: TimeSignature = song
-        .sections()
-        .first()
-        .map(vocabulary::song::Section::time_signature)
-        .ok_or_else(|| String::from("ERROR: the song has no sections."))?;
     let mut last_announced: Option<(String, u64)> = None;
     let mut next_pass: usize = 0;
     event_player::play(
         &output,
         &events,
         plan.tempo,
+        &plan.tempo_changes,
         &mut |event: &ScheduledEvent| {
             // The first event at or after a pass's start says the pass begins.
             while let Some(pass) = plan.section_passes.get(next_pass) {
                 if event.position.ticks() < pass.start_ticks {
                     break;
                 }
-                println!("{}", describe_pass(pass, time_signature));
+                println!("{}", describe_pass(pass, &plan.section_passes));
                 next_pass += 1;
             }
-            announce(event, time_signature, &mut last_announced);
+            announce(event, &plan.section_passes, &mut last_announced);
         },
     )?;
     for track in &plan.note_tracks {
@@ -131,7 +125,7 @@ fn load<T>(
 
 /// One line for the start of a play of a section: its name and pass, key,
 /// meter and tempo (in the meter's beats), and where it starts.
-fn describe_pass(pass: &SectionPass, first_time_signature: TimeSignature) -> String {
+fn describe_pass(pass: &SectionPass, passes: &[SectionPass]) -> String {
     let key: String = pass
         .key
         .map_or_else(|| String::from("no key"), |key| key.to_string());
@@ -158,17 +152,48 @@ fn describe_pass(pass: &SectionPass, first_time_signature: TimeSignature) -> Str
         pass.pass_count,
         pass.time_signature.pulses_per_bar(),
         pass.time_signature.pulses_per_whole_note(),
-        describe_place(pass.start_ticks, first_time_signature)
+        place_in_song(pass.start_ticks, passes)
+    )
+}
+
+/// Where a position is in the song, as bar and beat, counted through every
+/// section before it in that section's own meter, so a meter change does not
+/// shift the bar numbers after it.
+fn place_in_song(position_ticks: u64, passes: &[SectionPass]) -> String {
+    let Some(index) = passes
+        .iter()
+        .rposition(|pass: &SectionPass| pass.start_ticks <= position_ticks)
+    else {
+        // Before the first pass: nothing to count from, so the first pass's
+        // meter is the only one there is.
+        return passes
+            .first()
+            .map_or_else(String::new, |first: &SectionPass| {
+                describe_place_after_bars(position_ticks, first.time_signature, 0)
+            });
+    };
+    // bars before = sum over earlier passes of (ticks of the pass ÷ ticks/bar).
+    let bars_before: u64 = passes[..index]
+        .iter()
+        .zip(&passes[1..=index])
+        .map(|(pass, next): (&SectionPass, &SectionPass)| {
+            (next.start_ticks - pass.start_ticks) / pass.time_signature.bar_length().ticks()
+        })
+        .sum();
+    describe_place_after_bars(
+        position_ticks - passes[index].start_ticks,
+        passes[index].time_signature,
+        bars_before,
     )
 }
 
 /// Shows each voice's notes once per place and each cue as it is queued.
 fn announce(
     event: &ScheduledEvent,
-    time_signature: TimeSignature,
+    passes: &[SectionPass],
     last_announced: &mut Option<(String, u64)>,
 ) {
-    let place: String = describe_place(event.position.ticks(), time_signature);
+    let place: String = place_in_song(event.position.ticks(), passes);
     match (&event.source, event.action) {
         (EventSource::Notes { track_name }, OutputAction::NoteOn { velocity, .. }) => {
             let key: (String, u64) = (track_name.clone(), event.position.ticks());

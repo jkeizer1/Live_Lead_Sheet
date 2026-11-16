@@ -1,0 +1,17 @@
+# Canonical test song (valid): crates/song_text/src/song_file.rs, test `euclid_spreads_hits_over_the_bar`.
+# Bass bar 1: euclid(3,8); bar 2: euclid(2,5) with an accent on each hit. Keys: a rhythm line of :euclid(3,8) reading a sample source.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+track "Bass"
+  type mono_voice
+  clef bass
+section "A"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Keys" sample_source | I | I |
+  line "Keys" | :euclid(3,8) | :euclid(2,5) |
+  line "Bass" | C2:euclid(3,8) | C2:euclid(2,5)> |

@@ -236,7 +236,6 @@ fn describe_track(track: &Track) -> String {
             voice,
             clef,
             lead,
-            home_octave,
             voice_layer_names,
         } => {
             let voice_text: &str = match voice {
@@ -248,8 +247,6 @@ fn describe_track(track: &Track) -> String {
             } else {
                 ""
             };
-            let octave_text: String =
-                home_octave.map_or_else(String::new, |octave| format!(", home octave {octave}"));
             let mut names_text: String = String::new();
             for named in voice_layer_names {
                 let named: &VoiceLayerName = named;
@@ -261,7 +258,7 @@ fn describe_track(track: &Track) -> String {
                 );
             }
             format!(
-                "{voice_text}, {} clef{octave_text}{lead_text}{names_text}",
+                "{voice_text}, {} clef{lead_text}{names_text}",
                 clef_name(*clef)
             )
         }
@@ -384,6 +381,9 @@ fn print_line(track: &Track, line: &Line, several: bool, section: &Section) {
                 number.value()
             );
         }
+        LineRole::Dynamics => {
+            println!("  {}, dynamics:", line.track_name());
+        }
         LineRole::VoiceLayer(_) | LineRole::CuePlacement => {
             println!("  {}:", line.track_name());
         }
@@ -466,7 +466,11 @@ fn describe_contents(contents: Option<&ElementContents>) -> String {
         Some(ElementContents::ChordWithNotes { chord, notes }) => {
             format!(" — chord {chord} voiced {}", join_pitches(notes))
         }
+        Some(ElementContents::InvertedChord { chord, inversion }) => {
+            format!(" — chord {chord} in inversion {}", inversion.number())
+        }
         Some(ElementContents::Cue(name)) => format!(" — cue \"{name}\""),
+        Some(ElementContents::Dynamic(mark)) => format!(" — dynamic {mark}"),
     }
 }
 

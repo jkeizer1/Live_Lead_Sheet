@@ -11,10 +11,11 @@ use vocabulary::midi_values::{
 };
 use vocabulary::score_length::ScoreLength;
 use vocabulary::song::{
-    Clef, CueDefinition, CueDestination, CueMessage, Line, LineRole, Section, Song, Track,
-    TrackKind, VoiceKind, VoiceLayerName, VoiceLayerNumber,
+    Clef, CueDefinition, CueDestination, CueMessage, Line, LineRole, Section, Song, SongError,
+    Track, TrackKind, VoiceKind, VoiceLayerName, VoiceLayerNumber,
 };
 use vocabulary::tempo::{Tempo, TempoError};
+use vocabulary::ticks::TICKS_PER_QUARTER_NOTE;
 use vocabulary::time_signature::TimeSignature;
 
 use crate::contents_text::parse_key;
@@ -29,7 +30,6 @@ struct OpenTrack {
     type_name: Option<String>,
     clef: Option<Clef>,
     lead: bool,
-    home_octave: Option<i8>,
     cues: Vec<CueDefinition>,
     voice_layer_names: Vec<VoiceLayerName>,
     /// How many mistakes were reported when the block began; more by its
@@ -46,6 +46,8 @@ struct RawLine {
     voice_layer: Option<VoiceLayerNumber>,
     /// `sample_source` written after the track's name (and voice layer).
     sample_source: bool,
+    /// `dynamics` written after the track's name: the line holds levels.
+    dynamics: bool,
     line_number: usize,
     parts: Vec<RawBarsText>,
 }
@@ -64,6 +66,9 @@ struct OpenSection {
     repeat_count: Option<u32>,
     key: Option<Key>,
     time_signature: Option<TimeSignature>,
+    /// `grouping 2+2+3` written after the meter, as written: the pulses of
+    /// each group.
+    beat_grouping: Option<Vec<u8>>,
     tempo: Option<WrittenTempo>,
     lines: Vec<RawLine>,
     /// True right after a `line` or its continuation: a text line starting
@@ -119,14 +124,52 @@ impl WrittenTempo {
 }
 
 /// The key, meter and tempo a section carries on from the one before. The
-/// tempo carries as note speed, not as beats: a section that changes the
-/// meter but writes no tempo keeps the quarter note's speed (Jim, 7 Nov
-/// 2026).
+/// tempo carries as beats per minute, so the beat feel stays the same
+/// across a meter change: 4/4 at 120 beats/min then 3/4 is still 120
+/// beats/min (Jim, 8 Nov 2026, decided 15 Nov 2026).
 #[derive(Default)]
 struct Carried {
     key: Option<Key>,
     time_signature: Option<TimeSignature>,
+    /// The grouping goes with the meter it was written for.
+    beat_grouping: Option<Vec<u8>>,
     tempo: Option<Tempo>,
+}
+
+/// The tempo of the section before, kept as beats per minute and given the
+/// beat of the new meter. In the same meter this is the same tempo.
+///
+/// ticks/beat of the old meter: `mbeats/min = mq/min × 5040 ticks/q ÷ L_beat
+/// ticks/beat` (exact: the old tempo was a whole number of mq/min made from
+/// whole mbeats/min).
+fn carry_tempo(
+    carried: Tempo,
+    carried_time_signature: TimeSignature,
+    time_signature: TimeSignature,
+) -> Result<Tempo, String> {
+    let old_beat_ticks: u64 = carried_time_signature.beat_length().ticks();
+    let milli_beats_per_minute: u64 = carried
+        .milli_quarters_per_minute()
+        .saturating_mul(TICKS_PER_QUARTER_NOTE)
+        / old_beat_ticks;
+    let text: String = milli_beats_text(milli_beats_per_minute);
+    WrittenTempo::BeatsPerMinute(MilliBeats {
+        milli_beats: milli_beats_per_minute,
+        text,
+    })
+    .to_tempo(time_signature)
+}
+
+/// 120000 → "120", 112500 → "112.5": a tempo's number as the song writes it.
+fn milli_beats_text(milli_beats: u64) -> String {
+    let whole: u64 = milli_beats / 1000;
+    let thousandths: u64 = milli_beats % 1000;
+    if thousandths == 0 {
+        whole.to_string()
+    } else {
+        let decimals: String = format!("{thousandths:03}");
+        format!("{whole}.{}", decimals.trim_end_matches('0'))
+    }
 }
 
 struct SongReader<'a> {
@@ -236,7 +279,6 @@ impl SongReader<'_> {
             type_name: None,
             clef: None,
             lead: false,
-            home_octave: None,
             cues: Vec::new(),
             voice_layer_names: Vec::new(),
             errors_at_start: self.errors.len(),
@@ -254,11 +296,11 @@ impl SongReader<'_> {
             track.clef = Some(parse_clef(rest)?);
         } else if line == "lead" {
             track.lead = true;
-        } else if let Some(rest) = keyword_rest(line, "home_octave") {
-            let octave: i8 = rest
-                .parse::<i8>()
-                .map_err(|_| format!("\"{rest}\" is not an octave. Write e.g. home_octave 3"))?;
-            track.home_octave = Some(octave);
+        } else if keyword_rest(line, "home_octave").is_some() {
+            return Err(String::from(
+                "home_octave no longer exists: the clef sets the octave. Move a passage with +8va \
+                 or -8va at the start of a bar, and return with loco",
+            ));
         } else if let Some(rest) = keyword_rest(line, "cue") {
             let cue: CueDefinition = parse_cue(rest)?;
             if track
@@ -278,7 +320,7 @@ impl SongReader<'_> {
             let _ = line_number;
             return Err(format!(
                 "\"{line}\" is not understood in a track. Expected type, clef, lead, \
-                 home_octave, voice_layer or cue"
+                 voice_layer or cue"
             ));
         }
         Ok(())
@@ -333,6 +375,7 @@ impl SongReader<'_> {
             repeat_count: None,
             key: None,
             time_signature: None,
+            beat_grouping: None,
             tempo: None,
             lines: Vec::new(),
             continuing_line: false,
@@ -363,6 +406,7 @@ impl SongReader<'_> {
                     }
                 };
             let (sample_source, bars_text): (bool, &str) = read_sample_source(bars_text);
+            let (dynamics, bars_text): (bool, &str) = read_dynamics(bars_text);
             // The bars may all be on the lines below, so a bare name is fine.
             let parts: Vec<RawBarsText> = if bars_text.trim().is_empty() {
                 Vec::new()
@@ -376,6 +420,7 @@ impl SongReader<'_> {
                 track_name: track_name.to_string(),
                 voice_layer,
                 sample_source,
+                dynamics,
                 line_number,
                 parts,
             });
@@ -402,6 +447,9 @@ impl SongReader<'_> {
     }
 
     /// Turns the open section into a `Section`, or reports why not.
+    // One pass over a section's settings, lines and carried values; split
+    // apart it would pass the same state between several helpers.
+    #[allow(clippy::too_many_lines)]
     fn finish_section(&mut self) {
         let Some(open) = self.section.take() else {
             return;
@@ -423,7 +471,26 @@ impl SongReader<'_> {
             );
             return;
         };
-        let tempo: Tempo = match (&open.tempo, self.carried.tempo) {
+        let carried_tempo: Option<Tempo> = match (self.carried.tempo, self.carried.time_signature) {
+            (Some(tempo), Some(carried_signature)) if open.tempo.is_none() => {
+                match carry_tempo(tempo, carried_signature, time_signature) {
+                    Ok(carried) => Some(carried),
+                    Err(message) => {
+                        self.report(
+                            open.line_number,
+                            format!(
+                                "section \"{}\": the tempo carried on from the section before \
+                                 does not fit this meter: {message}. Write a tempo for this section",
+                                open.name
+                            ),
+                        );
+                        return;
+                    }
+                }
+            }
+            _ => None,
+        };
+        let tempo: Tempo = match (&open.tempo, carried_tempo) {
             (Some(written), _) => match written.to_tempo(time_signature) {
                 Ok(tempo) => tempo,
                 Err(message) => {
@@ -457,7 +524,14 @@ impl SongReader<'_> {
         // A section with repeat 0 is checked as written, as a section that
         // plays once, and then left out of the song as if commented out.
         let checked_count: u32 = repeat_count.max(1);
-        match Section::new(
+        // A grouping goes with the meter: written with it, or carried along
+        // with a meter that is carried on.
+        let beat_grouping: Option<Vec<u8>> = if open.time_signature.is_some() {
+            open.beat_grouping.clone()
+        } else {
+            self.carried.beat_grouping.clone()
+        };
+        let built: Result<Section, SongError> = Section::new(
             &open.name,
             open.count_in,
             checked_count,
@@ -465,7 +539,12 @@ impl SongReader<'_> {
             time_signature,
             tempo,
             lines,
-        ) {
+        )
+        .and_then(|section: Section| match beat_grouping {
+            Some(group_pulses) => section.with_beat_grouping(group_pulses),
+            None => Ok(section),
+        });
+        match built {
             Ok(section) => {
                 if self.defined.iter().any(|d: &Section| d.name() == open.name) {
                     self.report(
@@ -483,6 +562,9 @@ impl SongReader<'_> {
                     self.carried = Carried {
                         key,
                         time_signature: Some(time_signature),
+                        beat_grouping: section
+                            .beat_grouping()
+                            .map(|grouping| grouping.group_pulses().to_vec()),
                         tempo: Some(tempo),
                     };
                     self.sections.push(section);
@@ -535,6 +617,9 @@ impl SongReader<'_> {
                 self.carried = Carried {
                     key: section.key(),
                     time_signature: Some(section.time_signature()),
+                    beat_grouping: section
+                        .beat_grouping()
+                        .map(|grouping| grouping.group_pulses().to_vec()),
                     tempo: Some(section.tempo()),
                 };
                 self.sections.push(section);
@@ -576,6 +661,7 @@ impl SongReader<'_> {
             // track's line places its cues. A role that does not suit the
             // track is refused by the line, with a message.
             let role: LineRole = match (raw.voice_layer, track.kind()) {
+                (None, _) if raw.dynamics => LineRole::Dynamics,
                 (number, _) if raw.sample_source => {
                     LineRole::SampleSource(number.unwrap_or(VoiceLayerNumber::FIRST))
                 }
@@ -681,14 +767,12 @@ fn build_track(open: &OpenTrack) -> Result<Track, String> {
                 voice,
                 clef,
                 lead: open.lead,
-                home_octave: open.home_octave,
                 voice_layer_names: open.voice_layer_names.clone(),
             }
         }
         _ if open.clef.is_some() => return Err(voice_only("clef")),
         _ if !open.voice_layer_names.is_empty() => return Err(voice_only("voice_layer")),
         _ if open.lead => return Err(voice_only("lead")),
-        _ if open.home_octave.is_some() => return Err(voice_only("home_octave")),
         "clock_and_transport" => TrackKind::ClockAndTransport,
         "cue_control" => TrackKind::CueControl {
             cues: open.cues.clone(),
@@ -723,12 +807,13 @@ fn read_voice_layer(after_name: &str) -> Result<(Option<VoiceLayerNumber>, &str)
         if after_name.trim().is_empty()
             || after_name.trim_start().starts_with('|')
             || keyword_rest(after_name.trim(), "sample_source").is_some()
+            || keyword_rest(after_name.trim(), "dynamics").is_some()
         {
             return Ok((None, after_name));
         }
         return Err(format!(
             "\"{}\" after the track's name is not understood. Write voice_layer and its \
-             number, sample_source, or the bars, e.g. line \"Keys\" voice_layer 2 | C4:q D4 E4 F4 |",
+             number, sample_source, dynamics, or the bars, e.g. line \"Keys\" voice_layer 2 | C4:q D4 E4 F4 |",
             after_name.trim()
         ));
     };
@@ -743,6 +828,15 @@ fn read_voice_layer(after_name: &str) -> Result<(Option<VoiceLayerNumber>, &str)
 /// text after it; the text as it is when the word is not there.
 fn read_sample_source(after: &str) -> (bool, &str) {
     match keyword_rest(after.trim(), "sample_source") {
+        Some(rest) => (true, rest),
+        None => (false, after),
+    }
+}
+
+/// `dynamics` right after the track's name, and the text after it; the text
+/// as it is when the word is not there.
+fn read_dynamics(after: &str) -> (bool, &str) {
+    match keyword_rest(after.trim(), "dynamics") {
         Some(rest) => (true, rest),
         None => (false, after),
     }
@@ -902,14 +996,41 @@ fn read_key<'a>(section: &mut OpenSection, after: &'a [Word]) -> Result<&'a [Wor
 }
 
 fn read_meter<'a>(section: &mut OpenSection, after: &'a [Word]) -> Result<&'a [Word], String> {
-    let Some((meter, rest)) = after.split_first() else {
+    let Some((meter, mut rest)) = after.split_first() else {
         return Err(String::from("meter needs two numbers, e.g. meter 4/4"));
     };
     let time_signature: TimeSignature = parse_meter(&meter.text)?;
     if section.time_signature.replace(time_signature).is_some() {
         return Err(String::from("meter is written twice in this section"));
     }
+    // `grouping 2+2+3` belongs to the meter it follows.
+    if let Some((word, after_grouping)) = rest.split_first()
+        && word.text == "grouping"
+        && !word.quoted
+    {
+        let Some((groups, after_groups)) = after_grouping.split_first() else {
+            return Err(String::from(
+                "grouping needs the sizes of the groups, e.g. meter 7/8 grouping 2+2+3",
+            ));
+        };
+        section.beat_grouping = Some(parse_grouping(&groups.text)?);
+        rest = after_groups;
+    }
     Ok(rest)
+}
+
+/// `2+2+3` → the pulses of each group. Whether they fill the bar is checked
+/// when the section is built, against its meter.
+fn parse_grouping(text: &str) -> Result<Vec<u8>, String> {
+    let wrong = || {
+        format!(
+            "\"{text}\" is not a grouping. Write the pulses of each group with a plus between, \
+             e.g. grouping 2+2+3"
+        )
+    };
+    text.split('+')
+        .map(|group: &str| group.parse::<u8>().map_err(|_| wrong()))
+        .collect()
 }
 
 /// A tempo's number as whole milli-beats: digits, then optionally a point
@@ -1251,14 +1372,26 @@ mod tests {
     }
 
     #[test]
-    fn a_carried_tempo_keeps_the_note_speed_across_a_meter_change() {
-        // B writes no tempo: the quarter note stays at 120 q/min in 6/8
-        // (80 dotted-quarter beats/min), not 120 dotted quarters/min.
+    fn home_octave_is_refused_and_says_what_replaced_it() {
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/home_octave_removed.song"
+        ));
+        // The refused track leaves its section without a line: a second
+        // message follows from the first, so only the first is checked.
+        assert!(errors[0].starts_with("test.song line 11:"), "{}", errors[0]);
+        assert!(errors[0].contains("+8va"), "{}", errors[0]);
+    }
+
+    #[test]
+    fn a_carried_tempo_keeps_the_beats_per_minute_across_a_meter_change() {
+        // 120 beats/min in 4/4 stays 120 beats/min in 3/4 (a quarter note
+        // beat both times: 120 q/min) and in 6/8 (a dotted quarter beat:
+        // 120 beats/min × 1.5 q/beat = 180 q/min), and back in 4/4.
         assert_eq!(
             tempos_of(include_str!(
                 "../../../songs_canonical/song_file/tempo_carried_across_meter_change.song"
             )),
-            vec![120_000, 120_000]
+            vec![120_000, 120_000, 180_000, 120_000]
         );
     }
 
@@ -1366,6 +1499,245 @@ mod tests {
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert!(errors[0].starts_with("test.song line 14:"), "{}", errors[0]);
         assert!(errors[0].contains("15/8 is not read yet"), "{}", errors[0]);
+    }
+
+    #[test]
+    fn beat_grouping_is_kept_with_its_meter() {
+        let song: Song = parse_song(
+            "test.song",
+            include_str!("../../../songs_canonical/song_file/grouping_kept.song"),
+        )
+        .unwrap();
+        let groupings: Vec<Option<String>> = song
+            .sections()
+            .iter()
+            .map(|section: &Section| section.beat_grouping().map(ToString::to_string))
+            .collect();
+        // B carries 7/8 and its grouping; C writes its own; D has a new
+        // meter and so no grouping.
+        assert_eq!(
+            groupings,
+            vec![
+                Some(String::from("2+2+3")),
+                Some(String::from("2+2+3")),
+                Some(String::from("3+2")),
+                None
+            ]
+        );
+    }
+
+    #[test]
+    fn a_grouping_that_does_not_fill_the_bar_is_refused_at_its_section() {
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/grouping_not_filling_the_bar.song"
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(errors[0].starts_with("test.song line 10:"), "{}", errors[0]);
+        assert!(
+            errors[0].contains("the grouping 2+2+2 adds up to 6 pulses, but a bar of 7/8 has 7"),
+            "{}",
+            errors[0]
+        );
+    }
+
+    #[test]
+    fn a_grouping_that_is_not_numbers_says_how_to_write_one() {
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/grouping_not_numbers.song"
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(errors[0].starts_with("test.song line 11:"), "{}", errors[0]);
+        assert!(
+            errors[0].contains("\"2+x\" is not a grouping"),
+            "{}",
+            errors[0]
+        );
+    }
+
+    /// The chords or notes of the `track`'s line in each section, as text.
+    fn contents_of_track(song: &Song, track: &str) -> Vec<Vec<String>> {
+        song.sections()
+            .iter()
+            .map(|section: &Section| {
+                section
+                    .lines()
+                    .iter()
+                    .find(|line: &&Line| line.track_name() == track)
+                    .unwrap()
+                    .elements()
+                    .iter()
+                    .map(|line_element: &vocabulary::song::LineElement| {
+                        match line_element.contents() {
+                            Some(ElementContents::Chord(chord)) => chord.to_string(),
+                            Some(ElementContents::Notes(notes)) => notes[0].to_string(),
+                            other => format!("{other:?}"),
+                        }
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn repeat_signs_are_written_out() {
+        let song: Song = parse_song(
+            "test.song",
+            include_str!("../../../songs_canonical/song_file/repeat_signs.song"),
+        )
+        .unwrap();
+        let bar_counts: Vec<u32> = song.sections().iter().map(Section::bar_count).collect();
+        assert_eq!(bar_counts, vec![6, 3, 3]);
+        let keys: Vec<Vec<String>> = contents_of_track(&song, "Keys");
+        assert_eq!(keys[0], vec!["I", "ii7", "V", "ii7", "V", "IV"]);
+        assert_eq!(keys[1], vec!["I", "I", "I"]);
+        // A `/` at the start of a group plays what came before the sign.
+        assert_eq!(keys[2], vec!["I", "I", "I"]);
+        let bass: Vec<Vec<String>> = contents_of_track(&song, "Bass");
+        assert_eq!(bass[0], vec!["C2", "G2", "D2", "C2", "G2", "D2"]);
+        assert_eq!(bass[2], vec!["C2", "C2", "C2"]);
+    }
+
+    fn repeat_sign_error(text: &str) -> String {
+        let errors: Vec<String> = errors_of(text);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(errors[0].starts_with("test.song line 12:"), "{}", errors[0]);
+        errors[0].clone()
+    }
+
+    #[test]
+    fn a_repeat_sign_inside_another_is_refused() {
+        let message: String = repeat_sign_error(include_str!(
+            "../../../songs_canonical/song_file/repeat_sign_nested.song"
+        ));
+        assert!(message.contains("Repeat signs do not nest"), "{message}");
+    }
+
+    #[test]
+    fn a_repeat_sign_not_closed_is_refused() {
+        let message: String = repeat_sign_error(include_str!(
+            "../../../songs_canonical/song_file/repeat_sign_not_closed.song"
+        ));
+        assert!(message.contains("opened and not closed"), "{message}");
+    }
+
+    #[test]
+    fn a_repeat_sign_not_opened_is_refused() {
+        let message: String = repeat_sign_error(include_str!(
+            "../../../songs_canonical/song_file/repeat_sign_not_opened.song"
+        ));
+        assert!(
+            message.contains("closes a group that was not opened"),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn a_repeat_sign_with_zero_plays_is_refused() {
+        let message: String = repeat_sign_error(include_str!(
+            "../../../songs_canonical/song_file/repeat_sign_zero.song"
+        ));
+        assert!(message.contains("Use |%2 for twice"), "{message}");
+    }
+
+    #[test]
+    fn a_repeat_sign_with_no_bars_is_refused() {
+        let message: String = repeat_sign_error(include_str!(
+            "../../../songs_canonical/song_file/repeat_sign_empty.song"
+        ));
+        assert!(message.contains("no bars between"), "{message}");
+    }
+
+    /// (start ticks, length ticks, sounding, accented) of each element of
+    /// the `track`'s first line in the first section.
+    fn places_of_track(
+        song: &Song,
+        track: &str,
+        rhythm_line_only: bool,
+    ) -> Vec<(u64, u64, bool, bool)> {
+        let lines: Vec<&Line> = song.sections()[0]
+            .lines()
+            .iter()
+            .filter(|line: &&Line| line.track_name() == track)
+            .collect();
+        let line: &Line = if rhythm_line_only { lines[1] } else { lines[0] };
+        line.elements()
+            .iter()
+            .map(|line_element: &vocabulary::song::LineElement| {
+                let element = line_element.element();
+                (
+                    element.start().ticks(),
+                    element.length().ticks(),
+                    element.kind() == vocabulary::rhythm_pattern::ElementKind::Sounding,
+                    element.marks().accent() == vocabulary::rhythm_pattern::AccentLevel::Accent,
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn euclid_spreads_hits_over_the_bar() {
+        let song: Song = parse_song(
+            "test.song",
+            include_str!("../../../songs_canonical/song_file/euclid.song"),
+        )
+        .unwrap();
+        // 4/4 bar: 20160 ticks. euclid(3,8) is x..x..x. with steps of 2520 ticks;
+        // euclid(2,5) is x.x.. with steps of 4032 ticks, in the second bar.
+        let expected: Vec<(u64, u64, bool, bool)> = vec![
+            (0, 2520, true, false),
+            (2520, 5040, false, false),
+            (7560, 2520, true, false),
+            (10_080, 5040, false, false),
+            (15_120, 2520, true, false),
+            (17_640, 2520, false, false),
+            (20_160, 4032, true, true),
+            (24_192, 4032, false, false),
+            (28_224, 4032, true, true),
+            (32_256, 8064, false, false),
+        ];
+        let bass: Vec<(u64, u64, bool, bool)> = places_of_track(&song, "Bass", false);
+        // The first bar's hits carry no accent; the second bar's carry it.
+        assert_eq!(bass, expected);
+        // A hit on a rhythm line with nothing before the colon takes its contents from the source.
+        let keys: Vec<(u64, u64, bool, bool)> = places_of_track(&song, "Keys", true);
+        assert_eq!(keys[..6], expected[..6]);
+    }
+
+    fn euclid_error(text: &str) -> String {
+        let errors: Vec<String> = errors_of(text);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(errors[0].starts_with("test.song line 15:"), "{}", errors[0]);
+        errors[0].clone()
+    }
+
+    #[test]
+    fn euclid_with_no_hits_is_refused() {
+        let message: String = euclid_error(include_str!(
+            "../../../songs_canonical/song_file/euclid_no_hits.song"
+        ));
+        assert!(
+            message.contains("euclid(0,8) needs at least 1 hit and no more hits than steps"),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn euclid_with_more_hits_than_steps_is_refused() {
+        let message: String = euclid_error(include_str!(
+            "../../../songs_canonical/song_file/euclid_more_hits_than_steps.song"
+        ));
+        assert!(
+            message.contains("euclid(9,8) needs at least 1 hit"),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn euclid_beside_another_element_is_refused() {
+        let message: String = euclid_error(include_str!(
+            "../../../songs_canonical/song_file/euclid_not_alone.song"
+        ));
+        assert!(message.contains("euclid fills the whole bar"), "{message}");
     }
 
     fn bar_counts_of(text: &str) -> Vec<u32> {

@@ -3,6 +3,7 @@
 //! sections 3, 4 and 5). A line may go on over several text lines: a text line starting
 //! with `|` adds its bars to the line above.
 
+use vocabulary::dynamics::DynamicMark;
 use vocabulary::rhythm_pattern::{ElementKind, RhythmElement, RhythmPatternError};
 use vocabulary::score_length::ScoreLength;
 use vocabulary::song::{
@@ -12,7 +13,8 @@ use vocabulary::time_signature::TimeSignature;
 
 use crate::contents_text::parse_voice_contents;
 use crate::length_words::describe_place;
-use crate::rhythm_bar::{BarElement, BarNotation, LengthCarry, parse_bars, parse_source_bars};
+use crate::repeat_signs::write_out_repeat_signs;
+use crate::rhythm_bar::{BarElement, BarNotation, LineCarry, parse_bars, parse_source_bars};
 
 /// One text line holding bars of a song line: the `line "Keys" | … |` line
 /// itself, or a line that continues it, `| … |`.
@@ -49,19 +51,29 @@ pub fn build_line(
     let mut bars: Vec<Vec<BarElement>> = Vec::new();
     // The file line each bar is written on, by bar index.
     let mut bar_line_numbers: Vec<usize> = Vec::new();
-    let mut carry: LengthCarry = LengthCarry::start_of_line();
+    let mut carry: LineCarry = LineCarry::start_of_line();
     for part in parts {
+        // Repeat signs are written out first, so every bar below is a bar of the line.
+        let written_out: String =
+            write_out_repeat_signs(part.text).map_err(|message: String| LineError {
+                line_number: part.line_number,
+                message,
+            })?;
         // A sample source writes contents and no lengths: its elements share
         // each bar evenly. Every other line writes both.
         let read: Result<Vec<Vec<BarElement>>, String> =
             if matches!(role, LineRole::SampleSource(_)) {
-                parse_source_bars(part.text, bars.len(), bar_length_ticks)
+                parse_source_bars(&written_out, bars.len(), bar_length_ticks)
             } else {
                 parse_bars(
-                    part.text,
+                    &written_out,
                     bars.len(),
                     bar_length_ticks,
-                    BarNotation::SongLine,
+                    if role == LineRole::Dynamics {
+                        BarNotation::Dynamics
+                    } else {
+                        BarNotation::SongLine
+                    },
                     &mut carry,
                 )
             };
@@ -108,7 +120,7 @@ pub fn build_line(
                 message,
             };
             let place: String = describe_place(start_ticks, time_signature);
-            let contents: Option<ElementContents> = contents_of(track, placed, &mut carried)
+            let contents: Option<ElementContents> = contents_of(track, role, placed, &mut carried)
                 .map_err(|why| at(format!("{place}: {why}")))?;
             let element: RhythmElement = RhythmElement::new(
                 ScoreLength::from_ticks(start_ticks),
@@ -120,6 +132,9 @@ pub fn build_line(
             .map_err(|error| at(format!("{place}: {error}")))?;
             elements.push(
                 LineElement::new(element, contents)
+                    .map(|line_element: LineElement| {
+                        line_element.with_octave_shift_octaves(placed.octave_shift_octaves)
+                    })
                     .map_err(|error| at(describe_song_error(&error, time_signature)))?,
             );
         }
@@ -140,6 +155,8 @@ fn error_start_ticks(error: &SongError) -> Option<u64> {
         SongError::ElementWithoutContents { start_ticks, .. }
         | SongError::ContentsNotAllowed { start_ticks, .. }
         | SongError::ContentsOnRest { start_ticks }
+        | SongError::DynamicsNeedsAMark { start_ticks, .. }
+        | SongError::DynamicRampWithoutTarget { start_ticks, .. }
         | SongError::Rhythm(RhythmPatternError::TieWithoutNote { start_ticks, .. }) => {
             Some(*start_ticks)
         }
@@ -160,12 +177,22 @@ enum Carried {
 /// A sounding element with no contents is a `/`.
 fn contents_of(
     track: &Track,
+    role: LineRole,
     placed: &BarElement,
     carried: &mut Option<Carried>,
 ) -> Result<Option<ElementContents>, String> {
     if placed.kind == ElementKind::Rest {
         // The bar parser gives a rest no contents: `r` is all it writes.
         return Ok(None);
+    }
+    if role == LineRole::Dynamics {
+        // The bar parser has already checked the word.
+        return placed
+            .contents_text
+            .as_deref()
+            .and_then(DynamicMark::from_text)
+            .map(|mark: DynamicMark| Some(ElementContents::Dynamic(mark)))
+            .ok_or_else(|| String::from("a dynamics line holds pp, p, mp, mf, f, ff, <, > or r"));
     }
     if placed.from_source {
         // `:q` plays what the sample source holds when it starts. A later
@@ -287,7 +314,6 @@ mod tests {
                 voice: VoiceKind::Poly,
                 clef: Clef::Grand,
                 lead: true,
-                home_octave: None,
                 voice_layer_names: Vec::new(),
             },
         )
@@ -301,7 +327,6 @@ mod tests {
                 voice: VoiceKind::Mono,
                 clef: Clef::Bass,
                 lead: false,
-                home_octave: None,
                 voice_layer_names: Vec::new(),
             },
         )

@@ -5,7 +5,7 @@
 
 use vocabulary::key::{Key, Mode};
 use vocabulary::pitch::{Accidental, NoteLetter, NoteName, Pitch};
-use vocabulary::roman_chord::{ChordKind, RomanChord, ScaleDegree};
+use vocabulary::roman_chord::{ChordKind, Inversion, InversionError, RomanChord, ScaleDegree};
 use vocabulary::song::{ElementContents, VoiceKind};
 
 /// `C2`, `F#2`, `Bb1` → a pitch, checked to be a note a MIDI device has.
@@ -62,6 +62,25 @@ pub fn parse_notes(text: &str) -> Result<Vec<Pitch>, String> {
         ));
     }
     Ok(pitches)
+}
+
+/// `[1stInversion]` → 1, `[2ndInversion]` → 2, `[3rdInversion]` → 3,
+/// `[4thInversion]` → 4. `None` when the brackets hold notes, not an
+/// inversion.
+fn inversion_number(text: &str) -> Option<Result<u8, String>> {
+    let inner: &str = text.strip_prefix('[')?.strip_suffix(']')?.trim();
+    let digits: &str = inner.strip_suffix("Inversion")?;
+    let number_text: &str = digits
+        .strip_suffix("st")
+        .or_else(|| digits.strip_suffix("nd"))
+        .or_else(|| digits.strip_suffix("rd"))
+        .or_else(|| digits.strip_suffix("th"))?;
+    Some(number_text.parse::<u8>().map_err(|_| {
+        format!(
+            "\"{inner}\" is not an inversion. Write e.g. [1stInversion], [2ndInversion], \
+             [3rdInversion]"
+        )
+    }))
 }
 
 /// `ii7`, `bVII7`, `viidim`, `iim7b5` → a chord.
@@ -207,8 +226,14 @@ pub fn parse_voice_contents(text: &str, voice: VoiceKind) -> Result<ElementConte
                 "a mono voice plays one note at a time; write a single note such as C2",
             ));
         }
+        let chord: RomanChord = parse_chord(&text[..bracket])?;
+        if let Some(number) = inversion_number(&text[bracket..]) {
+            let inversion: Inversion = Inversion::new(number?, chord.kind())
+                .map_err(|error: InversionError| format!("{}: {error}", &text[..bracket]))?;
+            return Ok(ElementContents::InvertedChord { chord, inversion });
+        }
         return Ok(ElementContents::ChordWithNotes {
-            chord: parse_chord(&text[..bracket])?,
+            chord,
             notes: parse_notes(&text[bracket..])?,
         });
     }

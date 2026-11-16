@@ -1,6 +1,6 @@
 # song_play_test
 
-Revision 6 — 15 Nov 2026 (a line at the start of each play of a section)
+Revision 7 — 15 Nov 2026 (tempo changes between sections are played; bar numbers continue through meter changes; the Nov 15 listening song)
 
 ## What it proves
 
@@ -33,11 +33,22 @@ What to hear in the Demo:
 - **Cues:** none in the current Demo (the `Cues` track and the SQ-1
   destination are commented out). Cues are marked as deferred in other documents.
 
+## Tempo and meter changes between sections
+
+A section whose tempo differs from the section before it gets a new anchor
+at its first position (Musical Time and Clock, section 8): the player works
+out that position's instant from the anchor before it, so the bars already
+sent do not move. A meter change that keeps the beat's length (4/4 to 3/4)
+changes nothing; one that changes it (3/4 to 6/8, the beat going from a
+quarter to a dotted quarter) changes the speed in quarter notes per minute,
+because the beats per minute carry on. The bar numbers the program prints
+continue through the meter changes, each section counted in its own meter.
+`songs/Nov15_features_1_7.song` has a section for each of the Nov 15
+notations; its comments say what to listen for.
+
 ## Not applied yet (the program says so before playing)
 
 - `settle_delay` and the legato mark have no effect yet.
-- Tempo changes between sections: the program refuses a song whose
-  sections have different tempi.
 
 ## How to run
 

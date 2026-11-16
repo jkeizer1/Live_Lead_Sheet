@@ -78,6 +78,21 @@ impl ChordKind {
         )
     }
 
+    /// How many notes the chord has in the plain voicing: a triad 3, a
+    /// seventh chord 4, a seventh with a flat ninth 5.
+    #[must_use]
+    pub const fn note_count(self) -> u8 {
+        match self {
+            ChordKind::Major | ChordKind::Minor | ChordKind::Diminished | ChordKind::Augmented => 3,
+            ChordKind::DominantSeventh
+            | ChordKind::MajorSeventh
+            | ChordKind::MinorSeventh
+            | ChordKind::DiminishedSeventh
+            | ChordKind::HalfDiminishedSeventh => 4,
+            ChordKind::DominantSeventhFlatNinth => 5,
+        }
+    }
+
     /// What follows the numeral, as EFS-1.5a spells it.
     #[must_use]
     pub const fn suffix(self) -> &'static str {
@@ -93,6 +108,53 @@ impl ChordKind {
         }
     }
 }
+
+/// An inversion as standard music uses the term: the third (or fifth, ...)
+/// is the lowest note, and the notes that were below it move up one octave
+/// (Song Notation, section 4). 1 is the first inversion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Inversion {
+    number: u8,
+}
+
+impl Inversion {
+    /// # Errors
+    ///
+    /// When the number is 0, or the chord has no such inversion: a chord of
+    /// `n` notes has inversions 1 to `n - 1`.
+    pub fn new(number: u8, kind: ChordKind) -> Result<Inversion, InversionError> {
+        let highest: u8 = kind.note_count() - 1;
+        if number == 0 || number > highest {
+            return Err(InversionError { number, highest });
+        }
+        Ok(Inversion { number })
+    }
+
+    /// 1 for the first inversion.
+    #[must_use]
+    pub const fn number(self) -> u8 {
+        self.number
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InversionError {
+    number: u8,
+    highest: u8,
+}
+
+impl fmt::Display for InversionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "inversion {} does not exist for this chord: the highest is {}. Write an \
+             inversion from 1 to {}, e.g. [1stInversion]",
+            self.number, self.highest, self.highest
+        )
+    }
+}
+
+impl std::error::Error for InversionError {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RomanChord {
