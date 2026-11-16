@@ -1,9 +1,9 @@
 # Live Lead Sheet — Experience Functional Specification
 
-Revision 18 — 15 Nov 2026 (EFS-5.2b: a section played again by name; repeat 0; EFS-1.2, EFS-1.3, EFS-2.2 and EFS-5.2 adjusted; Song Notation, Revision 22)
+Revision 19 — 15 Nov 2026 (tempo steps and ramps and meter changes inside a section: EFS-2.2, new EFS-2.2a, EFS-2.3, EFS-1.11, EFS-3.8, EFS-5.2; navigation marks deferred, EFS-5.10; settle delay removed, EFS-6.6; Song Notation, Revision 23)
 
 Builds on the Concept Brief, Revision 13, Architecture D-10 and D-11, and
-Song Notation, Revision 22. Covers
+Song Notation, Revision 23. Covers
 **V1: the leader** — a chordal song with its own slash rhythm and a bass
 accompaniment, with a beat pulse voice and a control track for phrase cues,
 on one screen. Requirements are in the musician's terms; nothing here chooses a
@@ -112,8 +112,7 @@ The cues panel lists it (EFS-1.11).
 **EFS-1.10** CANCELLED (Jim, 9 Nov 2026). The number stays so that other
 references remain valid.
 
-**EFS-1.11 Cues panel.** A side panel listing what is coming: each
-phrase cue, key change and tempo change in view, with its bar and beat.
+**EFS-1.11 Cues panel.** A side panel listing what is coming: each phrase cue, key change, meter change and tempo change in view, with its bar and beat.
 Each entry is marked when it fires and leaves the list once passed.
 
 **EFS-1.12 Scaling.** Bars across and tracks down are set by screen size
@@ -143,16 +142,22 @@ Stop sends MIDI Stop and silences every track
 
 **EFS-2.2 Tempo.** Each section has a written tempo, or carries on the
 previous section's tempo. The tempo of the first section that plays is the
-song's initial tempo; a tempo or time-signature change happens at a
-section boundary. A section played again by name has the tempo of the
+song's initial tempo; a key change happens at a section boundary; tempo and meter may also change bar by bar inside a section (EFS-2.2a). A section played again by name has the tempo of the
 section it repeats, and the section after it carries on from that tempo.
-Later: tempo marks inside a section, a step or a ramp between two
-points in the song (an accelerando, or a ritardando at the end), written in
-rhythm notation (Song Notation, section 5).
+Tempo marks inside a section are `tp` marks (Song Notation, "Meter and
+tempo inside a section"). A step changes the tempo at the start of a bar. A
+ramp moves it in a straight line, smoothly, over a number of bars (an
+accelerando, or a ritardando at the end), and the end tempo then holds.
+
+**EFS-2.2a Meter inside a section.** A section's meter may change bar by
+bar, as in the common alternation of a 4/4 bar and a 5/4 bar, written in an
+optional `meter_control` line (Song Notation). With no such line, the
+section's meter applies to every bar. Bars are numbered along the song; each
+bar's beats, beat grouping and the time signature on the staff follow that
+bar's own meter, and the time signature is shown where it changes.
 
 **EFS-2.3 Tempo slider.** For practice, a slider scales the written
-tempo, as a percentage, so tempo changes between sections keep their
-proportions. Range 50–150 %.
+tempo, as a percentage, so tempo changes between sections and inside them keep their proportions. Range 50–150 %.
 
 **EFS-2.4 Steady time.** Tempo is even, with no drift over a long
 performance.
@@ -280,12 +285,11 @@ CANCELLED - THERE IS NO Keywheel. THERE IS A LEAD TRACK; it is the first track c
 
 **EFS-3.8 Track types.** Each track has a type. In V1: poly voice and mono
 voice (EFS-3.2, 3.3; a beat pulse, EFS-2.6, is a mono voice), clock and
-transport, and cue control (EFS-4). The clock and transport track has a port and no channel,
+transport, cue control (EFS-4), and tempo control (a line of a section, EFS-2.2). The clock and transport track has a port and no channel,
 because Timing Clock, Start, Continue and Stop carry none; each song has
-exactly one. Later: a tempo control track (EFS-2.2), a musician voice
+exactly one. Deferred: a musician voice
 (a part composed for a person to read, in the clef of that instrument,
-sending no MIDI; a fermata is drawn, never obeyed by the clock), and an
-automation control track (continuous controller curves, such as a filter
+sending no MIDI; a fermata is drawn, never obeyed by the clock), and an automation control track (continuous controller curves, such as a filter
 sweep or a crescendo).
 
 **EFS-3.9 Pitch.** A song's pitches are staff pitches in the track's clef
@@ -343,7 +347,7 @@ tempo (EFS-2.5).
 **EFS-5.2 Sections.** Add, name, reorder and remove sections, and mark
 the first as a count-in section. For each:
 repeat count, key (twelve roots, major or minor, chosen from a list),
-meter with its beat grouping, and tempo (written, or carry on). A repeat
+meter with its beat grouping, and tempo (written, or carry on), with optional bar-by-bar meter and tempo lines (EFS-2.2, EFS-2.2a). A repeat
 count of 0 is allowed: the song plays as if that section were commented
 out, which is how a musician skips it while testing.
 
@@ -397,10 +401,10 @@ away.
 **EFS-5.9 Library.** Browse library progressions and rhythm patterns,
 and save a progression or rhythm from the song into the library.
 
-**EFS-5.10 Navigation marks — later.** Not in V1, but the song structure
-must leave room for the standard navigation marks: D.C., D.S., segno,
-Coda and To Coda, Fine, and first and second endings. When they arrive,
-the strip still shows bars in the order they will actually be played.
+**EFS-5.10 Navigation marks — deferred (Jim, 15 Nov 2026).** The song's
+structure is set in the user interface, and the sections that result encode
+the order of play, so no notation for D.C., D.S., segno, Coda or endings is
+written. The strip shows bars in the order they will actually be played.
 
 ## 6. Song file and library files
 
@@ -437,8 +441,7 @@ idiom, then by kind.
 plain-text file (`.studio`) in the same notation. It declares the output
 ports and, for each track of a song by its name: port, channel (none for
 the clock and transport track), octave offset, velocity levels
-(EFS-3.6), and device timing — a retrigger gap and a settle delay for a
-device that needs time (EFS-3.5) — and it maps each cue destination to a
+(EFS-3.6), and device timing — a retrigger gap for a device that needs time (EFS-3.5) — and it maps each cue destination to a
 port and channel. Quantities are written with their units (`2 ms`, `-1
 octaves`). One configuration serves many songs; a track of the song with
 no entry stops the song loading, and the message names the track. Errors
@@ -500,8 +503,7 @@ knobs and sliders is settled before it is built.
 ## 10. Not in V1
 
 Listener and recorder roles; colour-phrase tracks; musician voices and
-automation tracks (EFS-3.8); tempo marks and ramps inside a section
-(EFS-2.2); lines of different lengths in a section (polymeter); soft
+automation tracks (EFS-3.8); lines of different lengths in a section (true polymeter); soft
 notes, pressure and pitch bend; device profiles and
 external phrases (EFS-4.6); pulse bursts (EFS-4.7); alternative tunings;
 modes and modal vamps; navigation marks (D.C., D.S., Coda…); SATB voices

@@ -1,9 +1,9 @@
 # Live Lead Sheet — Architecture
 
-Revision 23 — 8 Nov 2026 (crates note_spelling and lilypond_export; a LilyPond view of a song)
+Revision 24 — 15 Nov 2026 (tempo and meter changes inside a section; tempo carry decided; navigation marks deferred; track types)
 
 Builds on the Concept Brief (Revision 13), the Experience Functional
-Specification (Revision 13) and Song Notation (Revision 9). Sets the
+Specification (Revision 19) and Song Notation (Revision 23). Sets the
 principles, the main parts, how they talk, and the technology for V1.
 
 **Focus.** V1 is the Live Lead Sheet itself: the leader, on one native
@@ -88,7 +88,7 @@ block what is planned:
 | Recorder | a follower that writes what it hears into a song in the catalog |
 | Melody generator, other transforms | a link in the chain, with its own view (A-4) |
 | Strudel, other programs, remote players | links reached through a transport output (A-3) |
-| Navigation marks (D.C., Coda…) | song structure; the player resolves play order |
+| Navigation marks | deferred: the song's structure is set in the user interface, and the sections that result encode the order of play |
 | SATB, one channel per voice | an option of the MIDI output |
 | Tunings | an attribute of the song, passed to instruments |
 | More windows or monitors | more followers drawing parts of the same stream |
@@ -334,9 +334,7 @@ exactly and never drift. 5040 = 2⁴ × 3² × 5 × 7 divides a quarter note
 exactly for every subdivision the music uses, and one MIDI clock pulse
 is 210 ticks. Two types: `ScorePosition` (a place in the song, from
 0 ticks at the first downbeat) and `ScoreLength` (a distance along it),
-with only checked operations between them. Instants are computed from an
-anchor, never by adding intervals, so rounding cannot accumulate
-(EFS-2.4). Set aside: 960 ticks/q (no sevenths), fractions, and
+with only checked operations between them. A position becomes an instant only through an **anchor**: a known meeting point of the score and the clock, made of a score position, the instant at which it sounds, and the tempo from there on. An instant is always computed from the latest anchor, never by adding up the durations of earlier events, so rounding cannot accumulate (EFS-2.4). A new anchor is made when playing starts or jumps (Play, play from a section, the practice loop, a restart after Stop) and wherever the tempo changes (a written tempo step or ramp, or the tempo slider). The full definition and the arithmetic are in Musical Time and Clock, sections 2, 6 and 8. Set aside: 960 ticks/q (no sevenths), fractions, and
 floating-point seconds.
 
 The full reference — definitions, conversions, worked examples and the
@@ -386,7 +384,7 @@ considered and set aside: it is the sleep-then-busy-wait method measured
 above, it waits on a second clock (`std::time::Instant`), and it has a
 single author.
 
-The full decision — reading the clock, the timer evidence, re-anchoring,
+The full decision — reading the clock, the timer evidence, making a new anchor (D-7),
 loop release and stop, sending MIDI clock — is in sections 5, 8 and 9 of
 [Musical Time and Clock](Musical%20Time%20and%20Clock.md).
 
@@ -453,8 +451,7 @@ from what is published (A-5).
   A transport cue on the music's first bar starts the followers, so they
   never play the count-in. The player has no count-in state; its only
   count-in control is the practice one below.
-- **Navigation.** A return that should skip the count-in is a D.S. to a
-  segno on the music's first bar, as in standard notation. A cue can be
+- **Navigation.** Navigation marks are deferred (Jim, 15 Nov 2026): the song's structure is set in the user interface, and the sections that result encode the order of play. A cue can be
   limited to a pass ("1st time only"), as a marking can.
 - **Output ports.** The program has several ALSA output ports, named for
   their purpose (e.g. `Clock`, `Harmony`, `SQ-1`) and declared in the
@@ -481,7 +478,7 @@ from what is published (A-5).
   at the section's first bar, with no count-in. For practice, a play
   screen control, *count-in first* (on or off, kept until changed),
   plays the song's count-in section once before the first pass, then
-  jumps to the section (a new anchor, as for the practice loop); the
+  jumps to the section (a jump, which makes a new anchor (D-7), as for the practice loop); the
   section then loops without a count-in until stopped. Every Play honours
   the control's setting. If the song has no count-in section, the
   control is unavailable and says so. At the start position the player
@@ -515,12 +512,12 @@ Decided by Jim, 5 Nov 2026.
 
 *Why.* The same song should play through different studios, and a
 device's quirks (which octave it calls C0, how long its gate must drop to
-retrigger, how long a quantizer needs to settle, how hard it responds to
+retrigger,  how hard it responds to
 an accent) belong to the device, not to the music. Ports and channels in
 the song tied it to one studio.
 
 - **Two kinds of file.** The *song* names tracks, with a type and a clef,
-  and holds sections, lines, cues and (later) tempo marks; no port,
+  and holds sections, lines, cues and tempo and meter changes inside a section (`tp` and `mp` lines); no port,
   channel, velocity number or device. The *studio configuration* declares
   the ports, and for each track of a song, by name: port, channel,
   octave offset, velocity levels and device timing; and maps each cue
@@ -529,9 +526,7 @@ the song tied it to one studio.
   vocabulary, so the configuration's type lives outside it; the parser
   for all the files is one adapter crate, `song_text` (A-3).
 - **Track types** say what a track can do and so what the receiver must
-  be able to do: poly voice, mono voice, clock and transport, cue
-  control in V1 (a beat pulse is a mono voice); tempo control, musician voice and automation control
-  later (Song Notation, section 5). Clock and transport has a port and no
+  be able to do: poly voice, mono voice, clock and transport, cue control and tempo control (a line of a section) in V1 (a beat pulse is a mono voice); musician voice and automation control deferred (Song Notation, section 5). Clock and transport has a port and no
   channel.
 - **Pitch** is stored as the staff pitch in the track's clef; the
   octave offset in the configuration corrects the device (musician voices,
@@ -539,13 +534,10 @@ the song tied it to one studio.
 - **Marks** (accent, Marcato (meaning: strong accent), staccato, legato, fermata) are written
   on elements; how hard an accent plays is the configuration's. A fermata
   never changes the clock in V1.
-- **Cues and tempo marks are rhythm lines**, so authors count note values,
-  not bar numbers across repeats.
+- **Cues are rhythm lines**, so authors count note values, not bar numbers across repeats. Meter and tempo changes are `mp` and `tp` lines inside the section (Song Notation, section 5), so they repeat with it.
 - **A file with errors** does not load, not even partly, but the program
   starts and shows the errors; the last good song keeps playing.
-- **Deferred:** polymeter (lines of different lengths in a section);
-  tempo ramps, which need a design in Musical Time and Clock first (its
-  anchors hold a constant tempo each).
+- **Deferred:** true polymeter (lines of different lengths in a section). Tempo ramps are required and are designed in Musical Time and Clock.
 
 *Set aside:* ports and channels in the song (the earlier draft); a
 velocity per track in the song; a track-wide *no root* setting (a
@@ -629,7 +621,7 @@ downbeat checks above, and the direct `aconnect` path.
 
 **3. Spike step 5: timing and drawing together.** A sending thread in
 `app` sending Timing Clock (24 clock pulses/q) and the control track, stamped
-up to 50 ms ahead, instants computed from an anchor (section 6);
+up to 50 ms ahead, instants computed from an anchor (D-7; Musical Time and Clock, section 6);
 the playhead driven by the queue's real time instead of the
 computer's clock; frame-time statistics printed on exit; then the
 `delivery_spread` measurement repeated while the window draws.
@@ -661,13 +653,14 @@ ear.
 **Noted, to revisit (Jim, 8 Nov 2026).** From Jim's notebook, roughly
 stated; each needs its own design step.
 
-- *Tempo carry, the other way round.* When the meter changes and no
-  tempo is written, the beat carries on and the notes follow the new
-  meter: 4/4 at 120 beats/min then 6/8 plays 120 dotted-quarter beats a
-  minute, which feels faster. This reverses the 7 Nov decision (the note
-  speed carried); in a typical score the meter changes often and the
-  beat carries on. Song Notation and Musical Time and Clock to state the
-  intent, not the arithmetic, which belongs in the code.
+- *Tempo carry* (*decided, Jim, 15 Nov 2026; first noted 8 Nov 2026*).
+  When the meter changes and no tempo is written, the beats per minute
+  carry on, so the beat feel is the same. 4/4 at 120 beats/min followed by
+  3/4 still plays 120 beats/min. Each beat is a quarter note in both, so
+  the notes keep their speed and only the bar is shorter, three beats
+  instead of four. In 6/8 the beat falls on the 1 and the 4, the two groups
+  of three. Song Notation and Musical Time and Clock state the rule and what
+  follows from it.
 - *Ledger lines.* The rule that the music stays on the staff (Song
   Notation, section 4) will be troublesome: notes placed by hand, such as
   on a bass line, already need ledger lines on the screen. The

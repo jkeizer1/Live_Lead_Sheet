@@ -1,6 +1,6 @@
 # Live Lead Sheet — Musical Time and Clock
 
-Revision 17 — 7 Nov 2026
+Revision 18 — 15 Nov 2026 (tempo steps inside a section; a meter change makes a new anchor only where the beat's length changes; tempo ramps as a staircase of anchors, one per clock pulse)
 
 How the program represents *where* things are in a song, *how long* they
 last, and *when* they happen. Every term is defined before it is used;
@@ -158,6 +158,10 @@ L_beat  = L_pulse                (simple time)
 L_beat  = 3 pulses × L_pulse     (compound time)
 L_bar   = n × L_pulse
 ```
+
+L_bar is the length of the bar's own meter. With a `meter_control` line it
+can differ from bar to bar inside a section (Song Notation, "Meter and
+tempo inside a section").
 
 Unit checks: `ticks/w ÷ pulses/w` → ticks/pulse;
 `pulses × ticks/pulse` → ticks.
@@ -497,10 +501,42 @@ A new anchor is made at:
 
 - **Play** — (start position, the instant playing starts,
   written tempo × slider).
-- **A section with a new written tempo** — at its first position, using
-  the instant computed for that position from the previous anchor.
-  Nothing at or after that position has been queued yet, so nothing is
-  removed.
+- **A new written tempo**, either a section with a new written tempo or a
+  `tp` step inside a section (Song Notation, "Meter and tempo inside a
+  section") — at its first position, using the instant computed for that
+  position from the previous anchor. The anchor is made when the player
+  reaches that position, before any event at or after it is queued, so
+  nothing is removed.
+- **A meter change that changes the beat's length** (4/4 to 6/8, where
+  the beat goes from a quarter note to a dotted quarter) — at the first
+  position of the new bar, using the instant computed for that position
+  from the previous anchor. The beats per minute carry on (Song Notation,
+  section 5), so B is recomputed from them with the new beat's length
+  (section 13). A meter change that leaves the beat's length alone (4/4 to
+  3/4, or 4/4 to 5/4) makes no anchor: B is unchanged, and only where the
+  next bar starts differs. A `tp` mark is in beats of the meter in force,
+  converted with that bar's beat length (section 13).
+- **A tempo ramp** (*decided, Jim, 15 Nov 2026*) — a new anchor at every
+  clock pulse of the ramp (section 9; 24 clock pulses/q, so one every
+  210 ticks), each made when the player reaches its position, from the
+  previous anchor as above. The tempo moves in a straight line over the
+  score positions of the ramp:
+
+  ```
+  B_i = B_start + (B_end − B_start) × (P_i − P_start) ÷ (P_end − P_start)
+  ```
+
+  | Symbol | Meaning | Unit |
+  |---|---|---|
+  | B_i | tempo of the anchor at clock pulse i, rounded to a whole number | mq/min |
+  | B_start, B_end | tempo at the start and at the end of the ramp | mq/min |
+  | P_i, P_start, P_end | position of that clock pulse, of the ramp's start, of its end | ticks |
+
+  Unit check: `mq/min × ticks ÷ ticks` → mq/min. Each anchor has a
+  constant tempo, so the arithmetic of section 6 is unchanged and stays
+  in whole numbers. Halfway through a two-bar ramp from 110 to 130
+  beats/min the tempo is 120 beats/min. After the ramp, B_end holds. A
+  slider change multiplies all of it, as for any anchor.
 - **A slider change** — at the first position not yet queued, using the
   instant computed for that position from the previous anchor. Nothing
   is removed. Since at most 50 ms of events are queued, the slider takes
@@ -516,6 +552,9 @@ A new anchor is made at:
   current tempo). Playing goes back; the positions themselves are
   unchanged.
 - **Restart after stop** — as for Play.
+
+Cues and every other event are score positions. A new anchor changes when
+they sound, never where they sit.
 
 **Loop release** (EFS-2.8) means "carry on into the next section", so
 playing never stops and **MIDI Stop is never sent**. Like a tempo
@@ -836,6 +875,9 @@ decimal place can fall between whole mq/min (112.25 beats/min × 250 =
 The tick size (section 4) and the clock (section 5, D-8) are decided.
 
 **Open, sending MIDI clock (V1):**
+
+- **O-14** (how a tempo ramp is played) — closed by Jim, 15 Nov 2026: a
+  staircase of anchors, one per clock pulse (section 8).
 
 - **O-2, O-3, O-13** (Timing Clock while stopped, when to send Start
   around a count-in, when the heartbeat runs) — closed by D-10: the

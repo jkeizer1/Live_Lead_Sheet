@@ -1,6 +1,6 @@
 # Live Lead Sheet — Song Notation
 
-Revision 22 — 15 Nov 2026 (`/` samples the source again on a rhythm line; `repeat 0`; sections played again by name)
+Revision 23 — 15 Nov 2026 (`mp` dynamic level; meter and tempo change inside a section, `mp` and `tp` lines with tempo ramps; a carried tempo keeps the beats per minute; track types and deferred list brought up to date)
 
 **Status: draft for trial.** *Decided* marks what Jim has decided;
 everything else is a proposal to try with a working player. Every open
@@ -55,8 +55,10 @@ can start from the chords' roots. Its result is written into the song.
 - **Marks are annotated on the score** (5 Nov 2026): accents, staccato,
   legato and fermata, on any sounding element. How hard an accent plays
   is set per device in the studio configuration, not in the song.
-- **Cues and tempo marks are written in rhythm notation** (5 Nov 2026),
-  so the author never counts bars including repeats.
+- **Cues are written in rhythm notation** (5 Nov 2026), so the author never
+  counts bars including repeats. Meter and tempo changes are written in `mp`
+  and `tp` lines (15 Nov 2026; section 5, "Meter and tempo inside a
+  section").
 - **Polymeter is deferred** (5 Nov 2026). In V1 every line of a section
   has the same number of bars (section 5).
 - **What an element plays comes first, then its length** (8 Nov 2026):
@@ -85,7 +87,7 @@ can start from the chords' roots. Its result is written into the song.
   (section 5, "Sample sources and uncoupled lines"). Standard music must
   work first; the uncoupled lines are what make this a modular sequencer
   and not one more notation program.
-- **Phrase dynamics on their own line** (11 Nov 2026): `pp`, `p`, `mf`,
+- **Phrase dynamics on their own line** (11 Nov 2026): `pp`, `p`, `mp`, `mf`,
   `f`, `ff` and the crescendo and diminuendo marks, written in rhythm
   notation and taken up by each sounding element (section 5, "Dynamics,
   in rhythm notation"). Marks on single notes stay in the note line.
@@ -109,7 +111,7 @@ can start from the chords' roots. Its result is written into the song.
   only `progression` blocks.
 - **Bars** are written between `|`, as in a chord chart.
 - **Units stay in the file** where a number is a quantity: `tempo 120
-  beats/min`, `settle_delay 2 ms`, `octave_offset -1 octaves`. *Decided.*
+  beats/min`, `octave_offset -1 octaves`. *Decided.*
 - **Pitches** are written as a letter, an accidental (`#` or `b`) and an
   octave, with C4 the middle C of the piano: `C2`, `F#2`, `Bb1`. They are
   positions on the staff of the track's clef, not MIDI note numbers.
@@ -451,9 +453,9 @@ and so what a receiving device must be able to do.
 | `mono_voice` | One note at a time, to a mono device (an analogue oscillator, a bass synth). The loader refuses overlapping notes, in hand-written files as well as the editor's. | Yes |
 | `clock_and_transport` | Timing Clock from Play to Stop, and Stop. Exactly one per song. Its output has a port but no channel, because Timing Clock, Start, Continue, Stop and Song Position Pointer carry no channel. | Yes |
 | `cue_control` | Phrase cues, placed in rhythm notation (below). | Yes |
-| `tempo_control` | Stepped and ramped tempo changes inside a section, in rhythm notation (below). | Later |
-| `musician_voice` | A part composed for a person to read and play, in the clef of that instrument. Sends no MIDI; drawn on its own staff, with marks as interpretation. | Later. It is written in the `.song` file and rendered; in the visual player it is a first-class track that can be focused and shown with a play head. The display details are settled with the UI (*decided, Jim, 11 Nov 2026*). |
-| `automation_control` | Continuous curves sent as controllers (a filter sweep, a crescendo on a VCA). | Later |
+| `tempo_control` | Tempo changes inside a section, written as `tp` marks (below). | Needed; not yet built |
+| `musician_voice` | A part composed for a person to read and play, in the clef of that instrument. Sends no MIDI; drawn on its own staff, with marks as interpretation. | Deferred (Jim, 15 Nov 2026). It is written in the `.song` file and rendered; in the visual player it is a first-class track that can be focused and shown with a play head. The display details are settled with the UI (*decided, Jim, 11 Nov 2026*). |
+| `automation_control` | Continuous curves sent as controllers (a filter sweep, a crescendo on a VCA). | Deferred (Jim, 15 Nov 2026) |
 
 **Every voice is the same on the wire:** a note-on with a velocity at the
 start of an element and a note-off at its end. The written length is the
@@ -554,9 +556,7 @@ note has priority. *Decided (Jim, 11 Nov 2026); not yet built.*
 
 `section "Name"` with `count-in` for the first section if wanted, `repeat
 n`, and `key`, `meter` and `tempo` (or carrying on from the previous
-section). A key change, a time-signature change and a stepped tempo change
-all happen at a section boundary; a change that lasts a few bars is a
-short section. The initial tempo is the first section's. The key
+section). A key change happens at a section boundary. Meter and tempo may also change bar by bar inside a section (section 5, "Meter and tempo inside a section"). The initial tempo is the first section's. The key
 signature is drawn on the staff the first time, and again everywhere the
 key changes, as standard notation requires (*decided, Jim, 11 Nov 2026*).
 
@@ -615,15 +615,14 @@ key changes, as standard notation requires (*decided, Jim, 11 Nov 2026*).
   quarters a minute: 60 beats/min × 3 eighths/beat = 180 eighths a minute.
   `q/min`, `e/min` and the like are refused, with a message saying what to
   write. *Decided (Jim, 7 Nov 2026).*
-  - **A carried tempo keeps the note speed.** A section that changes the
-    meter but writes no tempo keeps the speed of the notes, not the number
-    of beats: after `meter 4/4  tempo 120 beats/min`, a section with only
-    `meter 6/8` plays quarters at 120 a minute, which is 120 q/min ÷
-    1.5 q/beat = 80 beats/min. *Decided (Jim, 7 Nov 2026).*
-  - **The same number with a new beat is a new speed.** After 4/4 at
-    `tempo 120 beats/min`, a 6/8 section writing `tempo 120 beats/min`
-    plays 120 dotted quarters/min × 1.5 q/dotted quarter = 180 q/min: the
-    quarter notes speed up from 120 to 180 a minute.
+  - **A carried tempo keeps the beats per minute** (*decided, Jim,
+    15 Nov 2026; replaces the 7 Nov rule*). A section, or a bar of a
+    `meter_control` line, that changes the meter but writes no tempo keeps
+    the beats per minute, so the beat feel is the same. After `meter 4/4
+    tempo 120 beats/min`, a section with only `meter 3/4` still plays 120
+    beats/min. Each beat is a quarter note in both, so the notes keep their
+    speed and the bar is three beats instead of four. In 6/8 the beat is
+    each group of three eighths, falling on the 1 and the 4.
 - **Meters** are n/d with d = 1, 2, 4, 8 or 16. Compound meters stop at
   12 on top: 15/8, 18/8 and other multiples of 3 above 12 are refused when
   the song is read, with a message, until their beats are decided
@@ -738,6 +737,7 @@ normal from the fourth.
 |---|---|
 | `pp` | pianissimo |
 | `p` | piano |
+| `mp` | mezzo-piano, between `p` and `mf` |
 | `mf` | mezzo-forte, the normal level: velocity 64, or the track's `velocity normal` if the studio gives one |
 | `f` | forte |
 | `ff` | fortissimo |
@@ -764,7 +764,6 @@ normal from the fourth.
 - **On the screen** the line is drawn above the staff, or its highest
   ledger line, and below the chords. The player shows the letters in
   italics and the crescendo and diminuendo as elongated symbols.
-- **`mp`** (mezzo-piano) is left out until it is wanted.
 - **One play head at first.** The dynamics line moves with the track.
   Like a sample source, it can later have its own play head and tempo,
   for example a crescendo cycle of a different length to the harmony
@@ -796,28 +795,31 @@ track "Cues"
 - A cue whose destination is `track "Keys"` goes to that voice track's own
   port and channel and is drawn above that track's staff (EFS-4.3, D-10).
 
-### Tempo marks, in rhythm notation (later)
+### Meter and tempo inside a section
 
-A `tempo_control` track is a line in rhythm notation whose sounding
-elements carry a tempo mark:
+Two optional lines of a section change the meter or the tempo from bar to
+bar (*decided, Jim, 15 Nov 2026*). They are lines of the section, not
+tracks.
 
-- `step 100 beats/min` — the tempo becomes 100 beats/min at the start of
-  the element.
-- `ramp 60 beats/min` — the tempo moves from what it was at the start of
-  the element to 60 beats/min by the end of the element. A ramp lasts the
-  element's written duration; a tie makes it longer. A ritardando over the
-  last four bars, in this revision's order: `| "ramp 60 beats/min":w~ | /~ | /~ | / |`.
-
-The beats are those of the section's meter, as for `tempo`.
-
-Ramps apply to any stretch of a section (a speeding up in the first bars,
-a slowing mid-phrase, a retard at the end after several bars at tempo).
-All devices follow, because they follow the clock. Ramps need a design in
-`Musical Time and Clock.md` first: its instants are computed from anchors
-with a constant tempo each, and a ramp is a continuously changing tempo.
-Until then, tempo changes are stepped, per section. A gradually
-increasing or decreasing tempo is to be smooth, without jumps (*decided,
-Jim, 11 Nov 2026*).
+- `meter_control | mp [3_4 5_4 4_4] |` gives one meter per bar, here
+  three bars. `mp` means "meter pattern". The underscore is used because
+  `/` means "the same again". `mp section` goes back to the section's own
+  `meter`.
+- A `/` plays the previous pattern once more. `/_end` plays it again and
+  again to the end of the section: `| mp [4_4 5_4] | /_end |`. A pattern
+  cut by the end of the section is simply cut.
+- Bars the line does not cover use the section's `meter`. The line need not
+  have as many bars as the other lines, but every other line must have, in
+  each bar, the length of that bar's meter.
+- `tempo_control | tp [130] |` sets 130 beats/min from the start of that
+  bar. A `/` holds it one more bar, and `/_end` holds it to the end of the
+  section. `tp` takes a list, one tempo per bar. Bars after the line ends
+  keep the last tempo.
+- **Ramp:** `| tp [110 ramp_to 130 2_bars] |` starts at 110 beats/min and
+  moves in a straight line to 130 beats/min over two bars, then holds 130.
+  A gradually increasing or decreasing tempo is smooth, without jumps
+  (*decided, Jim, 11 Nov 2026*). A ramp is played as a series of very small steps, one for each MIDI clock pulse, so the tempo changes smoothly (`Musical Time and Clock.md`, section 8).
+- The beats are those of the meter in force, as for `tempo`.
 
 ### What the song does not say
 
@@ -897,40 +899,39 @@ destination "SQ-1"
     unless the block gives an absolute velocity for a mark (`accent` for
     `>`, `marcato` for `>>`). `<` and `<<` have no word here and are
     always relative (*decided, Jim, 11 Nov 2026*).
-  - The levels `pp`, `p`, `f` and `ff` of a dynamics line are relative to
+  - The levels `pp`, `p`, `mp`, `f` and `ff` of a dynamics line are relative to
     the normal level too, and shift with it.
   - **The numbers are a share of the room left** (*decided, Jim,
     11 Nov 2026; built for the marks on a note; the levels of the
     `dynamics` line are not yet built*). A MIDI velocity runs from 1 to 127.
     `f` is 3/8 of the way from the normal velocity to 127, and `ff` is
     3/4 of the way. `p` is 3/8 of the way from the normal velocity to 1,
-    and `pp` is 3/4 of the way. A mark on a single note does the same
+    and `pp` is 3/4 of the way. `mp` is 3/16 of the way from the normal velocity to 1, half of `p`'s step. A mark on a single note does the same
     from the level in force at that note: 3/8 of the way for `<` and
     `>`, 3/4 for `<<` and `>>`. The result is rounded to the nearest
     whole velocity. Nothing reaches the limit, so `f` and `ff` stay
     apart on a track whose normal velocity is high.
 
-    | Normal velocity | `pp` | `p` | `mf` | `f` | `ff` |
-    |---|---|---|---|---|---|
-    | 64 | 17 | 40 | 64 | 88 | 111 |
-    | 90 | 23 | 57 | 90 | 104 | 118 |
-    | 100 | 26 | 63 | 100 | 110 | 120 |
+    | Normal velocity | `pp` | `p` | `mp` | `mf` | `f` | `ff` |
+    |---|---|---|---|---|---|---|
+    | 64 | 17 | 40 | 52 | 64 | 88 | 111 |
+    | 90 | 23 | 57 | 73 | 90 | 104 | 118 |
+    | 100 | 26 | 63 | 81 | 100 | 110 | 120 |
 
     Worked for a normal velocity of 100: the room above is 127 − 100 =
     27, so `f` is 100 + 3/8 × 27 = 110 and `ff` is 100 + 3/4 × 27 = 120;
-    the room below is 100 − 1 = 99, so `p` is 100 − 3/8 × 99 = 63 and
-    `pp` is 100 − 3/4 × 99 = 26. All of these are MIDI velocities.
+    the room below is 100 − 1 = 99, so `p` is 100 − 3/8 × 99 = 63,
+    `mp` is 100 − 3/16 × 99 = 81 and `pp` is 100 − 3/4 × 99 = 26. All of these are MIDI velocities.
   - **No loudness curve is applied.** The song and the player send
     velocities, and the studio configuration says nothing about how a
     device turns a velocity into loudness. That is the receiving
     device's business. *Decided (Jim, 11 Nov 2026).*
 - **Device timing**, optional and omitted when not needed: `retrigger_gap`
   (a stopgap that raises the 5 ms lead of a note off before the next note
-  on above its floor; Q11) and `settle_delay` (time for a quantizer's voltage to settle after
-  a note is sent). Both are durations in ms, sent as clock time where the
-  MIDI is sent, not in ticks: a device's response time does not change
-  with tempo (A-7). Omitted, each is 0 ms, a harmless default: no change
-  to the timing. More such device settings are expected as they are found.
+  on above its floor; Q11). It is a duration in ms, sent as clock time
+  where the MIDI is sent, not in ticks: a device's response time does not
+  change with tempo (A-7). Omitted, it is 0 ms, a harmless default: no
+  change to the timing. More such device settings are expected as they are found.
 - **Destinations** are the names cues use. A destination for Start, Stop
   and Continue needs only a port.
 - Staccato sounds for half the written duration, fixed in V1; it can move
@@ -1085,7 +1086,7 @@ word "wedge" is not used for them.
   halfway through a crescendo from `p` (40) to `f` (88) at a normal
   velocity of 64, the level is 64.
 - **The author writes the target.** A crescendo or diminuendo ends where
-  the next level mark begins (`pp`, `p`, `mf`, `f`, `ff`), which may be
+  the next level mark begins (`pp`, `p`, `mp`, `mf`, `f`, `ff`), which may be
   bars later (a crescendo over two bars is `<:w` for two bars, then the
   target level). A crescendo or diminuendo with no level written after
   it, or followed directly by another crescendo or diminuendo, is refused
@@ -1316,9 +1317,12 @@ gates on every note on, to be heard as **legato**?
 These are decisions to wait, not open questions. Each becomes its own
 OPEN_QUESTION when its design starts.
 
-- **Navigation marks** (D.C., coda and the like): a deferred capability.
+- **Navigation marks** (D.C., coda and the like): deferred (Jim, 15 Nov
+  2026). The song's structure is set in the user interface, and the
+  sections that result encode it.
 - **Pressure and pitch bend:** deferred. They need a focused discussion
-  of control tracks, cue tracks and continuous-value tracks.
+  of control tracks, cue tracks and continuous-value tracks. They come with a
+  MIDI record function if one is added; otherwise with `automation_control`.
 - **More functions** from Strudel (repeat a step, play a group faster,
   weights): can be added later as features. `/` and the `fit` functions
   cover them for now.
