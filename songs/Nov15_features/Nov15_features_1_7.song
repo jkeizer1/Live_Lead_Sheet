@@ -44,15 +44,14 @@ section "3 repeat signs" repeat 0
 
 # 4. EUCLID. Three hits spread over eight steps, then five over eight: Bjorklund's patterns
 #    (x..x..x. and x.xx.xx.). Listen: the Beat track.
-section "4 euclid" repeat 0
+section "4 euclid" repeat 4
   key C major  meter 4/4  tempo 120 beats/min
-#  line "Keys"  | I:w | I:w | I:w |
-   line "Bass"  | G2:euclid(3,8)  | A2:euclid(5,8)  | B2:euclid(6,8)  | 
-   line "Beat"  | C2:q / / /      | C2:q / / /      | C2:q / / /      |
+   line "Bass"  | G2:euclid(3,8)  |  C2:trp(q q q) / |
+   line "Beat"  | C2:q / / /      |  C2: / / /       |
 
 # 4. EUCLID. Three hits spread over eight steps, then five over eight: Bjorklund's patterns
 #    (x..x..x. and x.xx.xx.). Listen: the Beat track.
-section "4 euclid B" repeat 4
+section "4 euclid B" repeat 0
   key C major  meter 8/8  tempo 420 beats/min
    line "Keys"  |%2 I:w      | -8va V:w  %|%2 loco ii:w | V:w %|
    line "Bass"  | G3:q / / / | G2:euclid(3,8)                       |  G2:euclid(4,8)          |  G2:euclid(5,6)          |  G2:euclid(2,3)          | G2:euclid(7,8)          | G2:euclid(8,8) |  r:w |       
@@ -81,8 +80,16 @@ section "6 dynamic levels" repeat 0
 section "6b crescendo diminuendo" repeat 0
   key C major  meter 4/4  tempo 100 beats/min
   line "Keys"  | I:w | / | / | / | / | / | / | / |
-  line "Keys"  dynamics  | p:w | <:w | r:w | f:w | >:w | r:w | p:w | mf:w |
-  line "Bass"  | C2:w | / | / | / | / | / | / | / |
+  line "Keys"  dynamics  | pp:w | <:w | r:w | f:w | >:w | r:w | p:w | mf:w |
+  line "Bass"            | C2:w    | / |   / | / | / | / | / | / |
+  line "Bass"  dynamics  | pp:w    | <:w | r:w | f:w | >:w | r:w | p:w | mf:w |
+
+# 6b2. CRESCENDO AND DIMINUENDO. p, then a crescendo over two bars to f, then a diminuendo over
+#     two bars to p, then mf. The < and > end where the next level starts.
+section "6b2crescendo diminuendo" repeat 0
+  key C major  meter 4/4  tempo 100 beats/min
+   line "Bass"            | C2:w    | / |   / | / | / | / | / | / |
+   line "Bass"  dynamics  | pp:w    | <:w | r:w | f:w | >:w | r:w | p:w | mf:w |
 
 # 6c. ACCENT UNDER p. The studio's accent (velocity 100) is absolute: the first chord in the
 #     bar is loud though the line says p. The next bar's < marks are softer than p.

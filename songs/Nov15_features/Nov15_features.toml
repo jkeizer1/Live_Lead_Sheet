@@ -29,12 +29,6 @@ port = "FH-2 MIDI 1"
 direction = "receive"
 
 [[port]]
-id = "midi-through-rcv"
-client = "Midi Through"
-port = "Midi Through Port-0"
-direction = "receive"
-
-[[port]]
 id = "fh-2"
 client = "FH-2"
 port = "FH-2 MIDI 1"
@@ -44,12 +38,6 @@ direction = "send"
 id = "lead-sheet-clock"
 client = "Lead Sheet"
 port = "Clock"
-direction = "send"
-
-[[port]]
-id = "midi-through"
-client = "Midi Through"
-port = "Midi Through Port-0"
 direction = "send"
 
 [[port]]
@@ -90,18 +78,6 @@ from = "lead-sheet-clock"
 to = "fh-2-rcv"
 channels = "all"
 messages = ["clock", "transport"]
-
-[[route]]
-from = "fh-2"
-to = "midi-through-rcv"
-channels = "all"
-messages = "all"
-
-[[route]]
-from = "midi-through"
-to = "fh-2-rcv"
-channels = "all"
-messages = "all"
 
 [[route]]
 from = "lead-sheet-beat-pulse"

@@ -13,11 +13,12 @@ track "Clock"
 track "Keys"
   port "Harmony"  channel 1
   velocity normal 64  accent 100
-  octave_offset 1 octaves
+  octave_offset -1 octaves
 
 track "Bass"
   port "Bass"  channel 2
   velocity normal 90  accent 115
+  octave_offset 1 octaves
 
 track "Beat"
   port "Beat pulse"  channel 15

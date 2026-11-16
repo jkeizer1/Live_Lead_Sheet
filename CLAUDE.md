@@ -112,7 +112,11 @@ code only in adapters), but do not build them.
   OPEN_QUESTION to "Qn (CLOSED, Jim, date)", so a scan finds only what is
   still open, and state the conclusion plainly in the block, under its
   status. A recommendation of mine is not a conclusion until Jim has
-  confirmed it.
+  confirmed it. Closing a question may require a specification or other content 
+  change in the /docs various .md files; those specifications and annotations will
+  be updated and DO NOT Date Time Stamp and state "decided by Jim" in the
+  content of specificaitons; the specifications and text are to survive the project
+  and to be read for all time without knowledge of decision history. Add no clutter.
 - **Carrying a conclusion into the specifications is done together, one
   document at a time.** After a question is closed, Claude does not edit
   any specification on its own. It lists in chat each document that may be
