@@ -59,5 +59,6 @@ not settled, and the entry says what, with a recommendation.
 **JIm to update:** 
 For you to edit, in Song Notation. Two examples still show the old wording:
 
-Line 283: charleston.rhythm line 3: bar 1 is short by an eighth note. Add e or er. would become charleston.rhythm line 3: bar 1 is 4/4 and short by an eighth note. Add e or er.
-Line 662: line 34: line "Keys": bar 7 is short by a quarter note would become line 34: line "Keys": bar 7 is 4/4 and short by a quarter note.
+Line 283: charleston.rhythm line 3: bar 1 is short by an eighth note. Add e or er. would become charleston.rhythm line 3: bar 1 is 4/4 and short by an eighth note. Add e or er. ***DONE***
+
+Line 662: line 34: line "Keys": bar 7 is short by a quarter note would become line 34: line "Keys": bar 7 is 4/4 and short by a quarter note.***DONE***

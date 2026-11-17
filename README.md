@@ -27,7 +27,7 @@ Every song and studio that a test uses (the unit tests, the integration tests an
 the test that reads it (`song_file/`, `studio_file/`, `sample_source/`,
 `legato_mark/`, `note_spelling/`, `lilypond_export/`, `song_notation_test/`,
 `count_in_and_verse/`, `chord_inversion/`, `layer_merge/`, `dynamics/`,
-`octave_annotation/`, `tempo_change/`, `meter_control/`, `tempo_marks/`, `minor_key/`, `progression_library/`). Each file starts with two comment lines: which test reads
+`octave_annotation/`, `tempo_change/`, `meter_control/`, `tempo_marks/`, `minor_key/`, `progression_library/`, `function_form/`). Each file starts with two comment lines: which test reads
 it, what case it is, and for a bad file, what the loader must say. A test checks
 exactly what its file says, so edit a copy in `songs/` to experiment, not the
 canonical file.

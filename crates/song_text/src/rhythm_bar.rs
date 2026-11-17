@@ -76,9 +76,13 @@ struct WrittenLength {
 /// a line goes on over (in a group it is the written value, before the group
 /// squeezes it, so the element after `trp (C4:q D4 E4)` is a plain quarter,
 /// Song Notation, section 4); and the octave annotation in force.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LineCarry {
     written: Option<WrittenLength>,
+    /// The function (`trp(q q q)`) the last element wrote in place of a
+    /// length, as written. An element that writes no length plays it again
+    /// (Song Notation, section 3, "Repeating"); a length written clears it.
+    function_text: Option<String>,
     /// `+8va` is 1, `-8va` is -1, `loco` is 0, until the next annotation.
     octave_shift_octaves: i8,
 }
@@ -90,6 +94,7 @@ impl LineCarry {
     pub fn start_of_line() -> LineCarry {
         LineCarry {
             written: None,
+            function_text: None,
             octave_shift_octaves: 0,
         }
     }
@@ -166,22 +171,26 @@ pub fn parse_bar(
             }
             return parse_euclid_bar(&mut cursor, bar_number, bar_length_ticks);
         }
-        if cursor.starts_with("trp") || cursor.starts_with("fit") {
-            let (group_length, inner): (GroupLength, Vec<WrittenElement>) =
-                parse_group(&mut cursor, bar_length_ticks, notation, carry)?;
-            let natural_subticks: u64 = inner.iter().map(|element| element.length_subticks).sum();
-            let group_subticks: u64 = match group_length {
-                GroupLength::TwoThirds => {
-                    if !(natural_subticks * 2).is_multiple_of(3) {
-                        return Err(format!(
-                            "bar {bar_number}: this trp group cannot be divided into whole \
-                             parts. Use fitH(...) or fitQ(...) to say how long it should be"
-                        ));
-                    }
-                    natural_subticks * 2 / 3
-                }
-                GroupLength::Fixed { length_ticks } => length_ticks * SUBTICKS_PER_TICK,
+        let function: Option<(GroupLength, Vec<WrittenElement>)> =
+            if notation == BarNotation::SongLine {
+                parse_song_function(&mut cursor, bar_length_ticks, carry)?
+            } else {
+                None
             };
+        let group: Option<(GroupLength, Vec<WrittenElement>)> = if function.is_some() {
+            function
+        } else if cursor.starts_with("trp") || cursor.starts_with("fit") {
+            Some(parse_standalone_group(
+                &mut cursor,
+                bar_length_ticks,
+                notation,
+                carry,
+            )?)
+        } else {
+            None
+        };
+        if let Some((group_length, inner)) = group {
+            let group_subticks: u64 = group_length_subticks(group_length, &inner, bar_number)?;
             placed.extend(place(
                 position_subticks,
                 group_subticks,
@@ -236,6 +245,51 @@ pub fn parse_bar(
         ));
     }
     Ok(placed)
+}
+
+/// A group written as an element of its own: `trp(q q q)` in a rhythm,
+/// `trp(F2:q A2:q C2:q)` on a song line, where each element names what it plays.
+fn parse_standalone_group(
+    cursor: &mut Cursor,
+    bar_length_ticks: u64,
+    notation: BarNotation,
+    carry: &mut LineCarry,
+) -> Result<(GroupLength, Vec<WrittenElement>), String> {
+    let group_start_position: usize = cursor.position;
+    let parsed: (GroupLength, Vec<WrittenElement>) =
+        parse_group(cursor, bar_length_ticks, notation, false, carry)?;
+    if notation == BarNotation::SongLine {
+        // A group that holds its own notes is the function the next `/`
+        // plays again (Song Notation, section 3, "Repeating").
+        carry.function_text = Some(
+            cursor.characters[group_start_position..cursor.position]
+                .iter()
+                .collect(),
+        );
+    }
+    Ok(parsed)
+}
+
+/// How long a group plays, in subticks: `trp` is 2/3 of its written
+/// lengths; the `fit` functions have a length of their own.
+fn group_length_subticks(
+    group_length: GroupLength,
+    inner: &[WrittenElement],
+    bar_number: usize,
+) -> Result<u64, String> {
+    let natural_subticks: u64 = inner.iter().map(|element| element.length_subticks).sum();
+    match group_length {
+        GroupLength::TwoThirds => {
+            if !(natural_subticks * 2).is_multiple_of(3) {
+                return Err(format!(
+                    "bar {bar_number}: this trp group cannot be divided into whole \
+                     parts. Use fitH(...) or fitQ(...) to say how long it should be"
+                ));
+            }
+            Ok(natural_subticks * 2 / 3)
+        }
+        GroupLength::Fixed { length_ticks } => Ok(length_ticks * SUBTICKS_PER_TICK),
+    }
 }
 
 /// `C2:euclid(3,8)>` or `:euclid(3,8)`: hits spread over the steps of the
@@ -584,38 +638,238 @@ fn place(
     Ok(result)
 }
 
+/// The function names a song line may write after the colon.
+const FUNCTION_NAMES: [&str; 6] = ["trp", "fitQ", "fitE", "fitH", "fitW", "fitBar"];
+
+/// A song line's element whose length is a function: `C2:trp(q q q)`,
+/// `I:fitBar(q e e h)>`, `:trp(q r q)`; or an element that writes no length
+/// while the line's last length was a function (`/`, `D2`), which plays the
+/// function again. What is written before the colon plays on every sounding
+/// element the function gives; marks after the `)` apply to each of them.
+/// `None` when the element is an ordinary one, left for the ordinary parser
+/// (which also reports any mistake in it).
+fn parse_song_function(
+    cursor: &mut Cursor,
+    bar_length_ticks: u64,
+    carry: &mut LineCarry,
+) -> Result<Option<(GroupLength, Vec<WrittenElement>)>, String> {
+    // A group standing alone (`trp(F2:q A2:q C2:q)`) is no function form:
+    // the group parser reads it.
+    if cursor.starts_with("trp") || cursor.starts_with("fit") {
+        return Ok(None);
+    }
+    let start_position: usize = cursor.position;
+    let element_text: String = cursor.element_text();
+    let Ok(contents) = parse_song_contents(cursor, &element_text) else {
+        cursor.position = start_position;
+        return Ok(None);
+    };
+    if cursor.peek() == Some(':') {
+        cursor.next();
+    }
+    let mut written_here: bool = true;
+    let function_text: String = if let Some(text) = take_function_text(cursor)? {
+        text
+    } else if matches!(parse_written_length(cursor), Ok(None)) {
+        written_here = false;
+        // No length written: the function before it plays again.
+        let Some(text) = carry.function_text.clone() else {
+            cursor.position = start_position;
+            return Ok(None);
+        };
+        text
+    } else {
+        cursor.position = start_position;
+        return Ok(None);
+    };
+
+    let mut function_cursor: Cursor = Cursor::new(&function_text);
+    // The function is read on its own, so a length left off inside it is the
+    // one before it in the function, never the line's.
+    let (group_length, lengths): (GroupLength, Vec<WrittenElement>) = parse_group(
+        &mut function_cursor,
+        bar_length_ticks,
+        BarNotation::SongLine,
+        true,
+        &mut LineCarry::start_of_line(),
+    )?;
+    // A group played again keeps the marks it was written with; a function
+    // written after a colon takes its marks after the ).
+    if written_here
+        && lengths.iter().any(|length: &WrittenElement| {
+            length.marks != ElementMarks::NONE || length.tied_to_next
+        })
+    {
+        return Err(format!(
+            "\"{function_text}\": write marks and ties after the ), where they apply to every \
+             note the function gives, e.g. C2:trp(q q q)>"
+        ));
+    }
+
+    let marks: ElementMarks = parse_marks(cursor)?;
+    if cursor.peek() == Some('~') {
+        return Err(String::from(
+            "a tie cannot follow a function. Tie notes one by one if you need one",
+        ));
+    }
+    match cursor.peek() {
+        None => {}
+        Some(character) if character.is_whitespace() => {}
+        Some(character) => {
+            return Err(format!(
+                "'{character}' after the function \"{function_text}\". Write marks right after \
+                 the ), then a space"
+            ));
+        }
+    }
+    let Some(elements) = give_function_its_contents(lengths, contents, marks)? else {
+        if written_here {
+            return Err(format!(
+                "every element of {function_text} names what it plays, so what is before the \
+                 colon plays nothing. Write the function alone, e.g. trp(F2:q A2:q C2:q)"
+            ));
+        }
+        // Only `/` plays such a group again; a note with no length after it
+        // is an ordinary element with the carried length.
+        cursor.position = start_position;
+        carry.function_text = None;
+        return Ok(None);
+    };
+    carry.function_text = Some(function_text);
+    Ok(Some((group_length, elements)))
+}
+
+/// What each element of a function plays. An element that names what it
+/// plays keeps it; one that gives only a length plays `contents`, what is
+/// before the colon, and takes `marks` after the `)`. `None` when every
+/// element names its own and `contents` has nothing left to play.
+fn give_function_its_contents(
+    lengths: Vec<WrittenElement>,
+    contents: WrittenContents,
+    marks: ElementMarks,
+) -> Result<Option<Vec<WrittenElement>>, String> {
+    let outer_is_same: bool = matches!(contents, WrittenContents::Same);
+    let (rest_everywhere, contents_text, from_source): (bool, Option<String>, bool) = match contents
+    {
+        WrittenContents::Rest => (true, None, false),
+        WrittenContents::Same => (false, None, false),
+        WrittenContents::FromSource => (false, None, true),
+        WrittenContents::Text(text) => (false, Some(text), false),
+    };
+    if rest_everywhere {
+        check_rest(ElementKind::Rest, marks, false)?;
+    }
+    let plays_own = |element: &WrittenElement| -> bool {
+        element.contents_text.is_some() || element.from_source
+    };
+    let takes_outer: bool = lengths.iter().any(|element: &WrittenElement| {
+        element.kind == ElementKind::Sounding && !plays_own(element)
+    });
+    if !takes_outer && !rest_everywhere && !outer_is_same {
+        return Ok(None);
+    }
+    Ok(Some(
+        lengths
+            .into_iter()
+            .map(|length: WrittenElement| {
+                if rest_everywhere || length.kind == ElementKind::Rest {
+                    WrittenElement {
+                        kind: ElementKind::Rest,
+                        marks: ElementMarks::NONE,
+                        contents_text: None,
+                        from_source: false,
+                        ..length
+                    }
+                } else if plays_own(&length) {
+                    WrittenElement {
+                        marks: if marks == ElementMarks::NONE {
+                            length.marks
+                        } else {
+                            marks
+                        },
+                        ..length
+                    }
+                } else {
+                    WrittenElement {
+                        marks,
+                        contents_text: contents_text.clone(),
+                        from_source,
+                        ..length
+                    }
+                }
+            })
+            .collect(),
+    ))
+}
+
+/// `trp(q q q)` at the cursor, as written, parentheses included; the cursor
+/// moves past the `)`. `None` when no function name and `(` stand here.
+fn take_function_text(cursor: &mut Cursor) -> Result<Option<String>, String> {
+    let mut name_length: usize = 0;
+    while cursor
+        .characters
+        .get(cursor.position + name_length)
+        .is_some_and(char::is_ascii_alphabetic)
+    {
+        name_length += 1;
+    }
+    let opens: bool = cursor.characters.get(cursor.position + name_length) == Some(&'(');
+    if name_length < 2 || !opens {
+        return Ok(None);
+    }
+    let name: String = cursor.characters[cursor.position..cursor.position + name_length]
+        .iter()
+        .collect();
+    if !FUNCTION_NAMES.contains(&name.as_str()) {
+        return Err(format!(
+            "\"{name}\" is not a function. Use trp, fitQ, fitE, fitH, fitW or fitBar, \
+             e.g. C2:trp(q q q)"
+        ));
+    }
+    let mut text: String = String::new();
+    loop {
+        match cursor.next() {
+            None => {
+                return Err(format!("the function {name}(...) is missing its closing )"));
+            }
+            Some(')') => {
+                text.push(')');
+                return Ok(Some(text));
+            }
+            Some(character) => text.push(character),
+        }
+    }
+}
+
+/// The group a name stands for: `trp` or one of the `fit` functions.
+fn group_length_named(name: &str, bar_length_ticks: u64) -> Result<GroupLength, String> {
+    let fixed = |length_ticks: u64| -> Result<GroupLength, String> {
+        Ok(GroupLength::Fixed { length_ticks })
+    };
+    match name {
+        "trp" => Ok(GroupLength::TwoThirds),
+        "fitQ" => fixed(TICKS_PER_QUARTER_NOTE),
+        "fitE" => fixed(TICKS_PER_QUARTER_NOTE / 2),
+        "fitH" => fixed(TICKS_PER_WHOLE_NOTE / 2),
+        "fitW" => fixed(TICKS_PER_WHOLE_NOTE),
+        "fitBar" => fixed(bar_length_ticks),
+        _ => Err(format!(
+            "\"{name}\" is not a group. Use trp, fitQ, fitE, fitH, fitW or fitBar, \
+             e.g. trp (q q q)"
+        )),
+    }
+}
+
 /// `trp (...)`, `fitQ(...)`, `fitE`, `fitH`, `fitW`, `fitBar`.
 fn parse_group(
     cursor: &mut Cursor,
     bar_length_ticks: u64,
     notation: BarNotation,
+    bare_lengths: bool,
     carry: &mut LineCarry,
 ) -> Result<(GroupLength, Vec<WrittenElement>), String> {
     let name: String = cursor.take_while(char::is_ascii_alphabetic);
-    let group_length: GroupLength = match name.as_str() {
-        "trp" => GroupLength::TwoThirds,
-        "fitQ" => GroupLength::Fixed {
-            length_ticks: TICKS_PER_QUARTER_NOTE,
-        },
-        "fitE" => GroupLength::Fixed {
-            length_ticks: TICKS_PER_QUARTER_NOTE / 2,
-        },
-        "fitH" => GroupLength::Fixed {
-            length_ticks: TICKS_PER_WHOLE_NOTE / 2,
-        },
-        "fitW" => GroupLength::Fixed {
-            length_ticks: TICKS_PER_WHOLE_NOTE,
-        },
-        "fitBar" => GroupLength::Fixed {
-            length_ticks: bar_length_ticks,
-        },
-        _ => {
-            return Err(format!(
-                "\"{name}\" is not a group. Use trp, fitQ, fitE, fitH, fitW or fitBar, \
-                 e.g. trp (q q q)"
-            ));
-        }
-    };
+    let group_length: GroupLength = group_length_named(&name, bar_length_ticks)?;
     cursor.skip_whitespace();
     if cursor.next() != Some('(') {
         return Err(format!(
@@ -640,7 +894,44 @@ fn parse_group(
                          inner group as separate elements"
                     ));
                 }
-                inner.push(parse_element(cursor, notation, carry)?);
+                // A bare `r` inside the parentheses is a rest as long as the
+                // element before it: `trp(q r q)` (Song Notation, section 3).
+                let bare_rest: bool = cursor.peek() == Some('r')
+                    && cursor
+                        .peek_second()
+                        .is_none_or(|after: char| after.is_whitespace() || after == ')');
+                if bare_rest && (notation == BarNotation::Rhythm || bare_lengths) {
+                    let Some(previous_length_subticks) = inner
+                        .last()
+                        .map(|element: &WrittenElement| element.length_subticks)
+                    else {
+                        return Err(format!(
+                            "{name}(r ...) starts with a rest that has no length. Write the \
+                             length first, e.g. {name}(qr q q)"
+                        ));
+                    };
+                    cursor.next();
+                    inner.push(WrittenElement {
+                        length_subticks: previous_length_subticks,
+                        kind: ElementKind::Rest,
+                        marks: ElementMarks::NONE,
+                        tied_to_next: false,
+                        contents_text: None,
+                        from_source: false,
+                    });
+                    continue;
+                }
+                // In a function after a colon (`C2:trp(q E2:q q)`) an element
+                // may be a bare length: it plays what is before the colon.
+                let bare_length: bool = bare_lengths
+                    && cursor
+                        .peek()
+                        .is_some_and(|first: char| "whqest".contains(first));
+                if bare_length {
+                    inner.push(parse_rhythm_element(cursor)?);
+                } else {
+                    inner.push(parse_element(cursor, notation, carry)?);
+                }
             }
         }
     }
@@ -712,6 +1003,7 @@ fn parse_dynamics_element(
     let length: WrittenLength = match written_length {
         Some(written) => {
             carry.written = Some(written);
+            carry.function_text = None;
             written
         }
         None => carry.written.ok_or_else(|| {
@@ -850,6 +1142,7 @@ fn parse_song_element(
     let length: WrittenLength = match written_length {
         Some(written) => {
             carry.written = Some(written);
+            carry.function_text = None;
             written
         }
         None => carry.written.ok_or_else(|| {
@@ -1247,6 +1540,214 @@ mod tests {
 
     fn error_of(bar_text: &str) -> String {
         rhythm(bar_text).unwrap_err()
+    }
+
+    /// A bar as (start ticks, length ticks, kind, what it plays).
+    type PlacedBar = Vec<(u64, u64, ElementKind, Option<String>)>;
+
+    fn song_with_carry(bar_texts: &[&str]) -> Vec<PlacedBar> {
+        let mut carry: LineCarry = LineCarry::start_of_line();
+        bar_texts
+            .iter()
+            .map(|bar_text: &&str| {
+                parse_bar(bar_text, 1, four_four(), BarNotation::SongLine, &mut carry)
+                    .unwrap()
+                    .into_iter()
+                    .map(|element: BarElement| {
+                        (
+                            element.start_ticks,
+                            element.length_ticks,
+                            element.kind,
+                            element.contents_text,
+                        )
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_function_after_the_colon_plays_what_is_before_the_colon_on_each_hit() {
+        // trp(q q q): three in the time of a half note (10080 ticks), 3360 ticks each.
+        let bar: PlacedBar = song_with_carry(&["C2:trp(q q q) G2:q B2"]).remove(0);
+        let c2: Option<String> = Some(String::from("C2"));
+        assert_eq!(
+            bar,
+            vec![
+                (0, 3360, ElementKind::Sounding, c2.clone()),
+                (3360, 3360, ElementKind::Sounding, c2.clone()),
+                (6720, 3360, ElementKind::Sounding, c2),
+                (
+                    10_080,
+                    5040,
+                    ElementKind::Sounding,
+                    Some(String::from("G2"))
+                ),
+                (
+                    15_120,
+                    5040,
+                    ElementKind::Sounding,
+                    Some(String::from("B2"))
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_function_may_hold_rests_and_takes_marks_after_the_bracket() {
+        let bar: Vec<BarElement> = song("C2:trp(q r q)> D2:h").unwrap();
+        assert_eq!(bar[1].kind, ElementKind::Rest);
+        assert_eq!(bar[0].marks.accent(), AccentLevel::Accent);
+        assert_eq!(bar[2].marks.accent(), AccentLevel::Accent);
+    }
+
+    #[test]
+    fn a_slash_or_a_note_with_no_length_plays_the_function_again() {
+        // Song Notation, "Repeating": two triplets fill the bar, with D2 in the second.
+        let slash: Vec<PlacedBar> = song_with_carry(&["C2:trp(q q q) /"]);
+        assert_eq!(slash[0].len(), 6);
+        assert_eq!(slash[0][3].0, 10_080);
+        let note: Vec<PlacedBar> = song_with_carry(&["C2:trp(q q q) D2"]);
+        assert_eq!(note[0].len(), 6);
+        assert_eq!(note[0][3].3, Some(String::from("D2")));
+    }
+
+    #[test]
+    fn a_written_length_ends_the_repeating_function() {
+        let bars: Vec<PlacedBar> = song_with_carry(&["C2:trp(q q q) D2:q E2", "F2 G2 A2 B2"]);
+        // After D2:q the length is a plain quarter: E2 and then the next bar's F2.
+        assert_eq!(bars[0].len(), 5);
+        assert_eq!(bars[1][0].1, 5040);
+    }
+
+    #[test]
+    fn the_fit_functions_fill_their_length_on_a_song_line() {
+        // Five eighths squeezed into one quarter (5040 ticks), then three quarters.
+        let bar: Vec<PlacedBar> = song_with_carry(&["C2:fitQ(e e e e e) D2:q E2 F2"]);
+        assert_eq!(bar[0].len(), 8);
+        assert_eq!(bar[0][1].0, 1008);
+        let whole_bar: Vec<BarElement> = song("C2:fitBar(q e e h)").unwrap();
+        assert_eq!(whole_bar.len(), 4);
+        assert_eq!(
+            whole_bar
+                .iter()
+                .map(|element| element.length_ticks)
+                .sum::<u64>(),
+            20_160
+        );
+    }
+
+    #[test]
+    fn a_function_from_the_source_and_on_a_chord_and_mistakes_in_it() {
+        let from_source: Vec<BarElement> = song(":trp(q q q) :h").unwrap();
+        assert!(from_source[0].from_source);
+        let chord: Vec<BarElement> = song("I:trp(q q q) /").unwrap();
+        assert_eq!(chord[0].contents_text, Some(String::from("I")));
+        assert!(song("C2:trp(q q q) r:h").is_ok());
+        assert!(
+            song("C2:trp(q> q q) D2:h")
+                .unwrap_err()
+                .contains("after the )")
+        );
+        assert!(song("C2:trp(q q q)~ D2:h").unwrap_err().contains("tie"));
+        assert!(song("C2:trp(q q q D2:h").unwrap_err().contains("closing )"));
+        assert!(
+            song("C2:wobble(q q q) D2:h")
+                .unwrap_err()
+                .contains("not a function")
+        );
+    }
+
+    /// What each element of a bar plays, in order.
+    fn plays(bar: &PlacedBar) -> Vec<Option<&str>> {
+        bar.iter()
+            .map(|element| element.3.as_deref())
+            .collect::<Vec<Option<&str>>>()
+    }
+
+    #[test]
+    fn a_group_on_a_song_line_may_name_a_note_for_each_element() {
+        // trp: three quarters in the time of a half note.
+        let bar: PlacedBar = song_with_carry(&["trp(F2:q A2:q C2:q) D2:h"]).remove(0);
+        assert_eq!(
+            plays(&bar),
+            vec![Some("F2"), Some("A2"), Some("C2"), Some("D2")]
+        );
+        assert_eq!(bar[1].0, 3360);
+        assert_eq!(bar[3].0, 10_080);
+        // A length left off inside is the one before it; the proportions hold.
+        let proportions: PlacedBar = song_with_carry(&["fitH(F2:q A2 C2:h) G2:h"]).remove(0);
+        assert_eq!(
+            proportions
+                .iter()
+                .map(|element| (element.0, element.1))
+                .collect::<Vec<(u64, u64)>>(),
+            vec![(0, 2520), (2520, 2520), (5040, 5040), (10_080, 10_080)]
+        );
+        // fitQ with eighths: three in one quarter, 1680 ticks each.
+        let fit: PlacedBar = song_with_carry(&["fitQ(F2:e A2:e C2:e) G2:q A2:h"]).remove(0);
+        assert_eq!(fit[2].0, 3360);
+        assert_eq!(fit[3].0, 5040);
+        // A chord and a rest inside.
+        let chords: PlacedBar = song_with_carry(&["trp(I:q r:q V:q) IV:h"]).remove(0);
+        assert_eq!(chords[1].2, ElementKind::Rest);
+        assert_eq!(chords[2].3, Some(String::from("V")));
+    }
+
+    #[test]
+    fn a_function_after_a_colon_may_mix_bare_lengths_and_notes() {
+        let bar: PlacedBar = song_with_carry(&["C2:trp(q E2:q q) G2:h"]).remove(0);
+        assert_eq!(
+            plays(&bar),
+            vec![Some("C2"), Some("E2"), Some("C2"), Some("G2")]
+        );
+        let accented: Vec<BarElement> = song("C2:trp(q E2:q q)> G2:h").unwrap();
+        assert!(accented[1].marks != ElementMarks::NONE);
+        assert!(
+            song("C2:trp(q E2:q> q) G2:h")
+                .unwrap_err()
+                .contains("after the )")
+        );
+    }
+
+    #[test]
+    fn a_slash_plays_a_group_again_with_its_notes() {
+        let bars: Vec<PlacedBar> = song_with_carry(&["trp(F2:q A2:q C2:q) /"]);
+        assert_eq!(
+            plays(&bars[0]),
+            vec![
+                Some("F2"),
+                Some("A2"),
+                Some("C2"),
+                Some("F2"),
+                Some("A2"),
+                Some("C2")
+            ]
+        );
+        assert_eq!(bars[0][3].0, 10_080);
+    }
+
+    #[test]
+    fn mistakes_in_a_group_that_names_notes() {
+        // Nothing for what is before the colon to play.
+        assert!(
+            song("C2:trp(F2:q A2:q C2:q) G2:h")
+                .unwrap_err()
+                .contains("plays nothing")
+        );
+        // A note with no length after a group that holds its own notes is an
+        // ordinary element with the carried length (a quarter), not a replay.
+        let after: PlacedBar = song_with_carry(&["trp(F2:q A2:q C2:q) D2 E2"]).remove(0);
+        assert_eq!(after[3].1, 5040);
+        assert_eq!(after.len(), 5);
+        // A bare length with nothing before the colon to play.
+        assert!(
+            song("trp(q q q) D2:h")
+                .unwrap_err()
+                .contains("what it plays first")
+        );
+        // The first element writes its own length.
+        assert!(song("trp(F2 A2:q C2:q) D2:h").is_err());
     }
 
     #[test]

@@ -182,9 +182,9 @@ its parameters in parentheses, with no space before the `(`: `trp(q q q)`,
 
 | Function | You give it | It plays | Example |
 |---|---|---|---|
-| `trp` | lengths | The lengths three in the time of two | `trp(q q q)`: three quarters in the time of a half note |
-| `fitQ`, `fitE`, `fitH`, `fitW` | lengths | The lengths squeezed or stretched into one quarter, eighth, half or whole note, keeping their proportions | `fitQ(e e e e e)`: five equal eighths in one quarter |
-| `fitBar` | lengths | The lengths fitted into the whole bar, keeping their proportions | `fitBar(q e e h)` |
+| `trp` | lengths, each with what it plays if it plays its own | The lengths three in the time of two | `trp(q q q)`: three quarters in the time of a half note |
+| `fitQ`, `fitE`, `fitH`, `fitW` | lengths, each with what it plays if it plays its own | The lengths squeezed or stretched into one quarter, eighth, half or whole note, keeping their proportions | `fitQ(e e e e e)`: five equal eighths in one quarter |
+| `fitBar` | lengths, each with what it plays if it plays its own | The lengths fitted into the whole bar, keeping their proportions | `fitBar(q e e h)` |
 | `euclid` | hits, steps | The hits spread as evenly as possible over the steps, the first step a hit, the other steps rests; the steps fill the bar | `euclid(3,8)`: hits on steps 1, 4 and 7 of 8 |
 
 A triplet is `fitH(q q q)`, which `trp(q q q)` writes in short. A `fit` over
@@ -203,11 +203,37 @@ gives, in the order set out under "Order inside an element". On a line that
 follows a `sample_source`, write only the colon and the function:
 `:trp(q q q)` takes what each element plays from the source.
 
+**Notes inside a function.** An element inside the parentheses may say what
+it plays as well as its length, written as on any song line: what it plays,
+a colon, the length. `trp(F2:q A2:q C2:q)` plays F2, A2 and C2, three
+quarters in the time of a half note. The function fits the lengths as it
+always does, keeping their proportions, so `trp(F2:q A2:e C2:e)` keeps the
+quarter twice as long as each eighth. A length left off inside the
+parentheses is the one before it, and the first element writes its own. The
+elements can be notes, chords or `r`, and the same works in `fitQ`, `fitE`,
+`fitH`, `fitW` and `fitBar`.
+
+Such a function stands as an element of its own, with nothing before it:
+`| trp(F2:q A2:q C2:q) D2:h |`. A function that fills the bar, such as
+`fitBar(C2:q D2:e E2:e F2:h)`, is the only thing in its bar, as `euclid` is.
+Marks written inside the parentheses on a single note are allowed here.
+
+A function may also mix the two ways. What is written before the colon plays
+on every element that gives only a length, and an element with its own note
+plays that: `C2:trp(q E2:q q)` plays C2, E2, C2. In this form marks and ties
+go after the `)`, where they apply to every note the function gives. If every
+element has its own note, nothing is left for what is before the colon, so
+write the function alone.
+
 **Repeating.** A length left off is the one before it, and `/` plays the
 previous element again. When the previous element is a function, the
-function plays again. In 4/4, `| C2:trp(q q q) / |` is two triplets, each in
-the time of a half note, which fills the bar. `| C2:trp(q q q) D2 |` is the
-same, with D2 in the second triplet.
+function plays again, with the notes it holds. In 4/4, `| C2:trp(q q q) / |`
+is two triplets, each in the time of a half note, which fills the bar.
+`| C2:trp(q q q) D2 |` is the same, with D2 in the second triplet.
+`| trp(F2:q A2:q C2:q) / |` is F2, A2, C2 twice. A function whose elements
+all have their own notes is played again only by `/`; a note with no length
+after it is an ordinary element and takes the length carried from before the
+function.
 
 **Ties.** `~` joins an element to the one after it into a single note of
 the combined duration. It may stand before a barline (here in the rhythm
@@ -281,7 +307,7 @@ part of it: where the accent falls (beat 1 in 4/4; beats 1 and 2 in 6/8)
 is written with `>`, so no meter has a rule of its own.
 
 Example message: `charleston.rhythm line 3: bar 1 is short by an eighth
-note. Add e or er.`
+note. Add e or er would become charleston.rhythm line 3: bar 1 is 4/4 and short by an eighth note.`
 
 *How it maps to the clock.* Every element's place is a whole number of
 ticks (1 tick = 1/5040 of a quarter note, D-7). The place of an element
@@ -461,7 +487,7 @@ and so what a receiving device must be able to do.
 | `clock_and_transport` | Timing Clock from Play to Stop, and Stop. Exactly one per song. Its output has a port but no channel, because Timing Clock, Start, Continue, Stop and Song Position Pointer carry no channel. | Yes |
 | `cue_control` | Phrase cues, placed in rhythm notation (below). | Yes |
 | `tempo_control` | Tempo changes inside a section, written as `tp` marks (below). | Yes |
-| `meter_control` | A repeating meter pattern for a section, written as `mp` (below). | Needed; not yet built |
+| `meter_control` | A repeating meter pattern for a section, written as `mp` (below). | Yes |
 | `musician_voice` | A part composed for a person to read and play, in the clef of that instrument. Sends no MIDI; drawn on its own staff, with marks as interpretation. | Deferred (Jim, 15 Nov 2026). It is written in the `.song` file and rendered; in the visual player it is a first-class track that can be focused and shown with a play head. The display details are settled with the UI. |
 | `automation_control` | Continuous curves sent as controllers (a filter sweep, a crescendo on a VCA). | Deferred (Jim, 15 Nov 2026) |
 
@@ -659,8 +685,7 @@ key changes, as standard notation requires.
   ```
 
   Bars are numbered along the whole line, and a message names the text
-  line the bar is on: `line 34: line "Keys": bar 7 is short by a quarter
-  note`.
+  line the bar is on: `line 34: line "Keys": bar 7 is 4/4 and short by a quarter note.`.
 
 ### Sample sources and uncoupled lines
 
@@ -960,16 +985,31 @@ destination "SQ-1"
     always relative.
   - The levels `pp`, `p`, `mp`, `f` and `ff` of a dynamics line are relative to
     the normal level too, and shift with it.
-  - **The numbers are a share of the room left** built for the marks on a note; 
-    the levels of the  `dynamics` line are not yet built*). A MIDI velocity runs
-    from 1 to 127.  `f` is 3/8 of the way from the normal velocity to 127, and `ff` is
-    3/4 of the way. `p` is 3/8 of the way from the normal velocity to 1,
-    and `pp` is 3/4 of the way. `mp` is 3/16 of the way from the normal 
-    velocity to 1, half of `p`'s step. A mark on a single note does the same
-    from the level in force at that note: 3/8 of the way for `<` and
-    `>`, 3/4 for `<<` and `>>`. The result is rounded to the nearest
-    whole velocity. Nothing reaches the limit, so `f` and `ff` stay
-    apart on a track whose normal velocity is high.
+  - **How loud each level and mark is.** A MIDI velocity runs from 1 to 127.
+    A louder level or mark moves the velocity a share of the way from the
+    starting velocity up to 127; a softer one moves it the same kind of share
+    down to 1. Because it is a share of the room that is left, nothing reaches
+    the limit, so `f` and `ff` stay apart even on a track whose normal
+    velocity is high. The result is rounded to the nearest whole velocity.
+
+    | Level on a dynamics line | Share of the way from the normal velocity |
+    |---|---|
+    | `ff` | 3/4 up to 127 |
+    | `f` | 3/8 up to 127 |
+    | `mp` | 3/16 down to 1 |
+    | `p` | 3/8 down to 1 |
+    | `pp` | 3/4 down to 1 |
+
+    | Mark on a single note | Share of the way from the level in force at that note |
+    |---|---|
+    | `>>` | 3/4 up to 127 |
+    | `>` | 3/8 up to 127 |
+    | `<` | 3/8 down to 1 |
+    | `<<` | 3/4 down to 1 |
+
+    `mf` is the normal velocity itself, and `mp` is half of `p`'s step. A
+    mark on a note starts from whatever level the dynamics line has set at
+    that point. The levels for three normal velocities:
 
     | Normal velocity | `pp` | `p` | `mp` | `mf` | `f` | `ff` |
     |---|---|---|---|---|---|---|
@@ -1190,8 +1230,7 @@ voice layer (`voice_layer 2 sample_source` with the layer 2 rhythm line).
   `marcato` are absolute overrides; `<` and `<<` draw nothing
   (`crates/vocabulary/src/midi_values.rs`,
   `crates/player/src/studio_configuration.rs`,
-  `crates/song_text/src/rhythm_bar.rs`). The levels of the `dynamics`
-  line are not built.
+  `crates/song_text/src/rhythm_bar.rs`).
 
 
 **Where the code lives.** The vocabulary crate holds the musical types

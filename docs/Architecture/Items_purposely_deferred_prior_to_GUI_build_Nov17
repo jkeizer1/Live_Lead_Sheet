@@ -1,0 +1,19 @@
+Audit: documented but not built
+
+Section 4 of Song Notation (the euclid and function notation) is now complete. Everything in the Nov 15 and Nov 16 lists is built, and the tests cover it, including meter_control, tempo marks and ramps, minor keys and the progression library loader.
+
+Letter chords (Am, Am/G) are not built; the loader refuses them with a message. The Nov 16 list marks them “not scheduled”.
+
+Progression library: Apply, the starter library file and the warning about applying a minor entry to a major song are not built.
+
+The ottava sign (8va) isn’t drawn on the staff; the notes move, but the sign doesn’t appear. The code notes this in spelled_line.rs.
+
+LilyPond export of minor keys is deferred to the end of the project.
+
+Cue control for devices like the SQ-1 (Q19, open question) is still undesigned.
+
+Deferred by your decision:
+ the musician_voice and automation_control tracks, true polymeter, navigation marks, pressure and pitch  bend, and more Strudel-style functions.
+
+Stale text in Song Notation: the meter_control row (line 464) still says “not yet built”, and lines 964 and 1194 say the dynamics line is not built, but both are built and tested. The two “Jim to update” message examples in Nov16_to_do.md also still need their wording change. Under your one-document-at-a-time rule I haven’t touched any of these.
+README path: the README gives the Nov 15 song path as songs/Nov15_features_1_7.song, but the file is in songs/Nov15_features/.

@@ -1,0 +1,30 @@
+# Canonical test song: crates/song_text/tests/function_form_plan.rs (the notes_* tests) reads this file and expects exactly this content.
+# One 4/4 bar per section, Bass only: functions that name their own notes (trp, fitQ, fitBar), a slash that plays one again, and a function that mixes bare lengths with notes.
+# To hear it:
+#   cargo run --release -p song_text --example song_play_test -- \
+#     songs_canonical/function_form/function_notes.song songs_canonical/function_form/function_form.studio
+song "Function notes cases"
+
+track "Clock"
+  type clock_and_transport
+
+track "Bass"
+  type mono_voice
+  clef bass
+  lead
+
+section "notes in a triplet"
+  key C major  meter 4/4  tempo 100 beats/min
+  line "Bass"  | trp(F2:q A2:q C2:q) D2:h |
+
+section "notes in a triplet, repeated by a slash"
+  line "Bass"  | trp(F2:q A2:q C2:q) / |
+
+section "bare lengths and notes mixed"
+  line "Bass"  | C2:trp(q E2:q q) G2:h |
+
+section "three eighths in a quarter"
+  line "Bass"  | fitQ(F2:e A2:e C2:e) G2:q A2:h |
+
+section "fitBar with four notes"
+  line "Bass"  | fitBar(C2:q D2:e E2:e F2:h) |

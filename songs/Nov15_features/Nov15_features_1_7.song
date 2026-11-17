@@ -3,6 +3,9 @@
 #   cargo run --release -p song_text --example song_play_test -- songs/Nov15_features/Nov15_features_1_7.song songs/Nov15_features/Nov15_features_1_7.studio
 # Keys is the chord instrument, Bass plays single notes, Beat plays the euclid rhythms.
 song "Nov 15 features 1 to 7"
+chord_numeral_standard key_dependent --- for minor keys; used to determine the root note
+#chord_numeral_standard major_referential
+
 
 track "Clock"
   type clock_and_transport
@@ -44,10 +47,26 @@ section "3 repeat signs" repeat 0
 
 # 4. EUCLID. Three hits spread over eight steps, then five over eight: Bjorklund's patterns
 #    (x..x..x. and x.xx.xx.). Listen: the Beat track.
-section "4 euclid" repeat 4
-  key C major  meter 4/4  tempo 120 beats/min
-   line "Bass"  | G2:euclid(3,8)  |  C2:trp(q q q) / |
-   line "Beat"  | C2:q / / /      |  C2: / / /       |
+#    minor dominant uses Eb
+section "4 F minor" repeat 2
+#  key C major  meter 4/4  tempo 7999 beats/min --- 8000 beats/min is too fast (rejected), 7999 bpm works.
+   key F minor  meter 4/4  tempo 140 beats/min --- 8000 beats/min is too fast (rejected), 7999 bpm works.
+#                             | Fm (F Ab C), Bb minor (Bb Db F)    |      Cm (C Eb G) Fm (F Ab C)   |
+   line "Keys" sample_source  | I              IV                  |      V           I             |
+   line "Keys"                | :h             :h                  |+8va  :h          :h            |
+   line "Bass"                | F2:trp(q q q)  G2:h                | C2:trp(q q q)    F2:q Ab1:q    |
+
+#   line "Beat"                | C2:q / / /      |  C2: / / C2:trp(e e e)   |
+
+# 4. EUCLID. Three hits spread over eight steps, then five over eight: Bjorklund's patterns
+#    (x..x..x. and x.xx.xx.). Listen: the Beat track.
+section "4 F Major" repeat 2
+#  key C major  meter 4/4  tempo 7999 beats/min --- 8000 beats/min is too fast (rejected), 7999 bpm works.
+   key F major  meter 4/4  tempo 140 beats/min --- 8000 beats/min is too fast (rejected), 7999 bpm works.
+   line "Keys" sample_source  | I  vi                     |      IV          vii°          |
+   line "Keys"                |  :w                       |+8va  :h :trp(q q q)            |
+   line "Bass"                | trp(F2:q A2:q C2:q)  D2:h | Bb2:trp(q q q)    E2:q C1:q    |
+#   line "Beat"               | C2:q / / /                |  C2: / / C2:trp(e e e)         |
 
 # 4. EUCLID. Three hits spread over eight steps, then five over eight: Bjorklund's patterns
 #    (x..x..x. and x.xx.xx.). Listen: the Beat track.

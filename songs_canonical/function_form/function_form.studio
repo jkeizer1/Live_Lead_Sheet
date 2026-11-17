@@ -1,0 +1,12 @@
+# Canonical test studio for function_form.song. Tests expect exactly this.
+studio "Function form studio"
+
+port "Clock"
+port "Bass"
+
+track "Clock"
+  port "Clock"
+
+track "Bass"
+  port "Bass"  channel 1
+  velocity normal 90  accent 115

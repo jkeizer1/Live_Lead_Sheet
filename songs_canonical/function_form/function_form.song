@@ -1,0 +1,24 @@
+# Canonical test song: crates/song_text/tests/function_form_plan.rs reads this file and expects exactly this content.
+# One 4/4 bar per section: Bass plays C2:trp(q q q) then G2:q B2:q (a triplet, then two quarters); then C2:trp(q q q) / (two triplets); then C2:trp(q r q)> D2:h (a rest in the triplet, accents).
+# To hear it:
+#   cargo run --release -p song_text --example song_play_test -- \
+#     songs_canonical/function_form/function_form.song songs_canonical/function_form/function_form.studio
+song "Function form cases"
+
+track "Clock"
+  type clock_and_transport
+
+track "Bass"
+  type mono_voice
+  clef bass
+  lead
+
+section "triplet then quarters"
+  key C major  meter 4/4  tempo 100 beats/min
+  line "Bass"  | C2:trp(q q q) G2:q B2:q |
+
+section "triplet repeated by a slash"
+  line "Bass"  | C2:trp(q q q) / |
+
+section "rest and accents"
+  line "Bass"  | C2:trp(q r q)> D2:h |
