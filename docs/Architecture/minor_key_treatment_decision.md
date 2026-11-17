@@ -1,6 +1,6 @@
 # Live Lead Sheet — Minor key treatment: decision points
 
-Revision 13 — 9 Nov 2026 (cross-references to Song Notation's Q12 removed from items 1 and 4)
+Revision 14 — 16 Nov 2026 (Conclusion section added)
 
 **Status: items 1 to 3 decided (9 Nov 2026); items 4 and 5 have OPEN_QUESTIONs (search for OPEN_QUESTION).** Minor keys are Song Notation
 Q12. Today `key C minor` is refused: `Mode` in `crates/vocabulary/src/key.rs`
@@ -9,6 +9,39 @@ scale (`semitones_above_tonic` in `crates/player/src/voicing.rs`). This
 note lists the decisions minor keys need, so they can be taken one at a
 time. Found while writing BWV 610 (C minor), which loads only with its
 key changed.
+
+## Conclusion
+
+Minor keys are supported, so that a song in any key loads. What follows
+sets the basis to build on; practice and testing may refine it.
+
+- **Keys.** A key is a tonic and either major or minor: twelve tonics,
+  each in both. `Mode` holds `Major` and `Minor` only. `key C minor` is
+  valid; `key D dorian` is not.
+- **Signature and spelling.** The signature follows from the tonic and
+  major or minor: a minor key takes its relative major's signature (C
+  minor: three flats). The raised 6th and 7th steps are written as
+  accidentals. Note spelling chooses flats or sharps from the key.
+- **Numerals in a minor key.** A song that uses chord numerals declares
+  its practice once, near the top: `chord_numeral_standard key_dependent`
+  or `chord_numeral_standard major_referential`. A minor song that uses
+  numerals and omits the line is refused with a message that says what to
+  add. A major song, and a song of letter chords only, need no line.
+- **Modes.** A mode is an annotation only: numerals count from the
+  declared key, and there is no mode keyword or song-level switch. The
+  annotation is the general one placed above the staff, a separate
+  feature.
+- **Chord libraries.** A library of numerals states its practice once,
+  in a `chord_numeral_standard` line at the top of the file, and is
+  refused without it. A library of letter chords needs none. One file
+  holds one style: numerals or letter chords, never both.
+- **Slash chords.** `Am/G` is a letter chord over a bass note, `V/V` is a
+  classical secondary chord, and the pop usage `V/2` is noted as an
+  alternative.
+
+Code, in order: `Mode::Minor` and `key C minor` in the song parser; the
+voicing's root for each numeral in minor, by the declared practice; note
+spelling and the LilyPond `\minor`; then libraries.
 
 **Jim's: Comment**
 - The BWV 610 score is written in E flat Major;
@@ -423,3 +456,4 @@ roots in minor), `note_spelling` (chord-note spelling, flats or sharps),
 - 9 Nov 2026, revision 11: every open question labelled OPEN_QUESTION with its context (five, in items 4 and 5); stale open remarks in items 1, 2 and 4 removed.
 - 9 Nov 2026, revision 12: the two mentions of Song Notation's Q12 (items 1 and 4) no longer say "open question" loosely; item 4 points to OPEN_QUESTION Q12 there.
 - 9 Nov 2026, revision 13: cross-references to Song Notation's Q12 removed from items 1 and 4; item 4 opens with what it is about.
+- 16 Nov 2026, revision 14: Conclusion section added near the top: keys as tonic plus major or minor, the numeral practice declaration, modes as annotation only, library rules, slash chords.

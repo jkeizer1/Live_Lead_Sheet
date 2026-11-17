@@ -187,7 +187,7 @@ pub fn parse_note_name(text: &str) -> Result<NoteName, String> {
     Ok(NoteName::new(letter, accidental))
 }
 
-/// `C major` → a key. Only major keys exist in V1.
+/// `C major` or `C minor` → a key.
 ///
 /// # Errors
 ///
@@ -196,9 +196,10 @@ pub fn parse_key(tonic_text: &str, mode_text: &str) -> Result<Key, String> {
     let tonic: NoteName = parse_note_name(tonic_text)?;
     match mode_text {
         "major" => Ok(Key::new(tonic, Mode::Major)),
+        "minor" => Ok(Key::new(tonic, Mode::Minor)),
         other => Err(format!(
-            "\"{other}\" is not a mode V1 plays. Write e.g. key C major; minor keys and modes \
-             are not designed yet"
+            "\"{other}\" is not a mode V1 plays. Write key C major or key C minor; a mode such \
+             as dorian is an annotation, not part of the key"
         )),
     }
 }
@@ -295,14 +296,15 @@ mod tests {
     }
 
     #[test]
-    fn keys_need_a_note_and_major() {
+    fn keys_need_a_note_and_major_or_minor() {
         assert_eq!(parse_key("C", "major").unwrap().to_string(), "C major");
         assert_eq!(parse_key("Bb", "major").unwrap().to_string(), "Bb major");
         assert!(
-            parse_key("C", "minor")
+            parse_key("C", "dorian")
                 .unwrap_err()
-                .contains("not designed")
+                .contains("not a mode V1 plays")
         );
+        assert_eq!(parse_key("C", "minor").unwrap().to_string(), "C minor");
         assert!(
             parse_key("X", "major")
                 .unwrap_err()

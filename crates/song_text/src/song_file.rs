@@ -5,10 +5,12 @@
 //! A file with any mistake does not load, not even partly (EFS-6.3): the
 //! result is the song or all the mistakes found, in line order.
 
+use vocabulary::bar_meters::BarMeters;
 use vocabulary::key::Key;
 use vocabulary::midi_values::{
     ControllerNumber, ControllerValue, NoteNumber, ProgramNumber, Velocity,
 };
+use vocabulary::numeral_standard::NumeralStandard;
 use vocabulary::score_length::ScoreLength;
 use vocabulary::song::{
     Clef, CueDefinition, CueDestination, CueMessage, Line, LineRole, Section, Song, SongError,
@@ -19,6 +21,7 @@ use vocabulary::ticks::TICKS_PER_QUARTER_NOTE;
 use vocabulary::time_signature::TimeSignature;
 
 use crate::contents_text::parse_key;
+use crate::meter_pattern::parse_meter_pattern;
 use crate::parse_error::ParseError;
 use crate::song_line::{BarsText, build_line};
 use crate::text_line::{Word, keyword_rest, parse_meter, quoted_prefix, without_comment, words};
@@ -131,6 +134,9 @@ impl WrittenTempo {
 struct Carried {
     key: Option<Key>,
     time_signature: Option<TimeSignature>,
+    /// The meter of every bar, so a section that omits `meter` carries a
+    /// meter pattern as well as a single meter.
+    bar_meters: Option<BarMeters>,
     /// The grouping goes with the meter it was written for.
     beat_grouping: Option<Vec<u8>>,
     tempo: Option<Tempo>,
@@ -176,6 +182,8 @@ struct SongReader<'a> {
     file_name: &'a str,
     errors: Vec<ParseError>,
     song_name: Option<(String, usize)>,
+    /// The `chord_numeral_standard` line, once read.
+    numeral_standard: Option<NumeralStandard>,
     tracks: Vec<Track>,
     /// Tracks that were written but are not usable, so their lines are not
     /// also reported.
@@ -200,6 +208,7 @@ pub fn parse_song(file_name: &str, text: &str) -> Result<Song, Vec<ParseError>> 
         file_name,
         errors: Vec::new(),
         song_name: None,
+        numeral_standard: None,
         tracks: Vec::new(),
         failed_track_names: Vec::new(),
         track: None,
@@ -226,6 +235,8 @@ impl SongReader<'_> {
     fn read_line(&mut self, line_number: usize, line: &str) {
         let result: Result<(), String> = if let Some(rest) = keyword_rest(line, "song") {
             self.start_song(line_number, rest)
+        } else if let Some(rest) = keyword_rest(line, "chord_numeral_standard") {
+            self.read_numeral_standard(rest)
         } else if let Some(rest) = keyword_rest(line, "track") {
             self.start_track(line_number, rest)
         } else if let Some(rest) = keyword_rest(line, "section") {
@@ -243,6 +254,28 @@ impl SongReader<'_> {
         if let Err(message) = result {
             self.report(line_number, message);
         }
+    }
+
+    /// `chord_numeral_standard key_dependent`, on the line after `song`.
+    fn read_numeral_standard(&mut self, rest: &str) -> Result<(), String> {
+        if self.song_name.is_none() || self.track.is_some() || !self.tracks.is_empty() {
+            return Err(String::from(
+                "write chord_numeral_standard on the line after song, before the first track",
+            ));
+        }
+        if self.numeral_standard.is_some() {
+            return Err(String::from(
+                "a second chord_numeral_standard line. A song has one",
+            ));
+        }
+        let standard: NumeralStandard = NumeralStandard::from_text(rest).ok_or_else(|| {
+            format!(
+                "\"{rest}\" is not a chord numeral standard. Write chord_numeral_standard \
+                 key_dependent or chord_numeral_standard major_referential"
+            )
+        })?;
+        self.numeral_standard = Some(standard);
+        Ok(())
     }
 
     fn start_song(&mut self, line_number: usize, rest: &str) -> Result<(), String> {
@@ -461,16 +494,43 @@ impl SongReader<'_> {
             self.finish_section_again(&open);
             return;
         }
-        let Some(time_signature) = open.time_signature.or(self.carried.time_signature) else {
-            self.report(
-                open.line_number,
-                format!(
-                    "section \"{}\" has no meter. Add meter 4/4 (or the meter you want)",
-                    open.name
-                ),
-            );
+        let Ok(pattern) = self.meter_pattern_of(&open) else {
             return;
         };
+        let pattern_written: bool = pattern.is_some();
+        let bar_meters: BarMeters = match (pattern, open.time_signature) {
+            (Some(_), Some(_)) => {
+                self.report(
+                    open.line_number,
+                    format!(
+                        "section \"{}\" writes a meter and also has a meter_control line. A \
+                         section has one or the other: remove the meter, or the meter_control \
+                         line",
+                        open.name
+                    ),
+                );
+                return;
+            }
+            (Some(pattern), None) => pattern,
+            (None, Some(time_signature)) => BarMeters::uniform(time_signature),
+            (None, None) => {
+                let Some(carried) = self.carried.bar_meters.clone() else {
+                    self.report(
+                        open.line_number,
+                        format!(
+                            "section \"{}\" has no meter. Add meter 4/4 (or the meter you want), \
+                             or a meter_control line",
+                            open.name
+                        ),
+                    );
+                    return;
+                };
+                carried
+            }
+        };
+        // Every meter of a section has the same beat, so the first bar's
+        // meter gives the beat of the section's tempo.
+        let time_signature: TimeSignature = bar_meters.first();
         let carried_tempo: Option<Tempo> = match (self.carried.tempo, self.carried.time_signature) {
             (Some(tempo), Some(carried_signature)) if open.tempo.is_none() => {
                 match carry_tempo(tempo, carried_signature, time_signature) {
@@ -515,7 +575,7 @@ impl SongReader<'_> {
             }
         };
         let key: Option<Key> = open.key.or(self.carried.key);
-        let lines: Vec<Line> = self.build_lines(&open, time_signature);
+        let lines: Vec<Line> = self.build_lines(&open, &bar_meters);
         if self.errors.len() > open.errors_at_start {
             return;
         }
@@ -528,6 +588,8 @@ impl SongReader<'_> {
         // with a meter that is carried on.
         let beat_grouping: Option<Vec<u8>> = if open.time_signature.is_some() {
             open.beat_grouping.clone()
+        } else if pattern_written {
+            None
         } else {
             self.carried.beat_grouping.clone()
         };
@@ -536,7 +598,7 @@ impl SongReader<'_> {
             open.count_in,
             checked_count,
             key,
-            time_signature,
+            bar_meters.clone(),
             tempo,
             lines,
         )
@@ -562,10 +624,13 @@ impl SongReader<'_> {
                     self.carried = Carried {
                         key,
                         time_signature: Some(time_signature),
+                        bar_meters: Some(bar_meters),
                         beat_grouping: section
                             .beat_grouping()
                             .map(|grouping| grouping.group_pulses().to_vec()),
-                        tempo: Some(tempo),
+                        // What the next section carries on is the tempo at
+                        // the end of this one, after any tempo marks.
+                        tempo: Some(section.end_tempo()),
                     };
                     self.sections.push(section);
                 }
@@ -617,10 +682,11 @@ impl SongReader<'_> {
                 self.carried = Carried {
                     key: section.key(),
                     time_signature: Some(section.time_signature()),
+                    bar_meters: Some(section.bar_meters().clone()),
                     beat_grouping: section
                         .beat_grouping()
                         .map(|grouping| grouping.group_pulses().to_vec()),
-                    tempo: Some(section.tempo()),
+                    tempo: Some(section.end_tempo()),
                 };
                 self.sections.push(section);
             }
@@ -628,7 +694,61 @@ impl SongReader<'_> {
         }
     }
 
-    fn build_lines(&mut self, open: &OpenSection, time_signature: TimeSignature) -> Vec<Line> {
+    /// The meter pattern of the section's `meter_control` line, if it has one.
+    /// A mistake is reported and answered with `Err`.
+    fn meter_pattern_of(&mut self, open: &OpenSection) -> Result<Option<BarMeters>, ()> {
+        let mut found: Option<BarMeters> = None;
+        for raw in &open.lines {
+            let is_meter_line: bool = self.tracks.iter().any(|track: &Track| {
+                track.name() == raw.track_name && matches!(track.kind(), TrackKind::MeterControl)
+            });
+            if !is_meter_line {
+                continue;
+            }
+            if found.is_some() {
+                self.report(
+                    raw.line_number,
+                    format!(
+                        "a second meter_control line in section \"{}\". A section has one",
+                        open.name
+                    ),
+                );
+                return Err(());
+            }
+            if raw.voice_layer.is_some() || raw.sample_source || raw.dynamics {
+                self.report(
+                    raw.line_number,
+                    String::from(
+                        "a meter_control line takes only its bars, e.g. line \"Meter\" | mp [3_4 5_4] |",
+                    ),
+                );
+                return Err(());
+            }
+            let text: String = raw
+                .parts
+                .iter()
+                .map(|part: &RawBarsText| part.text.as_str())
+                .collect::<Vec<&str>>()
+                .join(" ");
+            let line_number: usize = raw
+                .parts
+                .first()
+                .map_or(raw.line_number, |part| part.line_number);
+            match parse_meter_pattern(&text) {
+                Ok(pattern) => found = Some(pattern),
+                Err(message) => {
+                    self.report(
+                        line_number,
+                        format!("line \"{}\": {message}", raw.track_name),
+                    );
+                    return Err(());
+                }
+            }
+        }
+        Ok(found)
+    }
+
+    fn build_lines(&mut self, open: &OpenSection, bar_meters: &BarMeters) -> Vec<Line> {
         let mut lines: Vec<Line> = Vec::new();
         for raw in &open.lines {
             if self.failed_track_names.contains(&raw.track_name) {
@@ -649,6 +769,10 @@ impl SongReader<'_> {
                 );
                 continue;
             };
+            // The meter pattern is read before the lines; it is not a line.
+            if matches!(track.kind(), TrackKind::MeterControl) {
+                continue;
+            }
             let parts: Vec<BarsText> = raw
                 .parts
                 .iter()
@@ -667,11 +791,14 @@ impl SongReader<'_> {
                 }
                 (Some(number), _) => LineRole::VoiceLayer(number),
                 (None, TrackKind::CueControl { .. }) => LineRole::CuePlacement,
-                (None, TrackKind::Voice { .. } | TrackKind::ClockAndTransport) => {
-                    LineRole::VoiceLayer(VoiceLayerNumber::FIRST)
-                }
+                (
+                    None,
+                    TrackKind::Voice { .. }
+                    | TrackKind::ClockAndTransport
+                    | TrackKind::MeterControl,
+                ) => LineRole::VoiceLayer(VoiceLayerNumber::FIRST),
             };
-            match build_line(track, role, raw.line_number, &parts, time_signature) {
+            match build_line(track, role, raw.line_number, &parts, bar_meters.clone()) {
                 Ok(line) => lines.push(line),
                 Err(error) => {
                     self.report(
@@ -708,7 +835,10 @@ impl SongReader<'_> {
             ));
             return Err(self.errors);
         }
-        match Song::new(&name, self.tracks, self.sections) {
+        let numeral_standard: Option<NumeralStandard> = self.numeral_standard;
+        match Song::new(&name, self.tracks, self.sections)
+            .and_then(|song: Song| song.with_numeral_standard(numeral_standard))
+        {
             Ok(song) => Ok(song),
             Err(error) => {
                 self.errors.push(ParseError::new(
@@ -777,7 +907,15 @@ fn build_track(open: &OpenTrack) -> Result<Track, String> {
         "cue_control" => TrackKind::CueControl {
             cues: open.cues.clone(),
         },
-        "tempo_control" | "musician_voice" | "automation_control" => {
+        "meter_control" => TrackKind::MeterControl,
+        "tempo_control" => {
+            return Err(format!(
+                "track \"{}\": tempo_control no longer exists. Write a tempo mark at the start of a \
+                 bar of the lead track's line, e.g. | tempo 130 beats/min I:q / / / |",
+                open.name
+            ));
+        }
+        "musician_voice" | "automation_control" => {
             return Err(format!(
                 "track \"{}\": {type_name} is planned but not in V1",
                 open.name
@@ -786,7 +924,7 @@ fn build_track(open: &OpenTrack) -> Result<Track, String> {
         other => {
             return Err(format!(
                 "track \"{}\": \"{other}\" is not a track type. Use poly_voice, mono_voice, \
-                 clock_and_transport or cue_control",
+                 clock_and_transport, cue_control or meter_control",
                 open.name
             ));
         }
@@ -1036,7 +1174,7 @@ fn parse_grouping(text: &str) -> Result<Vec<u8>, String> {
 /// A tempo's number as whole milli-beats: digits, then optionally a point
 /// and one to three decimals (`120`, `112.5`, `0.125`). `None` for anything
 /// else, including a fourth decimal, which would not be held exactly.
-fn parse_milli_beats(text: &str) -> Option<u64> {
+pub(crate) fn parse_milli_beats(text: &str) -> Option<u64> {
     let (whole, decimals): (&str, &str) = text.split_once('.').unwrap_or((text, ""));
     let digits_only = |part: &str| part.bytes().all(|byte: u8| byte.is_ascii_digit());
     // A point must be followed by a decimal: "112." is a typing slip.
@@ -1780,7 +1918,7 @@ mod tests {
         ));
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert!(
-            errors[0].starts_with("test.song line 16: line \"Keys\": bar 3 is short"),
+            errors[0].starts_with("test.song line 16: line \"Keys\": bar 3 is 4/4 and short"),
             "{}",
             errors[0]
         );

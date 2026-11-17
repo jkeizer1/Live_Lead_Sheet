@@ -1,0 +1,16 @@
+# Canonical test song: crates/song_text/tests/minor_key.rs reads this file and expects exactly this content.
+# C minor with chord_numeral_standard key_dependent: III, VI and VII are the chords on E-flat, A-flat and B-flat; vii° is the leading-tone chord on B.
+song "Key dependent numerals"
+chord_numeral_standard key_dependent
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+section "C minor"
+  key C minor  meter 4/4  tempo 100 beats/min
+  line "Keys"  | i:w | III:w | iv:w | V:w | VI:w | VII:w | vii°:w | i:w |

@@ -1,0 +1,15 @@
+# Canonical test song (deliberately wrong): crates/song_text/tests/meter_control_plan.rs, test `pattern_meter_with_slash`.
+# The pattern is written with a slash, [3/4 5/4]. The loader must refuse it: write 3_4, with an underscore.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Meter"
+  type meter_control
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+section "A"
+  key C major  tempo 100 beats/min
+  line "Meter"  | mp [3/4 5/4] |
+  line "Keys"  | I:h. | IV:w IV:q |

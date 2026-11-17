@@ -1,0 +1,25 @@
+# Canonical test song: crates/song_text/tests/minor_key.rs reads this file and expects exactly this content.
+# A song in C minor and then A minor whose parts are notes: it loads and plans; each section's key is a minor key.
+song "Minor key notes"
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+track "Bass"
+  type mono_voice
+  clef bass
+
+section "C minor"
+  key C minor  meter 4/4  tempo 100 beats/min
+  line "Keys"  | C4:w | G3:w |
+  line "Bass"  | C2:q / / / | G1:q / / / |
+
+section "A minor"
+  key A minor
+  line "Keys"  | A3:w | E3:w |
+  line "Bass"  | A1:q / / / | E1:q / / / |

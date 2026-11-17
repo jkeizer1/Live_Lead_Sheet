@@ -1,0 +1,18 @@
+# Canonical test studio for meter_pattern.song. Tests expect exactly this.
+# The Meter track sends no MIDI, so it has no block.
+studio "Meter pattern studio"
+
+port "Clock"
+port "Keys"
+port "Bass"
+
+track "Clock"
+  port "Clock"
+
+track "Keys"
+  port "Keys"  channel 1
+  velocity normal 90  accent 115
+
+track "Bass"
+  port "Bass"  channel 2
+  velocity normal 100  accent 115

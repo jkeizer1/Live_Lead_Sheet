@@ -1,0 +1,15 @@
+# Canonical test song (deliberately wrong): crates/song_text/tests/meter_control_plan.rs, test `pattern_with_end`.
+# The mp mark is followed by _end. The loader must refuse it: nothing follows the closing bracket, since the pattern repeats to the end of the section by itself.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Meter"
+  type meter_control
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+section "A"
+  key C major  tempo 100 beats/min
+  line "Meter"  | mp [3_4] _end |
+  line "Keys"  | I:h. | IV:h. |

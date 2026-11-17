@@ -53,7 +53,7 @@ const MISTAKE_CASES: [MistakeCase; 6] = [
     MistakeCase {
         what: "a bar that is short",
         text: include_str!("../../../../songs_canonical/rhythm_notation_test/short_bar.library"),
-        expected_message: "mistake.library line 6: bar 1 is short by an eighth note. Add e or er.",
+        expected_message: "mistake.library line 6: bar 1 is 4/4 and short by an eighth note. Add e or er.",
     },
     MistakeCase {
         what: "a bar that is long",

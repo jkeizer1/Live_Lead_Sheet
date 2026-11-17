@@ -9,16 +9,19 @@
 
 use std::fmt;
 
+use crate::bar_meters::BarMeters;
 use crate::beat_grouping::{BeatGrouping, BeatGroupingError};
 use crate::dynamics::DynamicMark;
-use crate::key::Key;
+use crate::key::{Key, Mode};
 use crate::midi_values::{ControllerNumber, ControllerValue, NoteNumber, ProgramNumber, Velocity};
+use crate::numeral_standard::NumeralStandard;
 use crate::pitch::Pitch;
 use crate::rhythm_pattern::{
     ElementKind, RhythmElement, RhythmPatternError, check_elements_fill_bars,
 };
 use crate::roman_chord::{Inversion, RomanChord};
 use crate::tempo::Tempo;
+use crate::tempo_mark::{TempoMark, TempoMarkKind};
 use crate::time_signature::TimeSignature;
 
 /// A count-in section is one or two bars (EFS-2.7).
@@ -252,7 +255,7 @@ fn check_voice_layer_names(
 }
 
 /// What a track is and can do (Song Notation, section 5). The later types
-/// (tempo control, musician voice, automation control) are not here yet.
+/// (musician voice, automation control) are not here yet.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TrackKind {
     Voice {
@@ -269,6 +272,9 @@ pub enum TrackKind {
     CueControl {
         cues: Vec<CueDefinition>,
     },
+    /// The meter pattern of each section (Song Notation, "Meter Control");
+    /// sends no MIDI.
+    MeterControl,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -320,7 +326,9 @@ impl Track {
             } => voice_layer_names
                 .iter()
                 .find(|named: &&VoiceLayerName| named.number() == number),
-            TrackKind::ClockAndTransport | TrackKind::CueControl { .. } => None,
+            TrackKind::ClockAndTransport
+            | TrackKind::CueControl { .. }
+            | TrackKind::MeterControl => None,
         };
         given.map_or_else(
             || number.value().to_string(),
@@ -415,6 +423,9 @@ pub struct Line {
     role: LineRole,
     bar_count: u32,
     elements: Vec<LineElement>,
+    /// Tempo marks, in bar order; only the lead track's first voice layer
+    /// has any.
+    tempo_marks: Vec<TempoMark>,
 }
 
 impl Line {
@@ -432,17 +443,18 @@ impl Line {
     pub fn new(
         track: &Track,
         role: LineRole,
-        time_signature: TimeSignature,
+        bar_meters: impl Into<BarMeters>,
         bar_count: u32,
         elements: Vec<LineElement>,
     ) -> Result<Line, SongError> {
+        let bar_meters: BarMeters = bar_meters.into();
         let rhythm: Vec<RhythmElement> = elements
             .iter()
             .map(|line_element: &LineElement| *line_element.element())
             .collect();
         check_elements_fill_bars(
             &format!("line of track {:?}", track.name()),
-            time_signature,
+            &bar_meters,
             bar_count,
             &rhythm,
         )
@@ -481,7 +493,46 @@ impl Line {
             role,
             bar_count,
             elements,
+            tempo_marks: Vec::new(),
         })
+    }
+
+    /// The line with tempo marks, in bar order.
+    ///
+    /// # Errors
+    ///
+    /// When a mark is in a bar the line does not have, a ramp does not
+    /// finish inside the line, or a mark is in a bar a ramp covers.
+    pub fn with_tempo_marks(self, tempo_marks: Vec<TempoMark>) -> Result<Line, SongError> {
+        for (index, mark) in tempo_marks.iter().enumerate() {
+            if let TempoMarkKind::Ramp { bar_count, .. } = mark.kind()
+                && mark.end_bar_index() > self.bar_count
+            {
+                return Err(SongError::TempoRampPastSectionEnd {
+                    bar_number: mark.bar_index() + 1,
+                    ramp_bar_count: bar_count,
+                    bars_left: self.bar_count.saturating_sub(mark.bar_index()),
+                });
+            }
+            if let Some(ramp) = tempo_marks[..index].iter().find(|earlier: &&TempoMark| {
+                matches!(earlier.kind(), TempoMarkKind::Ramp { .. })
+                    && mark.bar_index() < earlier.end_bar_index()
+            }) {
+                return Err(SongError::TempoMarkInsideRamp {
+                    bar_number: mark.bar_index() + 1,
+                    ramp_bar_number: ramp.bar_index() + 1,
+                });
+            }
+        }
+        Ok(Line {
+            tempo_marks,
+            ..self
+        })
+    }
+
+    #[must_use]
+    pub fn tempo_marks(&self) -> &[TempoMark] {
+        &self.tempo_marks
     }
 
     #[must_use]
@@ -511,6 +562,9 @@ impl Line {
 fn check_role(track: &Track, role: LineRole) -> Result<(), SongError> {
     match (track.kind(), role) {
         (TrackKind::ClockAndTransport, _) => Err(SongError::LineOnClockTrack {
+            track_name: track.name().to_string(),
+        }),
+        (TrackKind::MeterControl, _) => Err(SongError::LineOnMeterControlTrack {
             track_name: track.name().to_string(),
         }),
         (
@@ -586,8 +640,9 @@ fn check_contents(track: &Track, line_element: &LineElement) -> Result<(), SongE
                 start_ticks,
             })
         }
-        // The clock and transport track is refused for the whole line.
-        (TrackKind::ClockAndTransport, _) => Ok(()),
+        // The clock and transport and meter control tracks are refused for
+        // the whole line.
+        (TrackKind::ClockAndTransport | TrackKind::MeterControl, _) => Ok(()),
         (TrackKind::Voice { voice, .. }, Some(contents)) => match (voice, contents) {
             (_, ElementContents::Cue(_)) => Err(wrong("a cue belongs on a cue control track")),
             (_, ElementContents::Dynamic(_)) => Err(wrong(
@@ -629,7 +684,9 @@ pub struct Section {
     /// The key in effect, written or carried on; `None` until a key is
     /// given (a count-in section needs none).
     key: Option<Key>,
-    time_signature: TimeSignature,
+    /// The meter of every bar: the section's `meter`, or the repeating
+    /// pattern of its `meter_control` line.
+    bar_meters: BarMeters,
     /// How the pulses of an irregular bar are grouped (`grouping 2+2+3`);
     /// `None` when the song writes none. It changes nothing played.
     beat_grouping: Option<BeatGrouping>,
@@ -650,10 +707,11 @@ impl Section {
         count_in: bool,
         repeat_count: u32,
         key: Option<Key>,
-        time_signature: TimeSignature,
+        bar_meters: impl Into<BarMeters>,
         tempo: Tempo,
         lines: Vec<Line>,
     ) -> Result<Section, SongError> {
+        let bar_meters: BarMeters = bar_meters.into();
         if name.trim().is_empty() {
             return Err(SongError::EmptyName { what: "section" });
         }
@@ -668,6 +726,13 @@ impl Section {
             });
         };
         let bar_count: u32 = first.bar_count();
+        if !(bar_count as usize).is_multiple_of(bar_meters.pattern_bar_count()) {
+            return Err(SongError::BarCountNotMultipleOfPattern {
+                section_name: name.to_string(),
+                bar_count,
+                pattern_bar_count: bar_meters.pattern_bar_count(),
+            });
+        }
         for (index, line) in lines.iter().enumerate() {
             if line.bar_count() != bar_count {
                 return Err(SongError::LinesOfDifferentLength {
@@ -704,7 +769,7 @@ impl Section {
             count_in,
             repeat_count,
             key,
-            time_signature,
+            bar_meters,
             beat_grouping: None,
             tempo,
             lines,
@@ -717,7 +782,7 @@ impl Section {
     ///
     /// When the groups do not add up to the pulses in the section's bar.
     pub fn with_beat_grouping(self, group_pulses: Vec<u8>) -> Result<Section, SongError> {
-        let beat_grouping: BeatGrouping = BeatGrouping::new(group_pulses, self.time_signature)
+        let beat_grouping: BeatGrouping = BeatGrouping::new(group_pulses, self.bar_meters.first())
             .map_err(|error: BeatGroupingError| SongError::BeatGrouping {
                 section_name: self.name.clone(),
                 error,
@@ -766,9 +831,23 @@ impl Section {
         self.key
     }
 
+    /// The meter of the first bar. Every meter of a section has the same
+    /// beat, so this is the meter whose beat the section's tempo counts.
     #[must_use]
     pub fn time_signature(&self) -> TimeSignature {
-        self.time_signature
+        self.bar_meters.first()
+    }
+
+    /// The meter of each bar of the section.
+    #[must_use]
+    pub fn bar_meters(&self) -> &BarMeters {
+        &self.bar_meters
+    }
+
+    /// The length of one play of the section, in ticks.
+    #[must_use]
+    pub fn length_ticks(&self) -> u64 {
+        self.bar_meters.length_ticks(self.bar_count())
     }
 
     #[must_use]
@@ -784,6 +863,26 @@ impl Section {
     #[must_use]
     pub fn lines(&self) -> &[Line] {
         &self.lines
+    }
+
+    /// The tempo marks of the section, in bar order: those of the lead
+    /// track's first voice layer, which is the only line that has any.
+    #[must_use]
+    pub fn tempo_marks(&self) -> &[TempoMark] {
+        self.lines
+            .iter()
+            .map(Line::tempo_marks)
+            .find(|marks: &&[TempoMark]| !marks.is_empty())
+            .unwrap_or(&[])
+    }
+
+    /// The tempo in force at the end of the section's last bar: what a
+    /// following section that writes no tempo carries on.
+    #[must_use]
+    pub fn end_tempo(&self) -> Tempo {
+        self.tempo_marks()
+            .last()
+            .map_or(self.tempo, TempoMark::end_tempo)
     }
 
     /// The section's length in bars, once (not counting repeats).
@@ -854,6 +953,8 @@ pub struct Song {
     name: String,
     tracks: Vec<Track>,
     sections: Vec<Section>,
+    /// What the song declared with `chord_numeral_standard`, if anything.
+    numeral_standard: Option<NumeralStandard>,
 }
 
 impl Song {
@@ -885,6 +986,15 @@ impl Song {
         if clock_tracks != 1 {
             return Err(SongError::ClockAndTransportTracks {
                 found: clock_tracks,
+            });
+        }
+        let meter_control_tracks: usize = tracks
+            .iter()
+            .filter(|track: &&Track| matches!(track.kind(), TrackKind::MeterControl))
+            .count();
+        if meter_control_tracks > 1 {
+            return Err(SongError::MeterControlTracks {
+                found: meter_control_tracks,
             });
         }
         let voice_tracks: usize = tracks
@@ -923,7 +1033,53 @@ impl Song {
             name: name.to_string(),
             tracks,
             sections,
+            numeral_standard: None,
         })
+    }
+
+    /// The song with its `chord_numeral_standard` (or none, when it wrote
+    /// none).
+    ///
+    /// # Errors
+    ///
+    /// When there is none and a section in a minor key writes a chord
+    /// numeral: its root would depend on a practice nobody declared.
+    pub fn with_numeral_standard(
+        mut self,
+        numeral_standard: Option<NumeralStandard>,
+    ) -> Result<Song, SongError> {
+        if numeral_standard.is_none() {
+            for section in &self.sections {
+                let minor: bool = section
+                    .key()
+                    .is_some_and(|key: Key| key.mode() == Mode::Minor);
+                let writes_numerals: bool = section.lines().iter().any(|line: &Line| {
+                    line.elements().iter().any(|element: &LineElement| {
+                        matches!(
+                            element.contents(),
+                            Some(
+                                ElementContents::Chord(_)
+                                    | ElementContents::InvertedChord { .. }
+                                    | ElementContents::ChordWithNotes { .. }
+                            )
+                        )
+                    })
+                });
+                if minor && writes_numerals {
+                    return Err(SongError::MinorKeyNeedsNumeralStandard {
+                        section_name: section.name().to_string(),
+                    });
+                }
+            }
+        }
+        self.numeral_standard = numeral_standard;
+        Ok(self)
+    }
+
+    /// What the song declared with `chord_numeral_standard`.
+    #[must_use]
+    pub fn numeral_standard(&self) -> Option<NumeralStandard> {
+        self.numeral_standard
     }
 
     #[must_use]
@@ -952,6 +1108,29 @@ pub enum SongError {
     },
     ClockAndTransportTracks {
         found: usize,
+    },
+    MeterControlTracks {
+        found: usize,
+    },
+    LineOnMeterControlTrack {
+        track_name: String,
+    },
+    BarCountNotMultipleOfPattern {
+        section_name: String,
+        bar_count: u32,
+        pattern_bar_count: usize,
+    },
+    TempoRampPastSectionEnd {
+        bar_number: u32,
+        ramp_bar_count: u32,
+        bars_left: u32,
+    },
+    MinorKeyNeedsNumeralStandard {
+        section_name: String,
+    },
+    TempoMarkInsideRamp {
+        bar_number: u32,
+        ramp_bar_number: u32,
     },
     LeadTracks {
         found: usize,
@@ -1064,6 +1243,47 @@ impl fmt::Display for SongError {
                 f,
                 "the song has {found} clock and transport tracks. It needs exactly 1: \
                  add a track with type clock_and_transport"
+            ),
+            SongError::MeterControlTracks { found } => write!(
+                f,
+                "the song has {found} meter_control tracks. It needs at most 1"
+            ),
+            SongError::LineOnMeterControlTrack { track_name } => write!(
+                f,
+                "{track_name:?} is a meter_control track: its line holds a meter pattern, e.g. \
+                 | mp [3_4 5_4] |"
+            ),
+            SongError::BarCountNotMultipleOfPattern {
+                section_name,
+                bar_count,
+                pattern_bar_count,
+            } => write!(
+                f,
+                "section {section_name:?} has {bar_count} bars, but its meter pattern is \
+                 {pattern_bar_count} bars long. The section's length must be a multiple of it"
+            ),
+            SongError::TempoRampPastSectionEnd {
+                bar_number,
+                ramp_bar_count,
+                bars_left,
+            } => write!(
+                f,
+                "bar {bar_number}: the tempo ramp runs {ramp_bar_count} bars but the section has \
+                 {bars_left} left from here. Shorten the ramp or move it earlier"
+            ),
+            SongError::MinorKeyNeedsNumeralStandard { section_name } => write!(
+                f,
+                "section \"{section_name}\" is in a minor key and writes chord numerals. Add \
+                 chord_numeral_standard key_dependent or chord_numeral_standard \
+                 major_referential on the line after song"
+            ),
+            SongError::TempoMarkInsideRamp {
+                bar_number,
+                ramp_bar_number,
+            } => write!(
+                f,
+                "bar {bar_number}: a tempo mark in a bar the ramp from bar {ramp_bar_number} \
+                 covers. Remove the mark, or shorten the ramp to end before this bar"
             ),
             SongError::LeadTracks { found } => write!(
                 f,

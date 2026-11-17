@@ -19,7 +19,7 @@ use std::fmt::Write;
 use std::process::ExitCode;
 
 use player::studio_configuration::{StudioConfiguration, UnmetNeed};
-use song_text::length_words::{describe_length, describe_place};
+use song_text::length_words::{describe_length, describe_place_in_bars};
 use song_text::parse_error::ParseError;
 use song_text::song_file::parse_song;
 use song_text::studio_file::parse_studio;
@@ -263,6 +263,7 @@ fn describe_track(track: &Track) -> String {
             )
         }
         TrackKind::ClockAndTransport => String::from("clock and transport"),
+        TrackKind::MeterControl => String::from("meter control (a repeating meter pattern)"),
         TrackKind::CueControl { cues } => {
             let mut text: String = String::from("cue control");
             for cue in cues {
@@ -312,9 +313,26 @@ fn print_section(song: &Song, section: &Section) {
     let key_text: String = section
         .key()
         .map_or_else(|| String::from("no key"), |key| key.to_string());
-    let meter = section.time_signature();
+    let meter_text: String = section
+        .bar_meters()
+        .pattern_meters()
+        .iter()
+        .map(|meter| {
+            format!(
+                "{}/{}",
+                meter.pulses_per_bar(),
+                meter.pulses_per_whole_note()
+            )
+        })
+        .collect::<Vec<String>>()
+        .join(" ");
+    let meter_text: String = if section.bar_meters().is_uniform() {
+        format!("{meter_text} time")
+    } else {
+        format!("meter pattern {meter_text}, repeating")
+    };
     println!(
-        "\nSection \"{}\"{}: {} {}{}, {}/{} time, {} quarter notes per minute, {}",
+        "\nSection \"{}\"{}: {} {}{}, {}, {} quarter notes per minute, {}",
         section.name(),
         if section.count_in() {
             " (count-in)"
@@ -332,8 +350,7 @@ fn print_section(song: &Song, section: &Section) {
         } else {
             String::new()
         },
-        meter.pulses_per_bar(),
-        meter.pulses_per_whole_note(),
+        meter_text,
         section.tempo().milli_quarters_per_minute() / 1000,
         key_text,
     );
@@ -346,7 +363,10 @@ fn print_section(song: &Song, section: &Section) {
             .filter(|line: &&Line| line.track_name() == track.name())
             .collect();
         if lines.is_empty() {
-            if !matches!(track.kind(), TrackKind::ClockAndTransport) {
+            if !matches!(
+                track.kind(),
+                TrackKind::ClockAndTransport | TrackKind::MeterControl
+            ) {
                 println!("  {}: rests for the whole section", track.name());
             }
             continue;
@@ -394,7 +414,8 @@ fn print_line(track: &Track, line: &Line, several: bool, section: &Section) {
     }
     for line_element in line.elements() {
         let element = line_element.element();
-        let place: String = describe_place(element.start().ticks(), section.time_signature());
+        let place: String =
+            describe_place_in_bars(element.start().ticks(), section.bar_meters(), 0);
         let length: String = describe_length(element.length().ticks()).description;
         if element.kind() == ElementKind::Rest {
             println!("    {place}: {length} rest");
@@ -411,17 +432,21 @@ fn print_line(track: &Track, line: &Line, several: bool, section: &Section) {
 /// A sample source's elements by their share of the bar ("part 2 of 3"):
 /// a third of a bar is not on a beat, so a beat is not named.
 fn print_source_elements(line: &Line, section: &Section) {
-    let bar_ticks: u64 = section.time_signature().bar_length().ticks();
+    let bar_meters = section.bar_meters();
     let elements: &[LineElement] = line.elements();
     for (index, line_element) in elements.iter().enumerate() {
-        let bar_index: u64 = line_element.element().start().ticks() / bar_ticks;
+        let bar_index: usize = bar_meters.bar_at(line_element.element().start().ticks()).0;
         let in_bar: Vec<&LineElement> = elements
             .iter()
-            .filter(|other: &&LineElement| other.element().start().ticks() / bar_ticks == bar_index)
+            .filter(|other: &&LineElement| {
+                bar_meters.bar_at(other.element().start().ticks()).0 == bar_index
+            })
             .collect();
         let part: usize = elements[..index]
             .iter()
-            .filter(|other: &&LineElement| other.element().start().ticks() / bar_ticks == bar_index)
+            .filter(|other: &&LineElement| {
+                bar_meters.bar_at(other.element().start().ticks()).0 == bar_index
+            })
             .count()
             + 1;
         println!(

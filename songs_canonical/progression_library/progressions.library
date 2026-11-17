@@ -1,0 +1,21 @@
+# Canonical test library: crates/song_text/tests/progression_library.rs, test `a_library_with_a_minor_entry_and_its_standard_loads`; reads this file and expects exactly this content.
+# Major and minor progressions with chord_numeral_standard key_dependent at the top; the minor entries use VI and VII.
+chord_numeral_standard key_dependent
+
+progression "12-bar blues"
+  group "Blues" "Full form"
+  mode major
+  meter 4/4
+  | I7 | I7 | I7 | I7 | IV7 | IV7 | I7 | I7 | V7 | IV7 | I7 | V7 |
+
+progression "ii-V"
+  group "Jazz" "Cadence"
+  mode major
+  meter 4/4
+  | ii7 V7 |
+
+progression "Andalusian cadence"
+  group "Pop and rock" "Loop"
+  mode minor
+  meter 4/4
+  | i | VII | VI | V |

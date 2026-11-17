@@ -1,0 +1,15 @@
+# Canonical test song (deliberately wrong): crates/song_text/tests/tempo_marks_plan.rs, test `tempo_without_unit`.
+# A tempo mark with no unit. The loader must refuse it: the unit beats/min is written.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+track "Bass"
+  type mono_voice
+  clef bass
+section "A"
+  key C major  meter 4/4  tempo 100 beats/min
+  line "Keys"  | tempo 90 I:w | I:w |

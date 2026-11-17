@@ -4,8 +4,9 @@
 //! `V7` is B♭ D F A♭, never A♯.
 
 use player::voicing::{VoicingError, plain_voicing};
-use vocabulary::key::Key;
+use vocabulary::key::{Key, Mode};
 use vocabulary::midi_values::NoteNumber;
+use vocabulary::numeral_standard::NumeralStandard;
 use vocabulary::pitch::{Accidental, NoteLetter, NoteName, Pitch};
 use vocabulary::roman_chord::{ChordKind, Inversion, RomanChord};
 
@@ -30,9 +31,10 @@ const LETTERS: [NoteLetter; LETTERS_PER_OCTAVE] = [
 pub fn chord_pitches(
     chord: RomanChord,
     key: Key,
+    numeral_standard: Option<NumeralStandard>,
     home_octave: i8,
 ) -> Result<Vec<Pitch>, VoicingError> {
-    let notes: Vec<NoteNumber> = plain_voicing(chord, key, home_octave)?;
+    let notes: Vec<NoteNumber> = plain_voicing(chord, key, numeral_standard, home_octave)?;
     let tonic_index: usize = letter_index(key.tonic().letter());
     let root_index: usize = tonic_index + usize::from(chord.degree().number()) - 1;
     let prefers_flats: bool = key_prefers_flats(key);
@@ -55,10 +57,11 @@ pub fn chord_pitches(
 pub fn inverted_chord_pitches(
     chord: RomanChord,
     key: Key,
+    numeral_standard: Option<NumeralStandard>,
     home_octave: i8,
     inversion: Inversion,
 ) -> Result<Vec<Pitch>, VoicingError> {
-    let pitches: Vec<Pitch> = chord_pitches(chord, key, home_octave)?;
+    let pitches: Vec<Pitch> = chord_pitches(chord, key, numeral_standard, home_octave)?;
     let (below, rest): (&[Pitch], &[Pitch]) = pitches.split_at(usize::from(inversion.number()));
     let mut inverted: Vec<Pitch> = rest.to_vec();
     inverted.extend(
@@ -176,11 +179,21 @@ fn pitch_sounding_as(note_value: i16, name: NoteName) -> Option<Pitch> {
         .map(|octave: i8| Pitch::new(name, octave))
 }
 
-/// F major and the keys whose tonic is written with a flat are flat keys.
+/// Flat keys spell a chord note that needs a double sharp or flat by its
+/// sound with flats, the others with sharps. A major key is flat when its
+/// tonic is written with a flat, and F major. A minor key takes its relative
+/// major's signature (C minor has the three flats of E-flat major), so it is
+/// flat when its tonic is written with a flat, and C, D, F and G minor.
 fn key_prefers_flats(key: Key) -> bool {
-    key.tonic().accidental() == Accidental::Flat
-        || (key.tonic().letter() == NoteLetter::F
-            && key.tonic().accidental() == Accidental::Natural)
+    let natural_tonic: bool = key.tonic().accidental() == Accidental::Natural;
+    let flat_natural_tonic: bool = match key.mode() {
+        Mode::Major => key.tonic().letter() == NoteLetter::F,
+        Mode::Minor => matches!(
+            key.tonic().letter(),
+            NoteLetter::C | NoteLetter::D | NoteLetter::F | NoteLetter::G
+        ),
+    };
+    key.tonic().accidental() == Accidental::Flat || (natural_tonic && flat_natural_tonic)
 }
 
 #[cfg(test)]
@@ -205,7 +218,7 @@ mod tests {
             ChordKind::MinorSeventh,
         );
         let pitches: Vec<Pitch> =
-            chord_pitches(chord, key(NoteLetter::C, Accidental::Natural), 4).unwrap();
+            chord_pitches(chord, key(NoteLetter::C, Accidental::Natural), None, 4).unwrap();
         assert_eq!(names(&pitches), vec!["D4", "F4", "A4", "C5"]);
     }
 
@@ -217,7 +230,7 @@ mod tests {
             ChordKind::DominantSeventh,
         );
         let pitches: Vec<Pitch> =
-            chord_pitches(chord, key(NoteLetter::E, Accidental::Flat), 3).unwrap();
+            chord_pitches(chord, key(NoteLetter::E, Accidental::Flat), None, 3).unwrap();
         assert_eq!(names(&pitches), vec!["Bb3", "D4", "F4", "Ab4"]);
     }
 
@@ -229,13 +242,13 @@ mod tests {
             ChordKind::Diminished,
         );
         let c_major: Key = key(NoteLetter::C, Accidental::Natural);
-        let pitches: Vec<Pitch> = chord_pitches(chord, c_major, 4).unwrap();
+        let pitches: Vec<Pitch> = chord_pitches(chord, c_major, None, 4).unwrap();
         assert_eq!(names(&pitches), vec!["B4", "D5", "F5"]);
         let sounding: Vec<u8> = pitches
             .iter()
             .map(|pitch: &Pitch| pitch.note_number().unwrap().value())
             .collect();
-        let voiced: Vec<u8> = plain_voicing(chord, c_major, 4)
+        let voiced: Vec<u8> = plain_voicing(chord, c_major, None, 4)
             .unwrap()
             .iter()
             .map(|note: &NoteNumber| note.value())
@@ -248,7 +261,58 @@ mod tests {
         let chord: RomanChord =
             RomanChord::new(Accidental::Flat, ScaleDegree::Seventh, ChordKind::Major);
         let pitches: Vec<Pitch> =
-            chord_pitches(chord, key(NoteLetter::C, Accidental::Natural), 3).unwrap();
+            chord_pitches(chord, key(NoteLetter::C, Accidental::Natural), None, 3).unwrap();
         assert_eq!(names(&pitches), vec!["Bb3", "D4", "F4"]);
+    }
+
+    fn minor(letter: NoteLetter, accidental: Accidental) -> Key {
+        Key::new(NoteName::new(letter, accidental), Mode::Minor)
+    }
+
+    #[test]
+    fn a_minor_key_is_flat_or_sharp_by_its_relative_major() {
+        let flat = |letter, accidental| key_prefers_flats(minor(letter, accidental));
+        // Relative majors E-flat, B-flat, A-flat, F and the flat-tonic keys.
+        assert!(flat(NoteLetter::C, Accidental::Natural));
+        assert!(flat(NoteLetter::G, Accidental::Natural));
+        assert!(flat(NoteLetter::F, Accidental::Natural));
+        assert!(flat(NoteLetter::D, Accidental::Natural));
+        assert!(flat(NoteLetter::B, Accidental::Flat));
+        // Relative majors C (no accidentals), G, D and A: sharps.
+        assert!(!flat(NoteLetter::A, Accidental::Natural));
+        assert!(!flat(NoteLetter::E, Accidental::Natural));
+        assert!(!flat(NoteLetter::B, Accidental::Natural));
+        assert!(!flat(NoteLetter::F, Accidental::Sharp));
+    }
+
+    #[test]
+    fn key_dependent_iii_in_c_minor_is_e_flat_g_b_flat() {
+        let chord: RomanChord =
+            RomanChord::new(Accidental::Natural, ScaleDegree::Third, ChordKind::Major);
+        let pitches: Vec<Pitch> = chord_pitches(
+            chord,
+            minor(NoteLetter::C, Accidental::Natural),
+            Some(NumeralStandard::KeyDependent),
+            4,
+        )
+        .unwrap();
+        assert_eq!(names(&pitches), vec!["Eb4", "G4", "Bb4"]);
+    }
+
+    #[test]
+    fn the_leading_tone_chord_in_a_minor_is_g_sharp_b_d() {
+        let chord: RomanChord = RomanChord::new(
+            Accidental::Natural,
+            ScaleDegree::Seventh,
+            ChordKind::Diminished,
+        );
+        let pitches: Vec<Pitch> = chord_pitches(
+            chord,
+            minor(NoteLetter::A, Accidental::Natural),
+            Some(NumeralStandard::KeyDependent),
+            4,
+        )
+        .unwrap();
+        assert_eq!(names(&pitches), vec!["G#4", "B4", "D5"]);
     }
 }

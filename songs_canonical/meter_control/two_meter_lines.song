@@ -1,0 +1,16 @@
+# Canonical test song (deliberately wrong): crates/song_text/tests/meter_control_plan.rs, test `two_meter_lines`.
+# A section with two meter_control lines. The loader must refuse it: a section has one.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Meter"
+  type meter_control
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+section "A"
+  key C major  tempo 100 beats/min
+  line "Meter"  | mp [3_4] |
+  line "Meter"  | mp [3_4] |
+  line "Keys"  | I:h. | IV:h. |

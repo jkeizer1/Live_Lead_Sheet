@@ -21,6 +21,7 @@ use std::fmt::Write;
 
 use note_spelling::note_value::NoteValue;
 use note_spelling::spelled_line::{Sound, SpelledBar, SpelledElement, SpelledItem, spell_line};
+use vocabulary::bar_meters::BarMeters;
 use vocabulary::key::Key;
 use vocabulary::pitch::Pitch;
 use vocabulary::roman_chord::RomanChord;
@@ -116,7 +117,12 @@ fn spell_song(song: &Song) -> Result<SpelledSong, ExportError> {
                 // cannot happen; nothing is drawn for such a line.
                 continue;
             };
-            let bars: Vec<SpelledBar> = spell_line(&song.tracks()[track_index], section, line)
+            let bars: Vec<SpelledBar> = spell_line(
+                &song.tracks()[track_index],
+                section,
+                song.numeral_standard(),
+                line,
+            )
                 .map_err(ExportError::Spelling)?;
             lines.insert(
                 LineKey {
@@ -143,7 +149,7 @@ fn plan_tracks(song: &Song, spelled: &SpelledSong) -> Vec<TrackPlan> {
             })
             .collect();
         match track.kind() {
-            TrackKind::ClockAndTransport => {}
+            TrackKind::ClockAndTransport | TrackKind::MeterControl => {}
             TrackKind::CueControl { .. } => plans.push(TrackPlan {
                 name: track.name().to_string(),
                 piano: false,
@@ -372,7 +378,13 @@ fn voice_music(
     for (section_index, section) in song.sections().iter().enumerate() {
         music.push_str(&section_start(section, previous, rhythmic, carries_marks));
         let body: String = match line_key.and_then(|key| spelled[section_index].get(&key)) {
-            Some(bars) => bars_text(bars, shows_chords, rhythmic, &mut slur_open),
+            Some(bars) => bars_text(
+                bars,
+                section.bar_meters(),
+                shows_chords,
+                rhythmic,
+                &mut slur_open,
+            ),
             None => rest_bars(section, first_on_staff && line_key.is_some()),
         };
         if section.repeat_count() > 1 {
@@ -423,7 +435,7 @@ fn section_start(
         let _ = write!(words, "{} ", key(written));
     }
     let meter: TimeSignature = section.time_signature();
-    if previous.is_none_or(|before: &Section| before.time_signature() != meter) {
+    if previous.is_none_or(|before: &Section| last_meter(before) != meter) {
         let _ = write!(
             words,
             "\\time {}/{} ",
@@ -432,6 +444,12 @@ fn section_start(
         );
     }
     words
+}
+
+/// The meter of the section's last bar: what the next section follows.
+fn last_meter(section: &Section) -> TimeSignature {
+    let last_bar: usize = section.bar_count().saturating_sub(1) as usize;
+    section.bar_meters().meter_of_bar(last_bar)
 }
 
 /// The section's tempo in its meter's beats, as written in the song: beats
@@ -469,20 +487,54 @@ fn tempo_words(section: &Section) -> String {
 /// first voice, an invisible spacer for its other voices.
 fn rest_bars(section: &Section, visible: bool) -> String {
     let meter: TimeSignature = section.time_signature();
-    let pulses: u64 = u64::from(meter.pulses_per_bar()) * u64::from(section.bar_count());
     let rest: char = if visible { 'R' } else { 's' };
-    format!("{rest}1*{pulses}/{} |", meter.pulses_per_whole_note())
+    if section.bar_meters().is_uniform() {
+        let pulses: u64 = u64::from(meter.pulses_per_bar()) * u64::from(section.bar_count());
+        return format!("{rest}1*{pulses}/{} |", meter.pulses_per_whole_note());
+    }
+    // A meter pattern: one rest per bar, with the time signature where it changes.
+    let mut text: String = String::new();
+    for bar_index in 0..section.bar_count() as usize {
+        let bar_meter: TimeSignature = section.bar_meters().meter_of_bar(bar_index);
+        if bar_index > 0 && section.bar_meters().meter_of_bar(bar_index - 1) != bar_meter {
+            let _ = write!(
+                text,
+                "\\time {}/{} ",
+                bar_meter.pulses_per_bar(),
+                bar_meter.pulses_per_whole_note()
+            );
+        }
+        let _ = write!(
+            text,
+            "{rest}1*{}/{} | ",
+            bar_meter.pulses_per_bar(),
+            bar_meter.pulses_per_whole_note()
+        );
+    }
+    text
 }
 
 fn bars_text(
     bars: &[SpelledBar],
+    bar_meters: &BarMeters,
     shows_chords: bool,
     rhythmic: bool,
     slur_open: &mut bool,
 ) -> String {
     let mut last_chord: Option<RomanChord> = None;
     let mut text: String = String::new();
-    for bar in bars {
+    for (bar_index, bar) in bars.iter().enumerate() {
+        if bar_index > 0 {
+            let bar_meter: TimeSignature = bar_meters.meter_of_bar(bar_index);
+            if bar_meters.meter_of_bar(bar_index - 1) != bar_meter {
+                let _ = write!(
+                    text,
+                    "\\time {}/{} ",
+                    bar_meter.pulses_per_bar(),
+                    bar_meter.pulses_per_whole_note()
+                );
+            }
+        }
         for item in &bar.items {
             match item {
                 SpelledItem::Single(element) => {

@@ -8,6 +8,7 @@ use std::fmt;
 
 use vocabulary::key::{Key, Mode};
 use vocabulary::midi_values::NoteNumber;
+use vocabulary::numeral_standard::NumeralStandard;
 use vocabulary::roman_chord::{ChordKind, Inversion, RomanChord, ScaleDegree};
 
 const SEMITONES_PER_OCTAVE: i16 = 12;
@@ -24,15 +25,15 @@ const SEMITONES_PER_OCTAVE: i16 = 12;
 pub fn plain_voicing(
     chord: RomanChord,
     key: Key,
+    numeral_standard: Option<NumeralStandard>,
     home_octave: i8,
 ) -> Result<Vec<NoteNumber>, VoicingError> {
-    let Mode::Major = key.mode();
+    let step_semitones: i16 = step_semitones_above_tonic(chord, key.mode(), numeral_standard)?;
     let tonic_semitones: i16 =
         key.tonic().letter().semitones_above_c() + key.tonic().accidental().semitone_offset();
-    let root_semitones_above_c: i16 = (tonic_semitones
-        + semitones_above_tonic(chord.degree())
-        + chord.accidental().semitone_offset())
-    .rem_euclid(SEMITONES_PER_OCTAVE);
+    let root_semitones_above_c: i16 =
+        (tonic_semitones + step_semitones + chord.accidental().semitone_offset())
+            .rem_euclid(SEMITONES_PER_OCTAVE);
     // C of the home octave: MIDI note 60 is C4, so C of octave n is
     // 12 notes/octave × (n + 1) octaves.
     let home_c: i16 = SEMITONES_PER_OCTAVE * (i16::from(home_octave) + 1);
@@ -59,10 +60,11 @@ pub fn plain_voicing(
 pub fn inverted_voicing(
     chord: RomanChord,
     key: Key,
+    numeral_standard: Option<NumeralStandard>,
     home_octave: i8,
     inversion: Inversion,
 ) -> Result<Vec<NoteNumber>, VoicingError> {
-    let notes: Vec<NoteNumber> = plain_voicing(chord, key, home_octave)?;
+    let notes: Vec<NoteNumber> = plain_voicing(chord, key, numeral_standard, home_octave)?;
     let moved: usize = usize::from(inversion.number());
     let (below, rest): (&[NoteNumber], &[NoteNumber]) = notes.split_at(moved);
     let mut inverted: Vec<NoteNumber> = rest.to_vec();
@@ -76,6 +78,54 @@ pub fn inverted_voicing(
         );
     }
     Ok(inverted)
+}
+
+/// The semitones from the tonic to the step a numeral names, before its
+/// flat or sharp. A major key counts in the major scale. A minor key counts
+/// as the song's `chord_numeral_standard` says: `major_referential` in the
+/// major scale on the tonic (`bIII` is E♭ in C minor), `key_dependent` in
+/// the natural minor scale (`III` is E♭), except that a diminished chord on
+/// step 7 is the leading-tone chord and takes the raised 7th (`vii°` is B in
+/// C minor, as in classical harmony).
+fn step_semitones_above_tonic(
+    chord: RomanChord,
+    mode: Mode,
+    numeral_standard: Option<NumeralStandard>,
+) -> Result<i16, VoicingError> {
+    if mode == Mode::Major {
+        return Ok(semitones_above_tonic(chord.degree()));
+    }
+    match numeral_standard {
+        None => Err(VoicingError::MinorKeyNeedsNumeralStandard { chord }),
+        Some(NumeralStandard::MajorReferential) => Ok(semitones_above_tonic(chord.degree())),
+        Some(NumeralStandard::KeyDependent) => {
+            let leading_tone_chord: bool = chord.degree() == ScaleDegree::Seventh
+                && matches!(
+                    chord.kind(),
+                    ChordKind::Diminished
+                        | ChordKind::DiminishedSeventh
+                        | ChordKind::HalfDiminishedSeventh
+                );
+            if leading_tone_chord {
+                return Ok(semitones_above_tonic(chord.degree()));
+            }
+            Ok(natural_minor_semitones_above_tonic(chord.degree()))
+        }
+    }
+}
+
+/// The natural minor scale: I 0, II 2, III 3, IV 5, V 7, VI 8, VII 10
+/// semitones above the tonic.
+fn natural_minor_semitones_above_tonic(degree: ScaleDegree) -> i16 {
+    match degree {
+        ScaleDegree::First => 0,
+        ScaleDegree::Second => 2,
+        ScaleDegree::Third => 3,
+        ScaleDegree::Fourth => 5,
+        ScaleDegree::Fifth => 7,
+        ScaleDegree::Sixth => 8,
+        ScaleDegree::Seventh => 10,
+    }
 }
 
 /// The major scale: I 0, II 2, III 4, IV 5, V 7, VI 9, VII 11 semitones
@@ -111,6 +161,7 @@ fn intervals(kind: ChordKind) -> &'static [i16] {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VoicingError {
     OutOfRange { chord: RomanChord, value: i16 },
+    MinorKeyNeedsNumeralStandard { chord: RomanChord },
 }
 
 impl fmt::Display for VoicingError {
@@ -120,6 +171,12 @@ impl fmt::Display for VoicingError {
                 f,
                 "the chord {chord} would need MIDI note {value}, outside 0 to 127. Lower or \
                  raise the track's home_octave"
+            ),
+            VoicingError::MinorKeyNeedsNumeralStandard { chord } => write!(
+                f,
+                "the chord {chord} is in a minor key and the song does not say how its numerals \
+                 are counted. Add chord_numeral_standard key_dependent or \
+                 chord_numeral_standard major_referential on the line after song"
             ),
         }
     }
@@ -149,6 +206,7 @@ mod tests {
         let notes = plain_voicing(
             chord(Accidental::Natural, ScaleDegree::First, ChordKind::Major),
             key(NoteLetter::C, Accidental::Natural),
+            None,
             4,
         )
         .unwrap();
@@ -164,6 +222,7 @@ mod tests {
                 ChordKind::MinorSeventh,
             ),
             key(NoteLetter::C, Accidental::Natural),
+            None,
             4,
         )
         .unwrap();
@@ -179,6 +238,7 @@ mod tests {
                 ChordKind::DominantSeventh,
             ),
             key(NoteLetter::C, Accidental::Natural),
+            None,
             4,
         )
         .unwrap();
@@ -191,6 +251,7 @@ mod tests {
         let notes = plain_voicing(
             chord(Accidental::Flat, ScaleDegree::Seventh, ChordKind::Major),
             key(NoteLetter::F, Accidental::Natural),
+            None,
             4,
         )
         .unwrap();
@@ -202,6 +263,7 @@ mod tests {
         let notes = plain_voicing(
             chord(Accidental::Natural, ScaleDegree::First, ChordKind::Major),
             key(NoteLetter::C, Accidental::Natural),
+            None,
             3,
         )
         .unwrap();
@@ -217,6 +279,7 @@ mod tests {
                 ChordKind::DominantSeventhFlatNinth,
             ),
             key(NoteLetter::B, Accidental::Natural),
+            None,
             9,
         )
         .unwrap_err();

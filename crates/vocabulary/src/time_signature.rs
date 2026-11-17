@@ -32,6 +32,13 @@ pub struct TimeSignature {
     pulses_per_whole_note: u8,
 }
 
+/// Written as in a song: `5/4`.
+impl std::fmt::Display for TimeSignature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}", self.pulses_per_bar, self.pulses_per_whole_note)
+    }
+}
+
 impl TimeSignature {
     /// # Errors
     ///

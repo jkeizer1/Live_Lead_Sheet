@@ -4,6 +4,7 @@
 //! A file with any mistake does not load, not even partly (EFS-6.3): the
 //! result is either all the entries or all the mistakes found.
 
+use vocabulary::bar_meters::BarMeters;
 use vocabulary::rhythm_pattern::{ElementMarks, RhythmElement, RhythmPattern, RhythmPatternError};
 use vocabulary::score_length::ScoreLength;
 use vocabulary::time_signature::TimeSignature;
@@ -147,7 +148,7 @@ fn read_block_line(block: &mut OpenBlock, line: &str) -> Result<(), String> {
         let bars: Vec<Vec<BarElement>> = parse_bars(
             line,
             block.bars.len(),
-            time_signature.bar_length().ticks(),
+            &BarMeters::uniform(time_signature),
             BarNotation::Rhythm,
             // A rhythm writes every length; nothing is carried.
             &mut LineCarry::start_of_line(),
@@ -278,7 +279,7 @@ mod tests {
         assert_eq!(errors.len(), 2);
         assert_eq!(
             errors[0].to_string(),
-            "bad.library line 6: bar 1 is short by an eighth note. Add e or er."
+            "bad.library line 6: bar 1 is 4/4 and short by an eighth note. Add e or er."
         );
         assert_eq!(errors[1].line_number(), 7);
         assert!(errors[1].message().contains("has no group"));

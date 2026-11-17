@@ -1,0 +1,41 @@
+# Canonical test song: crates/song_text/tests/meter_control_plan.rs reads this file and expects exactly this content.
+# Meter patterns: [4_4 5_4] over four bars, the same pattern carried, a plain 3/4 section, then [6_8 9_8] (a dotted quarter beat).
+# To hear it:
+#   cargo run --release -p song_text --example song_play_test -- \
+#     songs_canonical/meter_control/meter_pattern.song songs_canonical/meter_control/meter_pattern.studio
+song "Meter pattern cases"
+
+track "Clock"
+  type clock_and_transport
+
+track "Meter"
+  type meter_control
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+track "Bass"
+  type mono_voice
+  clef bass
+
+section "Four and five"
+  key C major  tempo 100 beats/min
+  line "Meter"  | mp [4_4 5_4] |
+  line "Keys"  | I:w | IV:w IV:q | V:w | I:w I:q |
+  line "Bass"  | C2:q / / / | F2:q / / / / | G2:q / / / | C2:q / / / / |
+
+section "Carried"
+  line "Keys"  | I:w | IV:w IV:q |
+  line "Bass"  | C2:q / / / | F2:q / / / / |
+
+section "Waltz"
+  meter 3/4
+  line "Keys"  | I:h. | V:h. |
+  line "Bass"  | C2:q / / | G2:q / / |
+
+section "Six and nine"
+  line "Meter"  | mp [6_8 9_8] |
+  line "Keys"  | I:h. | IV:h. IV:q. |
+  line "Bass"  | C2:q. / | F2:q. / / |

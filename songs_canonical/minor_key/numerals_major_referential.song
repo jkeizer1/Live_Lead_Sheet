@@ -1,0 +1,16 @@
+# Canonical test song: crates/song_text/tests/minor_key.rs reads this file and expects exactly this content.
+# C minor with chord_numeral_standard major_referential: bIII, bVI and bVII are the chords on E-flat, A-flat and B-flat, the same sound as numerals_key_dependent.song.
+song "Major referential numerals"
+chord_numeral_standard major_referential
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+section "C minor"
+  key C minor  meter 4/4  tempo 100 beats/min
+  line "Keys"  | i:w | bIII:w | iv:w | V:w | bVI:w | bVII:w | vii°:w | i:w |

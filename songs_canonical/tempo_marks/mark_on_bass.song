@@ -1,0 +1,16 @@
+# Canonical test song (deliberately wrong): crates/song_text/tests/tempo_marks_plan.rs, test `mark_on_bass`.
+# A tempo mark on the Bass line. The loader must refuse it: only the lead track's first voice layer takes marks.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+track "Bass"
+  type mono_voice
+  clef bass
+section "A"
+  key C major  meter 4/4  tempo 100 beats/min
+  line "Keys"  | I:w | I:w |
+  line "Bass"  | tempo 90 beats/min C2:q / / / | C2:q / / / |

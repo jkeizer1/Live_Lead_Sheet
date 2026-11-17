@@ -1,0 +1,15 @@
+# Canonical test song (deliberately wrong): crates/song_text/tests/meter_control_plan.rs, test `pattern_length_not_multiple`.
+# The pattern [3_4 5_4] is two bars and the section is three. The loader must refuse it: the section's length must be a multiple of the pattern's.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Meter"
+  type meter_control
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+section "A"
+  key C major  tempo 100 beats/min
+  line "Meter"  | mp [3_4 5_4] |
+  line "Keys"  | I:h. | IV:w IV:q | V:h. |

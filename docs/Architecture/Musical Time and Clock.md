@@ -1,6 +1,6 @@
 # Live Lead Sheet — Musical Time and Clock
 
-Revision 18 — 15 Nov 2026 (tempo steps inside a section; a meter change makes a new anchor only where the beat's length changes; tempo ramps as a staircase of anchors, one per clock pulse)
+Revision 19 — 16 Nov 2026
 
 How the program represents *where* things are in a song, *how long* they
 last, and *when* they happen. Every term is defined before it is used;
@@ -160,8 +160,9 @@ L_bar   = n × L_pulse
 ```
 
 L_bar is the length of the bar's own meter. With a `meter_control` line it
-can differ from bar to bar inside a section (Song Notation, "Meter and
-tempo inside a section").
+can differ from bar to bar inside a section (Song Notation, "Meter
+Control"). Every meter of a pattern has the same beat, so L_beat does not
+change inside a section.
 
 Unit checks: `ticks/w ÷ pulses/w` → ticks/pulse;
 `pulses × ticks/pulse` → ticks.
@@ -502,25 +503,30 @@ A new anchor is made at:
 - **Play** — (start position, the instant playing starts,
   written tempo × slider).
 - **A new written tempo**, either a section with a new written tempo or a
-  `tp` step inside a section (Song Notation, "Meter and tempo inside a
-  section") — at its first position, using the instant computed for that
-  position from the previous anchor. The anchor is made when the player
-  reaches that position, before any event at or after it is queued, so
-  nothing is removed.
+  tempo mark on the lead line inside a section (Song Notation, "Tempo
+  marks on the lead line") — at its first position, using the instant
+  computed for that position from the previous anchor. The anchor is made
+  when the player reaches that position, before any event at or after it
+  is queued, so nothing is removed. Each play of a repeated section starts
+  at the section's tempo, so a section whose tempo changes inside it makes
+  a new anchor at the start of every play.
 - **A meter change that changes the beat's length** (4/4 to 6/8, where
   the beat goes from a quarter note to a dotted quarter) — at the first
-  position of the new bar, using the instant computed for that position
-  from the previous anchor. The beats per minute carry on (Song Notation,
-  section 5), so B is recomputed from them with the new beat's length
-  (section 13). A meter change that leaves the beat's length alone (4/4 to
-  3/4, or 4/4 to 5/4) makes no anchor: B is unchanged, and only where the
-  next bar starts differs. A `tp` mark is in beats of the meter in force,
-  converted with that bar's beat length (section 13).
-- **A tempo ramp** (*decided, Jim, 15 Nov 2026*) — a new anchor at every
+  position of the new section, using the instant computed for that
+  position from the previous anchor. The beats per minute carry on (Song
+  Notation, section 5), so B is recomputed from them with the new beat's
+  length (section 13). A meter change that leaves the beat's length alone
+  (4/4 to 3/4, or 4/4 to 5/4) makes no anchor: B is unchanged, and only
+  where the next bar starts differs. Inside a section the beat never
+  changes (Song Notation, "Meter Control"), so only a change of section
+  can change it. A tempo mark is in beats of the section's meter,
+  converted with the beat length (section 13).
+- **A tempo ramp** — a new anchor at every
   clock pulse of the ramp (section 9; 24 clock pulses/q, so one every
   210 ticks), each made when the player reaches its position, from the
   previous anchor as above. The tempo moves in a straight line over the
-  score positions of the ramp:
+  score positions of the ramp. A ramp starts at a tempo mark and ends
+  inside its section:
 
   ```
   B_i = B_start + (B_end − B_start) × (P_i − P_start) ÷ (P_end − P_start)
@@ -875,9 +881,6 @@ decimal place can fall between whole mq/min (112.25 beats/min × 250 =
 The tick size (section 4) and the clock (section 5, D-8) are decided.
 
 **Open, sending MIDI clock (V1):**
-
-- **O-14** (how a tempo ramp is played) — closed by Jim, 15 Nov 2026: a
-  staircase of anchors, one per clock pulse (section 8).
 
 - **O-2, O-3, O-13** (Timing Clock while stopped, when to send Start
   around a count-in, when the heartbeat runs) — closed by D-10: the

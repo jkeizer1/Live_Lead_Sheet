@@ -12,9 +12,11 @@
 //! steps, and rounded once, to the nearest tick (half up), so nothing
 //! drifts.
 
+use vocabulary::bar_meters::BarMeters;
 use vocabulary::dynamics::DynamicMark;
 use vocabulary::rhythm_pattern::{AccentLevel, ElementKind, ElementMarks};
 use vocabulary::ticks::{TICKS_PER_QUARTER_NOTE, TICKS_PER_WHOLE_NOTE};
+use vocabulary::time_signature::TimeSignature;
 
 use crate::contents_text::parse_chord;
 use crate::euclid_pattern::euclid_pattern;
@@ -136,15 +138,16 @@ enum GroupLength {
 /// # Errors
 ///
 /// A message saying what is wrong and what to type instead; the caller adds
-/// the file and line. Also when the elements do not add up exactly to
-/// `bar_length_ticks`.
+/// the file and line. Also when the elements do not add up exactly to the
+/// length of `bar_meter`, which the message names.
 pub fn parse_bar(
     bar_text: &str,
     bar_number: usize,
-    bar_length_ticks: u64,
+    bar_meter: TimeSignature,
     notation: BarNotation,
     carry: &mut LineCarry,
 ) -> Result<Vec<BarElement>, String> {
+    let bar_length_ticks: u64 = bar_meter.bar_length().ticks();
     let mut cursor: Cursor = Cursor::new(bar_text);
     let mut placed: Vec<BarElement> = Vec::new();
     let mut position_subticks: u64 = 0;
@@ -221,14 +224,14 @@ pub fn parse_bar(
             (None, _) => String::from(" Add a note or rest to fill the bar."),
         };
         return Err(format!(
-            "bar {bar_number} is short by {}.{advice}",
+            "bar {bar_number} is {bar_meter} and short by {}.{advice}",
             words.description
         ));
     }
     if position_subticks > bar_subticks {
         let over_ticks: u64 = (position_subticks - bar_subticks).div_ceil(SUBTICKS_PER_TICK);
         return Err(format!(
-            "bar {bar_number} is over by {}. Shorten or remove an element.",
+            "bar {bar_number} is {bar_meter} and over by {}. Shorten or remove an element.",
             describe_length(over_ticks).description
         ));
     }
@@ -371,7 +374,7 @@ fn parse_euclid_bar(
 pub fn parse_bars(
     line: &str,
     bars_so_far: usize,
-    bar_length_ticks: u64,
+    bar_meters: &BarMeters,
     notation: BarNotation,
     carry: &mut LineCarry,
 ) -> Result<Vec<Vec<BarElement>>, String> {
@@ -399,8 +402,9 @@ pub fn parse_bars(
         } else {
             bar_text
         };
-        let mut bar: Vec<BarElement> =
-            parse_bar(bar_text, bar_number, bar_length_ticks, notation, carry)?;
+        // bar_number counts from 1; the meters count bars from 0.
+        let bar_meter: TimeSignature = bar_meters.meter_of_bar(bar_number - 1);
+        let mut bar: Vec<BarElement> = parse_bar(bar_text, bar_number, bar_meter, notation, carry)?;
         for element in &mut bar {
             element.octave_shift_octaves = carry.octave_shift_octaves;
         }
@@ -420,7 +424,7 @@ pub fn parse_bars(
 pub fn parse_source_bars(
     line: &str,
     bars_so_far: usize,
-    bar_length_ticks: u64,
+    bar_meters: &BarMeters,
 ) -> Result<Vec<Vec<BarElement>>, String> {
     let line: &str = line.trim();
     if !line.starts_with('|') || !line.ends_with('|') || line.len() < 2 {
@@ -432,6 +436,7 @@ pub fn parse_source_bars(
     let mut bars: Vec<Vec<BarElement>> = Vec::new();
     for (offset, bar_text) in split_at_barlines(inside).into_iter().enumerate() {
         let bar_number: usize = bars_so_far + offset + 1;
+        let bar_length_ticks: u64 = bar_meters.bar_length_ticks(bar_number - 1);
         bars.push(parse_source_bar(bar_text, bar_number, bar_length_ticks)?);
     }
     Ok(bars)
@@ -511,7 +516,7 @@ fn parse_source_bar(
 }
 
 /// Splits at `|`, except inside a quoted cue name.
-fn split_at_barlines(text: &str) -> Vec<&str> {
+pub(crate) fn split_at_barlines(text: &str) -> Vec<&str> {
     let mut parts: Vec<&str> = Vec::new();
     let mut inside_quotes: bool = false;
     let mut part_start: usize = 0;
@@ -1208,13 +1213,15 @@ impl Cursor {
 mod tests {
     use super::*;
 
-    const FOUR_FOUR_BAR_TICKS: u64 = 20_160;
+    fn four_four() -> TimeSignature {
+        TimeSignature::new(4, 4).unwrap()
+    }
 
     fn rhythm(bar_text: &str) -> Result<Vec<BarElement>, String> {
         parse_bar(
             bar_text,
             1,
-            FOUR_FOUR_BAR_TICKS,
+            four_four(),
             BarNotation::Rhythm,
             &mut LineCarry::start_of_line(),
         )
@@ -1224,7 +1231,7 @@ mod tests {
         parse_bar(
             bar_text,
             1,
-            FOUR_FOUR_BAR_TICKS,
+            four_four(),
             BarNotation::SongLine,
             &mut LineCarry::start_of_line(),
         )
@@ -1293,7 +1300,7 @@ mod tests {
             assert!(*length_ticks == 1832 || *length_ticks == 1833);
             expected_start_ticks += length_ticks;
         }
-        assert_eq!(expected_start_ticks, FOUR_FOUR_BAR_TICKS);
+        assert_eq!(expected_start_ticks, four_four().bar_length().ticks());
     }
 
     #[test]
@@ -1320,7 +1327,7 @@ mod tests {
     fn a_short_bar_says_what_to_add() {
         assert_eq!(
             error_of("q q q e"),
-            "bar 1 is short by an eighth note. Add e or er."
+            "bar 1 is 4/4 and short by an eighth note. Add e or er."
         );
     }
 
@@ -1328,7 +1335,7 @@ mod tests {
     fn a_long_bar_says_so() {
         assert_eq!(
             error_of("q q q q e"),
-            "bar 1 is over by an eighth note. Shorten or remove an element."
+            "bar 1 is 4/4 and over by an eighth note. Shorten or remove an element."
         );
     }
 
@@ -1451,7 +1458,7 @@ mod tests {
         let bars: Vec<Vec<BarElement>> = parse_bars(
             "| C4:h D4 | E4 F4 |",
             0,
-            FOUR_FOUR_BAR_TICKS,
+            &BarMeters::uniform(TimeSignature::new(4, 4).unwrap()),
             BarNotation::SongLine,
             &mut carry,
         )
@@ -1516,7 +1523,7 @@ mod tests {
         let bar: Vec<BarElement> = parse_bar(
             ":h :q r:q",
             1,
-            4 * 5040,
+            four_four(),
             BarNotation::SongLine,
             &mut LineCarry::start_of_line(),
         )

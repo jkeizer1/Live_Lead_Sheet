@@ -1,0 +1,15 @@
+# Canonical test song (deliberately wrong): crates/song_text/tests/tempo_marks_plan.rs, test `ramp_past_section_end`.
+# A ramp of 3 bars in bar 3 of a 4-bar section. The loader must refuse it: it needs bars 3 to 5 and the section has 2 left.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+track "Bass"
+  type mono_voice
+  clef bass
+section "A"
+  key C major  meter 4/4  tempo 100 beats/min
+  line "Keys"  | I:w | I:w | tempo 100 ramp_to 120 beats/min 3_bars I:w | I:w |

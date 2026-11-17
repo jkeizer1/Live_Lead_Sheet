@@ -1,0 +1,13 @@
+# Canonical test song (deliberately wrong): crates/song_text/tests/minor_key.rs, test `an_unknown_standard_is_refused`.
+# chord_numeral_standard with a word that is neither key_dependent nor major_referential. The loader must refuse it and name both.
+song "T"
+chord_numeral_standard classical
+track "Clock"
+  type clock_and_transport
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+section "A"
+  key C minor  meter 4/4  tempo 100 beats/min
+  line "Keys"  | C4:w |

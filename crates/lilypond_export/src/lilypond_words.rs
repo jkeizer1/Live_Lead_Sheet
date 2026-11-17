@@ -60,6 +60,7 @@ pub fn duration(value: NoteValue) -> String {
 pub fn key(written: Key) -> String {
     let mode: &str = match written.mode() {
         Mode::Major => "\\major",
+        Mode::Minor => "\\minor",
     };
     format!("\\key {} {mode}", note_name(written.tonic()))
 }

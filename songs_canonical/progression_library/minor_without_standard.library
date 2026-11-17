@@ -1,0 +1,7 @@
+# Canonical test library (deliberately wrong): crates/song_text/tests/progression_library.rs, test `a_minor_progression_needs_the_standard`.
+# A minor progression and no chord_numeral_standard line. The loader must refuse it and say what to add.
+progression "Andalusian cadence"
+  group "Pop and rock" "Loop"
+  mode minor
+  meter 4/4
+  | i | VII | VI | V |

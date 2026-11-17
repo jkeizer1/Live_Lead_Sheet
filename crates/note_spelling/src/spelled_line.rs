@@ -4,6 +4,7 @@
 //! here, once, for every converter.
 
 use vocabulary::key::Key;
+use vocabulary::numeral_standard::NumeralStandard;
 use vocabulary::pitch::Pitch;
 use vocabulary::rhythm_pattern::{ElementKind, ElementMarks, RhythmElement};
 use vocabulary::roman_chord::RomanChord;
@@ -60,12 +61,15 @@ pub struct SpelledBar {
 pub fn spell_line(
     track: &Track,
     section: &Section,
+    numeral_standard: Option<NumeralStandard>,
     line: &Line,
 ) -> Result<Vec<SpelledBar>, SpellingError> {
-    let bar_length_ticks: u64 = section.time_signature().bar_length().ticks();
+    let bar_meters = section.bar_meters();
     let home_octave: Option<i8> = match track.kind() {
         TrackKind::Voice { clef, .. } => Some(clef.default_home_octave()),
-        TrackKind::ClockAndTransport | TrackKind::CueControl { .. } => None,
+        TrackKind::ClockAndTransport | TrackKind::CueControl { .. } | TrackKind::MeterControl => {
+            None
+        }
     };
     let error_at = |bar_index: usize, problem: SpellingProblem| SpellingError {
         section_name: section.name().to_string(),
@@ -86,8 +90,7 @@ pub fn spell_line(
         let element: &RhythmElement = line_element.element();
         // Elements never cross a barline (the song file refuses it), so an
         // element's bar is the bar its start lies in.
-        let bar_index: usize =
-            usize::try_from(element.start().ticks() / bar_length_ticks).unwrap_or(usize::MAX);
+        let (bar_index, start_ticks): (usize, u64) = bar_meters.bar_at(element.start().ticks());
         if bar_index != current_bar_index {
             if !triplet.is_empty() {
                 return Err(error_at(
@@ -100,10 +103,9 @@ pub fn spell_line(
             });
             current_bar_index = bar_index;
         }
-        let start_ticks: u64 = element.start().ticks() % bar_length_ticks;
         let length_ticks: u64 = element.length().ticks();
         let (sound, chord): (Sound, Option<RomanChord>) =
-            sound_of(line_element, section.key(), home_octave)
+            sound_of(line_element, section.key(), numeral_standard, home_octave)
                 .map_err(|problem| error_at(bar_index, problem))?;
         // The staff shows the sounding pitch, so `+8va` or `-8va` moves the
         // notes. (Drawing the ottava sign is not built.)
@@ -189,6 +191,7 @@ fn shifted_by_octaves(sound: Sound, octaves: i8) -> Sound {
 fn sound_of(
     line_element: &LineElement,
     key: Option<Key>,
+    numeral_standard: Option<NumeralStandard>,
     home_octave: Option<i8>,
 ) -> Result<(Sound, Option<RomanChord>), SpellingProblem> {
     if line_element.element().kind() == ElementKind::Rest {
@@ -205,8 +208,9 @@ fn sound_of(
         Some(ElementContents::InvertedChord { chord, inversion }) => {
             let key: Key = key.ok_or(SpellingProblem::ChordWithoutKey)?;
             let home_octave: i8 = home_octave.ok_or(SpellingProblem::NothingWritten)?;
-            let pitches: Vec<Pitch> = inverted_chord_pitches(*chord, key, home_octave, *inversion)
-                .map_err(SpellingProblem::Voicing)?;
+            let pitches: Vec<Pitch> =
+                inverted_chord_pitches(*chord, key, numeral_standard, home_octave, *inversion)
+                    .map_err(SpellingProblem::Voicing)?;
             Ok((Sound::Pitches(pitches), Some(*chord)))
         }
         Some(ElementContents::Chord(chord)) => {
@@ -214,8 +218,8 @@ fn sound_of(
             // A chord on a track with no home octave: the song file only
             // lets voice tracks carry chords, so this is reported, not guessed.
             let home_octave: i8 = home_octave.ok_or(SpellingProblem::NothingWritten)?;
-            let pitches: Vec<Pitch> =
-                chord_pitches(*chord, key, home_octave).map_err(SpellingProblem::Voicing)?;
+            let pitches: Vec<Pitch> = chord_pitches(*chord, key, numeral_standard, home_octave)
+                .map_err(SpellingProblem::Voicing)?;
             Ok((Sound::Pitches(pitches), Some(*chord)))
         }
     }
@@ -233,7 +237,7 @@ mod tests {
     fn spelled(text: &str) -> Result<Vec<SpelledBar>, SpellingError> {
         let song: Song = parse_song("test.song", text).unwrap();
         let section: &Section = &song.sections()[0];
-        spell_line(&song.tracks()[1], section, &section.lines()[0])
+        spell_line(&song.tracks()[1], section, None, &section.lines()[0])
     }
 
     fn values(item: &SpelledItem) -> Vec<(u64, u8)> {

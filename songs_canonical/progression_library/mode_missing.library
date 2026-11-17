@@ -1,0 +1,6 @@
+# Canonical test library (deliberately wrong): crates/song_text/tests/progression_library.rs, test `an_entry_needs_its_mode`.
+# A progression with no mode line. The loader must refuse it and say to write mode major or mode minor.
+progression "No mode"
+  group "Jazz" "Cadence"
+  meter 4/4
+  | ii7 | V7 |

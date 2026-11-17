@@ -8,10 +8,12 @@
 
 use std::fmt;
 
+use vocabulary::bar_meters::BarMeters;
 use vocabulary::control_track::ControlTrack;
 use vocabulary::key::Key;
 use vocabulary::midi_values::NoteNumber;
 use vocabulary::midi_values::Velocity;
+use vocabulary::numeral_standard::NumeralStandard;
 use vocabulary::phrase_cue::{
     ChannelMessage, ControlCueMessage, OutputPortName, PhraseCue, PhraseCueError, TransportMessage,
 };
@@ -23,12 +25,14 @@ use vocabulary::song::{
     Section, Song, Track, TrackKind,
 };
 use vocabulary::tempo::Tempo;
+use vocabulary::tempo_mark::TempoMarkKind;
 use vocabulary::time_signature::TimeSignature;
 
 use crate::dynamics_timeline::DynamicsTimeline;
 use crate::layer_merge::{LayerNote, merge_equal_pitches_across_layers};
 use crate::note_track::{NoteTrack, NoteTrackError, TimedNote};
 use crate::sample_source::held_stretches;
+use crate::schedule::TICKS_PER_CLOCK_PULSE;
 use crate::studio_configuration::{StudioConfiguration, TrackOutput, UnmetNeed};
 use crate::voicing::{VoicingError, inverted_voicing, plain_voicing};
 
@@ -86,7 +90,11 @@ pub struct SectionPass {
     pub pass_number: u32,
     pub pass_count: u32,
     pub key: Option<Key>,
+    /// The meter of the first bar.
     pub time_signature: TimeSignature,
+    /// The meter of every bar, and the number of bars in one play.
+    pub bar_meters: BarMeters,
+    pub bar_count: u32,
     pub tempo: Tempo,
     /// Ticks from the start of the song.
     pub start_ticks: u64,
@@ -113,11 +121,19 @@ pub fn plan_song(song: &Song, studio: &StudioConfiguration) -> Result<SongPlan, 
     for track in song.tracks() {
         match track.kind() {
             TrackKind::Voice { .. } => {
-                note_tracks.push(voice_track(track, studio, &passes)?);
+                note_tracks.push(voice_track(
+                    track,
+                    studio,
+                    song.numeral_standard(),
+                    &passes,
+                )?);
             }
             TrackKind::CueControl { cues } => {
                 control_tracks.push(cue_track(track, cues, song, studio, &passes)?);
             }
+            // The meter pattern is read from the section (Section::length_ticks);
+            // the track sends nothing.
+            TrackKind::MeterControl => {}
             TrackKind::ClockAndTransport => {
                 let port: OutputPortName = port_of(studio, track)?;
                 control_tracks.push(transport_track(track, &port, stretch_length)?);
@@ -149,31 +165,105 @@ fn section_pass_of(pass: &Pass) -> SectionPass {
         pass_count: pass.section.repeat_count(),
         key: pass.section.key(),
         time_signature: pass.section.time_signature(),
+        bar_meters: pass.section.bar_meters().clone(),
+        bar_count: pass.section.bar_count(),
         tempo: pass.section.tempo(),
         start_ticks: pass.start_ticks,
     }
 }
 
-/// The tempo the song starts at, and each later place where a section's
-/// tempo differs from the one played before it. A section carried over from
-/// the one before keeps its tempo, so it makes no change.
+/// The tempo the song starts at, and each later place where the tempo
+/// changes: the start of a section play whose tempo differs from the tempo
+/// in force, each tempo mark of the lead line, and, along a ramp, one place
+/// at every clock pulse (Musical Time and Clock, section 8). A section play
+/// starts at the section's own tempo, so a repeat after a ramp starts again
+/// from the section's tempo.
 fn tempo_map_of(passes: &[Pass]) -> Result<(Tempo, Vec<TempoChange>), PlanError> {
-    let Some(first) = passes.first() else {
+    if passes.is_empty() {
         return Err(PlanError::NoSections);
-    };
+    }
+    // Every place a tempo is set, in order; a later setting at the same
+    // position (a mark at the section's first bar) replaces the earlier.
+    let mut settings: Vec<(u64, Tempo)> = Vec::new();
+    for pass in passes {
+        let bar_meters: &BarMeters = pass.section.bar_meters();
+        set_tempo(&mut settings, pass.start_ticks, pass.section.tempo());
+        for mark in pass.section.tempo_marks() {
+            let mark_start_ticks: u64 =
+                pass.start_ticks + bar_meters.bar_start_ticks(mark.bar_index() as usize);
+            match mark.kind() {
+                TempoMarkKind::Step { tempo } => {
+                    set_tempo(&mut settings, mark_start_ticks, tempo);
+                }
+                TempoMarkKind::Ramp { start, end, .. } => {
+                    let ramp_end_ticks: u64 = pass.start_ticks
+                        + bar_meters.bar_start_ticks(mark.end_bar_index() as usize);
+                    let ramp_length_ticks: u64 = ramp_end_ticks - mark_start_ticks;
+                    let pulse_count: u64 = ramp_length_ticks / TICKS_PER_CLOCK_PULSE;
+                    for pulse in 0..=pulse_count {
+                        let into_ramp_ticks: u64 = pulse * TICKS_PER_CLOCK_PULSE;
+                        let tempo: Tempo =
+                            ramp_tempo_at(start, end, into_ramp_ticks, ramp_length_ticks)?;
+                        set_tempo(&mut settings, mark_start_ticks + into_ramp_ticks, tempo);
+                    }
+                    // The end tempo holds from the end of the ramp, which
+                    // falls between clock pulses when the ramp is not a
+                    // whole number of them.
+                    set_tempo(&mut settings, ramp_end_ticks, end);
+                }
+            }
+        }
+    }
+    let first_tempo: Tempo = settings[0].1;
     let mut changes: Vec<TempoChange> = Vec::new();
-    let mut in_force: Tempo = first.section.tempo();
-    for pass in &passes[1..] {
-        let tempo: Tempo = pass.section.tempo();
+    let mut in_force: Tempo = first_tempo;
+    for &(position_ticks, tempo) in &settings[1..] {
         if tempo != in_force {
             changes.push(TempoChange {
-                position: ScorePosition::from_ticks(pass.start_ticks),
+                position: ScorePosition::from_ticks(position_ticks),
                 tempo,
             });
             in_force = tempo;
         }
     }
-    Ok((first.section.tempo(), changes))
+    Ok((first_tempo, changes))
+}
+
+/// Records `tempo` from `position_ticks`, replacing a setting already made
+/// at that position.
+fn set_tempo(settings: &mut Vec<(u64, Tempo)>, position_ticks: u64, tempo: Tempo) {
+    if let Some(last) = settings.last_mut()
+        && last.0 == position_ticks
+    {
+        last.1 = tempo;
+        return;
+    }
+    settings.push((position_ticks, tempo));
+}
+
+/// The tempo `into_ramp_ticks` along a ramp of `ramp_length_ticks`, on the
+/// straight line from `start` to `end`:
+/// `B = B_start + (B_end - B_start) × into_ramp_ticks / ramp_length_ticks`,
+/// in mq/min (the ticks cancel), rounded to the nearest whole mq/min.
+fn ramp_tempo_at(
+    start: Tempo,
+    end: Tempo,
+    into_ramp_ticks: u64,
+    ramp_length_ticks: u64,
+) -> Result<Tempo, PlanError> {
+    let start_mq_per_min: i128 = i128::from(start.milli_quarters_per_minute());
+    let end_mq_per_min: i128 = i128::from(end.milli_quarters_per_minute());
+    let ramp_length: i128 = i128::from(ramp_length_ticks);
+    let numerator: i128 = (end_mq_per_min - start_mq_per_min) * i128::from(into_ramp_ticks);
+    // Round half away from zero: add half the divisor with the numerator's sign.
+    let half: i128 = ramp_length / 2;
+    let step: i128 = if numerator >= 0 {
+        (numerator + half) / ramp_length
+    } else {
+        (numerator - half) / ramp_length
+    };
+    let mq_per_min: u64 = u64::try_from(start_mq_per_min + step).map_err(|_| PlanError::TooLong)?;
+    Tempo::from_milli_quarters_per_minute(mq_per_min).map_err(|_| PlanError::TooLong)
 }
 
 /// The sections in play order, each repeat written out, and the total length.
@@ -181,9 +271,8 @@ fn order_passes(song: &Song) -> Result<(Vec<Pass<'_>>, ScoreLength), PlanError> 
     let mut passes: Vec<Pass> = Vec::new();
     let mut position_ticks: u64 = 0;
     for section in song.sections() {
-        // bars × ticks/bar → ticks.
-        let section_ticks: u64 =
-            u64::from(section.bar_count()) * section.time_signature().bar_length().ticks();
+        // The ticks of the section's bars, each in its own meter.
+        let section_ticks: u64 = section.length_ticks();
         for number in 1..=section.repeat_count() {
             passes.push(Pass {
                 section,
@@ -263,6 +352,7 @@ fn not_yet_applied(song: &Song, studio: &StudioConfiguration) -> Vec<String> {
 fn voice_track(
     track: &Track,
     studio: &StudioConfiguration,
+    numeral_standard: Option<NumeralStandard>,
     passes: &[Pass],
 ) -> Result<NoteTrack, PlanError> {
     let TrackKind::Voice { clef, .. } = track.kind() else {
@@ -311,6 +401,7 @@ fn voice_track(
                 dynamics: &dynamics,
                 home_octave,
                 key: pass.section.key(),
+                numeral_standard,
             };
             layer_notes.extend(
                 line_notes(track, line, &around, pass, output)?
@@ -340,6 +431,8 @@ struct LineSurroundings<'a> {
     dynamics: &'a DynamicsTimeline,
     home_octave: i8,
     key: Option<Key>,
+    /// What the song declared for the roots of numerals in a minor key.
+    numeral_standard: Option<NumeralStandard>,
 }
 
 /// The notes of one line in one pass of a section: a note, or all of a
@@ -358,6 +451,7 @@ fn line_notes(
         dynamics,
         home_octave,
         key,
+        numeral_standard,
     } = *around;
     let elements: &[LineElement] = line.elements();
     let mut notes: Vec<TimedNote> = Vec::new();
@@ -405,6 +499,7 @@ fn line_notes(
             for note in note_numbers(
                 contents,
                 key,
+                numeral_standard,
                 home_octave,
                 line_element.octave_shift_octaves(),
                 output,
@@ -477,6 +572,7 @@ fn tied_length(
 fn note_numbers(
     contents: &ElementContents,
     key: Option<Key>,
+    numeral_standard: Option<NumeralStandard>,
     home_octave: i8,
     annotation_octaves: i8,
     output: &TrackOutput,
@@ -487,13 +583,14 @@ fn note_numbers(
             let key: Key = key.ok_or_else(|| PlanError::NoKey {
                 track_name: track.name().to_string(),
             })?;
-            plain_voicing(*chord, key, home_octave).map_err(PlanError::Voicing)?
+            plain_voicing(*chord, key, numeral_standard, home_octave).map_err(PlanError::Voicing)?
         }
         ElementContents::InvertedChord { chord, inversion } => {
             let key: Key = key.ok_or_else(|| PlanError::NoKey {
                 track_name: track.name().to_string(),
             })?;
-            inverted_voicing(*chord, key, home_octave, *inversion).map_err(PlanError::Voicing)?
+            inverted_voicing(*chord, key, numeral_standard, home_octave, *inversion)
+                .map_err(PlanError::Voicing)?
         }
         ElementContents::Notes(pitches)
         | ElementContents::ChordWithNotes { notes: pitches, .. } => pitches

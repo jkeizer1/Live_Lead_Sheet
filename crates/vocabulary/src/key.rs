@@ -1,6 +1,6 @@
-//! A key: tonic and mode. V1 has major keys only; minor keys and modes are
-//! not designed yet (Song Notation, Q12), so `Mode` has one variant and
-//! adding another makes the compiler list every place that must handle it.
+//! A key: tonic and mode, major or minor (`minor_key_treatment_decision.md`,
+//! Conclusion). A mode such as Dorian is an annotation, not a `Mode`.
+//! Adding a variant makes the compiler list every place that must handle it.
 
 use std::fmt;
 
@@ -9,6 +9,7 @@ use crate::pitch::NoteName;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Mode {
     Major,
+    Minor,
 }
 
 impl Mode {
@@ -16,6 +17,7 @@ impl Mode {
     pub const fn text(self) -> &'static str {
         match self {
             Mode::Major => "major",
+            Mode::Minor => "minor",
         }
     }
 }

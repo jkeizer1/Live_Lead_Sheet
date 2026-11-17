@@ -1,9 +1,9 @@
 # Live Lead Sheet — Architecture
 
-Revision 24 — 15 Nov 2026 (tempo and meter changes inside a section; tempo carry decided; navigation marks deferred; track types)
+Revision 25 — 16 Nov 2026
 
 Builds on the Concept Brief (Revision 13), the Experience Functional
-Specification (Revision 19) and Song Notation (Revision 23). Sets the
+Specification (Revision 20) and Song Notation (Revision 24). Sets the
 principles, the main parts, how they talk, and the technology for V1.
 
 **Focus.** V1 is the Live Lead Sheet itself: the leader, on one native
@@ -517,7 +517,7 @@ an accent) belong to the device, not to the music. Ports and channels in
 the song tied it to one studio.
 
 - **Two kinds of file.** The *song* names tracks, with a type and a clef,
-  and holds sections, lines, cues and tempo and meter changes inside a section (`tp` and `mp` lines); no port,
+  and holds sections, lines, cues, meter patterns inside a section (a `meter_control` line) and tempo marks on the lead line; no port,
   channel, velocity number or device. The *studio configuration* declares
   the ports, and for each track of a song, by name: port, channel,
   octave offset, velocity levels and device timing; and maps each cue
@@ -526,7 +526,7 @@ the song tied it to one studio.
   vocabulary, so the configuration's type lives outside it; the parser
   for all the files is one adapter crate, `song_text` (A-3).
 - **Track types** say what a track can do and so what the receiver must
-  be able to do: poly voice, mono voice, clock and transport, cue control and tempo control (a line of a section) in V1 (a beat pulse is a mono voice); musician voice and automation control deferred (Song Notation, section 5). Clock and transport has a port and no
+  be able to do: poly voice, mono voice, clock and transport, cue control and meter control (a line of a section) in V1 (a beat pulse is a mono voice); musician voice and automation control deferred (Song Notation, section 5). Clock and transport has a port and no
   channel.
 - **Pitch** is stored as the staff pitch in the track's clef; the
   octave offset in the configuration corrects the device (musician voices,
@@ -534,7 +534,7 @@ the song tied it to one studio.
 - **Marks** (accent, Marcato (meaning: strong accent), staccato, legato, fermata) are written
   on elements; how hard an accent plays is the configuration's. A fermata
   never changes the clock in V1.
-- **Cues are rhythm lines**, so authors count note values, not bar numbers across repeats. Meter and tempo changes are `mp` and `tp` lines inside the section (Song Notation, section 5), so they repeat with it.
+- **Cues are rhythm lines**, so authors count note values, not bar numbers across repeats. A meter pattern is a `meter_control` line and a tempo change is a mark on the lead line, both inside the section (Song Notation, section 5), so they repeat with it.
 - **A file with errors** does not load, not even partly, but the program
   starts and shows the errors; the last good song keeps playing.
 - **Deferred:** true polymeter (lines of different lengths in a section). Tempo ramps are required and are designed in Musical Time and Clock.

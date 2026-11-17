@@ -1,6 +1,6 @@
 # Live Lead Sheet — Song Notation
 
-Revision 23 — 15 Nov 2026 (`mp` dynamic level; meter and tempo change inside a section, `mp` and `tp` lines with tempo ramps; a carried tempo keeps the beats per minute; track types and deferred list brought up to date)
+Revision 24 — 16 Nov 2026 (`meter_control` as one repeating pattern per section; tempo marks on the lead line, `tempo_control` removed; tempo ramps; a carried tempo keeps the beats per minute)
 
 **Status: draft for trial.** *Decided* marks what Jim has decided;
 everything else is a proposal to try with a working player. Every open
@@ -55,9 +55,9 @@ can start from the chords' roots. Its result is written into the song.
   legato and fermata, may apply on any sounding element. How hard an accent plays
   is set per device in the studio configuration, not in the song.
 - **Cues are written in rhythm notation** so the author never
-  counts bars including repeats. Meter and tempo changes are written in `mp`
-  meter pattern and `tp` tempo pattern lines. Meter and tempo inside a
-  section").
+  counts bars including repeats. A meter pattern is a `meter_control` line of
+  the section, and a tempo change is a mark on the lead line (section 5,
+  "Meter Control" and "Tempo marks on the lead line").
 - **What an element plays comes first, then its length** 
   `Eb4:sx`, `I:q`, `r:h`. A length left off is the one before it in the
   line, and `/` plays the chord or note before it again (section 4). The
@@ -303,7 +303,8 @@ sixteenth"), and the order LilyPond and ABC notation write it in.
 **What an element plays:**
 
 - **Poly voice** (a track that can play chords): a chord name in the
-  section's key (`ii7` in C major is D minor seventh), voiced plainly.
+  section's key (in a minor key, see “Chord numerals in a minor key” in section 5)
+  (`ii7` in C major is D minor seventh), voiced plainly.
   The plain voicing (EFS-5.5) is in root position, meaning the root is
   the lowest note, and in close position, meaning the other notes are
   stacked directly above the root within one octave. The root is placed
@@ -422,6 +423,29 @@ section "Verse"  repeat 2
   line "Cues"  | "Start SQ-1":w | r |   --- fires on each pass: passes are not designed (EFS-4.4)
 ```
 
+
+**Chord numerals in a minor key.** A numeral (`III`, `VI`, `bVII`) names a
+step of a scale on the key's tonic. In a minor key two practices count
+that step differently, so a song that writes numerals in a minor key says
+which, once, on the line after `song`:
+
+    song "Minor blues"
+    chord_numeral_standard key_dependent
+
+- `key_dependent` counts the step in the key's own natural minor scale. In
+  C minor the chords on E♭, A♭ and B♭ are written `III`, `VI` and `VII`.
+- `major_referential` counts the step in the major scale on the tonic, and
+  writes a flat for a lowered step. The same chords are `bIII`, `bVI` and
+  `bVII`.
+- The chords on steps 1, 2, 4 and 5, and the leading-tone chord (`vii°`),
+  are written the same in both.
+- The line applies to every section of the song. A song in major keys, and
+  a song of notes only, need no line. A song with a minor key that writes
+  numerals and omits the line is refused, and the message says to add it.
+
+
+
+
 ### Tracks and their types
 
 A track has a name (unique in the song; lines and the studio
@@ -436,8 +460,8 @@ and so what a receiving device must be able to do.
 | `mono_voice` | One note at a time, to a mono device (an analogue oscillator, a bass synth). The loader refuses overlapping notes, in hand-written files as well as the editor's. | Yes |
 | `clock_and_transport` | Timing Clock from Play to Stop, and Stop. Exactly one per song. Its output has a port but no channel, because Timing Clock, Start, Continue, Stop and Song Position Pointer carry no channel. | Yes |
 | `cue_control` | Phrase cues, placed in rhythm notation (below). | Yes |
-| `tempo_control` | Tempo changes inside a section, written as `tp` marks (below). | Needed; not yet built |
-| `meter_control` | Meter changes inside a section, written as `mp` marks (below). | Needed; not yet built |
+| `tempo_control` | Tempo changes inside a section, written as `tp` marks (below). | Yes |
+| `meter_control` | A repeating meter pattern for a section, written as `mp` (below). | Needed; not yet built |
 | `musician_voice` | A part composed for a person to read and play, in the clef of that instrument. Sends no MIDI; drawn on its own staff, with marks as interpretation. | Deferred (Jim, 15 Nov 2026). It is written in the `.song` file and rendered; in the visual player it is a first-class track that can be focused and shown with a play head. The display details are settled with the UI. |
 | `automation_control` | Continuous curves sent as controllers (a filter sweep, a crescendo on a VCA). | Deferred (Jim, 15 Nov 2026) |
 
@@ -507,14 +531,14 @@ track "Manual"
   lead
 
 section "Stollen"  repeat 2
-  key C major  meter 4/4  tempo 40 beats/min
+  key C minor  meter 4/4  tempo 40 beats/min
   line "Manual"  voice_layer 1  | G4:q G4 F4 Eb4 | …
   line "Manual"  voice_layer 2  | Eb4:sx D4 Eb4:e~ Eb4:sx F4 Eb4 D4 C4:e D4~ D4 C4 | …
   line "Manual"  voice_layer 3  | C4:sx B3 C4:e~ C4:sx B3 C4 G3 A3:e G3~ G3:sx G3 Ab3 Eb3 | …
 ```
 
-(BWV 610 is in C minor; the example says C major only because minor keys
-are not built yet. The whole piece is `songs/LilyPond/bwv610.song`.)
+((This is the opening of BWV 610, in C minor. The whole piece is
+`songs/LilyPond/bwv610.song`.)
 
 In the vocabulary a line has a **role** for its track: a voice layer with
 its number, or the placing of a cue control track's cues. More roles, for
@@ -536,7 +560,11 @@ note has priority.
 
 `section "Name"` with `count-in` for the first section if wanted, `repeat
 n`, and `key`, `meter` and `tempo` (or carrying on from the previous
-section). A key change happens at a section boundary. Meter and tempo may also change bar by bar inside a section (section 5, "Meter and tempo inside a section"). The initial tempo is the first section's. The key
+section). A key change happens at a section boundary. 
+
+A section's meter may follow a repeating pattern (`meter_control`), and its tempo may change at a bar (tempo marks on the lead line);see the below.
+
+ The key
 signature is drawn on the staff the first time, and again everywhere the
 key changes, as standard notation requires.
 
@@ -578,9 +606,10 @@ key changes, as standard notation requires.
   the bars play twice. There  is no sign for "the previous bar again":
   `/` already plays the previous  note or chord again. 
 - **Carrying on.** A section that omits `key`, `meter` or `tempo` carries
-  on the one before. The first section must give `meter` and `tempo`
-  (nothing is assumed). A section with chords needs a key, written or
-  carried; a count-in section needs none. `count-in` is for the first
+  on the one before. 
+- The first section must give a `meter` or a `meter_control` line, and a `tempo`
+ (nothing is assumed). A later section that gives neither carries the one before.
+- A section with chords needs a key, written or  carried; a count-in section needs none. `count-in` is for the first
   section only, one or two bars.
 - **Tempo counts beats**, as the meter defines them (`Musical Time and
   Clock.md`, sections 2 and 13): `tempo 120 beats/min` or `tempo 2
@@ -592,13 +621,13 @@ key changes, as standard notation requires.
   quarters a minute: 60 beats/min × 3 eighths/beat = 180 eighths a minute.
   `q/min`, `e/min` and the like are refused, with a message saying what to
   write.
-  - **A carried tempo keeps the beats per minute** A section, or a bar of a
-    `meter_control` line, that changes the meter but writes no tempo keeps
-    the beats per minute, so the beat feel is the same. After `meter 4/4
-    tempo 120 beats/min`, a section with only `meter 3/4` still plays 120
-    beats/min. Each beat is a quarter note in both, so the notes keep their
-    speed and the bar is three beats instead of four. In 6/8 the beat is
-    each group of three eighths, falling on the 1 and the 4.
+  - **A carried tempo keeps the beats per minute** A section that changes 
+   the meter but writes no tempo keeps the beats per minute so the beat feel
+    is the same. After `meter 4/4 tempo 120 beats/min`, a section with
+    only `meter 3/4` still plays 120 beats/min. Each beat is a quarter 
+    note in both, so the notes keep their speed and the bar is three beats
+    instead of four. In 6/8 the beat is each group of three eighths, 
+    falling on the 1 and the 4.
 - **Meters** are n/d with d = 1, 2, 4, 8 or 16. Compound meters stop at
   12 on top: 15/8, 18/8 and other multiples of 3 above 12 are refused when
   the song is read, with a message, until their beats are decided
@@ -771,35 +800,86 @@ track "Cues"
 
 ### Meter Control and Tempo Control inside a section
 
+
 **Meter Control**
-- `meter_control | mp [3_4 5_4 4_4] |` gives one meter per bar, here
-  three bars. 
-- `mp` means "meter pattern".
-- `mp section` goes back to the section's own `meter`.
-- A `/` plays the previous pattern once more.
---  `_end` plays it again and again to the end of the section: `| mp [4_4 5_4] _end |`. 
-- A pattern cut by the end of the section is simply cut.
 
-- Bars the line does not cover use the section's `meter`. 
-- The line need not have as many bars as the other lines, but every other line must have, in
-  each bar, the length of that bar's meter.
+- `meter_control` is a track type. Its line in a section gives the repeating meter
+  pattern for the entire section.
+- `mp` means "meter pattern". 
+- a section carries one of: 
+   A) a meter declared in the section,
+   B) a meter_control line.
+- `| mp [3_4 5_4 4_4] |` is a pattern of three bars that  applies to the entire section.
+- There is only one `meter_control` line per section, and it applies to every line
+  that carries rhythm marks.
+- Every meter in the pattern has the same beat.
+- The denominators are the same, and a compound meter (6_8, 9_8, 12_8) is not mixed with one
+  that is not.
+- The tempo counts that beat, so beats per minute is the same in every bar of the
+  pattern. The numerator says how many beats a bar holds.
+- The number of bars in the section is a multiple of the number of bars in the
+  pattern. `[3_4 4_4]` fits a section of 2, 4, 6 bars and so on; any other length
+  is an error.
 
-**Tempo Control**
-- `tempo_control | tp [130] |` sets 130 beats/min from the start of that
-  bar. 
-- `tp` means "tempo pattern"
-- A `/` plays the previous pattern once more.
--- `_end` holds it to the end of the  section: `| tp [130] _end |`
-- `tp` takes a list, one tempo per bar. Bars after the line ends
-  keep the last tempo.
+- Every other line of the section fills each bar exactly as the bar's meter
+  requires. A bar has one meter, and every line of the section agrees on it.
 
-- **Tempo Ramp:** `| tp [110 ramp_to 130 2_bars] |` starts at 110 beats/min and
-  moves in a straight line to 130 beats/min over two bars, then holds 130.
-  A gradually increasing or decreasing tempo is smooth, without jumps.
-  A ramp is played as a series of very small steps, one for each MIDI clock pulse,
-  so the tempo changes smoothly (`Musical Time and Clock.md`, section 8).
--- `| tp [110 ramp_to 130 _end] |` ramps the tempo to the end of the section
-- The beats are those of the meter in force, as for `tempo`.
+  Example: a section of four bars whose meter_control line is
+
+      line "Meter"  | mp [3_4 5_4] |
+
+  The bars are 3/4, 5/4, 3/4, 5/4, and every line is written to match:
+
+      line "Keys"   | I:h. | IV:w IV:q | V:h. | I:w I:q |
+
+  This Keys line is refused:
+
+      line "Keys"   | I:h. | IV:w | V:h. | I:w I:q |
+
+  Bar 2 is 5/4 and holds a whole note, so the line is short by a quarter note.
+
+  The same holds for every other line of the section: the Bass line, the
+  dynamics line, a sample source and any further voice layer.
+
+**Tempo marks on the lead line**
+
+- A tempo change inside a section is written on the lead track's line, in the
+  bar where it starts. There is no tempo track.
+- A bar starts with `tempo 130 beats/min` before its first element:
+  `| tempo 130 beats/min I:q / / / |`. The unit is written, as for a section's
+  `tempo`.
+- The tempo applies from the start of that bar and holds until the next mark.
+- When a section repeats, the section's tempo, written or carried, applies again
+  from its first bar. The first mark of the section then takes effect when its
+  bar is reached, as on the first play.
+- The next section that carries its tempo takes the tempo in force at the end of
+  the last bar.
+- A bar holds at most one mark.
+- Only the first voice layer of the lead track takes marks. A mark on any other
+  line or layer is an error, and so is a mark in a section that has no lead line.
+- The beat is the beat of the section's meter, as for `tempo`. Every bar of a
+  section has the same beat, so the tempo in beats per minute is the same in
+  every bar of a `meter_control` pattern.
+
+**Marks in a repeated group of bars**
+
+- A group between repeat signs is written out in full, so a mark inside it
+  applies on every play of the group.
+- `|%2 tempo 90 beats/min I:w | IV %|` plays both bars at 90 beats/min, twice.
+
+**Tempo ramp**
+
+- `| tempo 110 ramp_to 130 beats/min 2_bars I:q / / / |` starts at 110 beats/min
+  and moves in a straight line to 130 beats/min over two bars, then holds 130.
+  The unit is written once, after the second number, and applies to both.
+- The tempo changes smoothly, without jumps. A ramp is played as a series of very
+  small steps, one for each MIDI clock pulse (`Musical Time and Clock.md`,
+  section 8).
+- A ramp must finish inside the section. `2_bars` on bar 8 of a section of eight
+  bars is an error, because it needs bar 9. The message names the bar and says
+  how many bars are left.
+- A mark in a bar that a ramp covers is an error.
+
 
 ### What the song does not say
 
@@ -1158,14 +1238,6 @@ Korg SQ-1? *Required, not yet designed.*
   be taken up as a whole. Limiting a cue to chosen passes of a repeated
   section is part of that work.
 - Raised: Jim, 5 Nov 2026.
-
-**Q28: (CLOSED, Jim 15 Nov 2026)** How does a source line run at its own tempo?
-- Context: Jim decided on 11 Nov 2026 every source line (a
-  has its own play head. By default it moves at the track's tempo. 
-- Why it matters: a source that drifts against the rhythm changes which
-  chord or level each rhythm element meets, which is the variation Jim
-  is after. The player needs rules before it can be built.
-- Decision: See tempo_control above.
 
 **Q34 (CLOSED, Jim, 14 Nov 2026 — see Status below):** How does a track send pitch to a device that
 gates on every note on, to be heard as **legato**?

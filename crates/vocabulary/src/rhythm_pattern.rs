@@ -7,6 +7,7 @@
 
 use std::fmt;
 
+use crate::bar_meters::BarMeters;
 use crate::score_length::ScoreLength;
 use crate::time_signature::TimeSignature;
 
@@ -202,7 +203,12 @@ impl RhythmPattern {
                 bar_count,
             });
         }
-        check_elements_fill_bars(name, time_signature, u32::from(bar_count), &elements)?;
+        check_elements_fill_bars(
+            name,
+            &BarMeters::uniform(time_signature),
+            u32::from(bar_count),
+            &elements,
+        )?;
         Ok(RhythmPattern {
             name: name.to_string(),
             time_signature,
@@ -242,12 +248,11 @@ impl RhythmPattern {
 /// The first of those rules that is broken.
 pub fn check_elements_fill_bars(
     name: &str,
-    time_signature: TimeSignature,
+    bar_meters: &BarMeters,
     bar_count: u32,
     elements: &[RhythmElement],
 ) -> Result<(), RhythmPatternError> {
-    let bar_length_ticks: u64 = time_signature.bar_length().ticks();
-    let total_length_ticks: u64 = u64::from(bar_count) * bar_length_ticks;
+    let total_length_ticks: u64 = bar_meters.length_ticks(bar_count);
 
     let mut expected_start_ticks: u64 = 0;
     for (index, element) in elements.iter().enumerate() {
@@ -260,7 +265,8 @@ pub fn check_elements_fill_bars(
         }
         let end_ticks: u64 = element.end_ticks();
         // The last tick of the element lies in the same bar as its start.
-        if element.start().ticks() / bar_length_ticks != (end_ticks - 1) / bar_length_ticks {
+        let start_bar: usize = bar_meters.bar_at(element.start().ticks()).0;
+        if start_bar != bar_meters.bar_at(end_ticks - 1).0 {
             return Err(RhythmPatternError::ElementCrossesBarline {
                 name: name.to_string(),
                 start_ticks: element.start().ticks(),

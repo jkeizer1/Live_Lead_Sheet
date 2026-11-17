@@ -1,0 +1,13 @@
+# Starter progression library (EFS-7.1). Progressions have no key: the song's
+# key gives each numeral its root. This file has minor entries, so it states
+# how their numerals are counted: key_dependent counts in the key's own
+# natural minor scale, so in C minor the chord on A-flat is VI.
+chord_numeral_standard key_dependent
+
+# The twelve-bar minor blues: four bars of i7, two of iv7, two of i7, then
+# VI7 and V7 over the turnaround (C minor: Cm7 Fm7 Cm7 Ab7 G7).
+progression "Minor blues"
+  group "Blues" "Full form"
+  mode minor
+  meter 4/4
+  | i7 | i7 | i7 | i7 | iv7 | iv7 | i7 | i7 | VI7 | V7 | i7 | V7 |

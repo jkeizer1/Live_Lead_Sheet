@@ -1,0 +1,7 @@
+# Canonical test library (deliberately wrong): crates/song_text/tests/progression_library.rs, test `a_letter_chord_is_refused_for_now`.
+# A letter chord in a bar. The loader must refuse it: letter chords are not built yet.
+progression "Letters"
+  group "Jazz" "Cadence"
+  mode major
+  meter 4/4
+  | Dm7 | G7 |

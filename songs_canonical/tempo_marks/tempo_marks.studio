@@ -1,0 +1,17 @@
+# Canonical test studio for tempo_marks.song. Tests expect exactly this.
+studio "Tempo marks studio"
+
+port "Clock"
+port "Keys"
+port "Bass"
+
+track "Clock"
+  port "Clock"
+
+track "Keys"
+  port "Keys"  channel 1
+  velocity normal 90  accent 115
+
+track "Bass"
+  port "Bass"  channel 2
+  velocity normal 100  accent 115

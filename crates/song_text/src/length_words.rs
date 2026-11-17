@@ -1,6 +1,7 @@
 //! Lengths in the musician's words, for messages ("an eighth note") and for
 //! the spelling that would write them ("e").
 
+use vocabulary::bar_meters::BarMeters;
 use vocabulary::ticks::{TICKS_PER_QUARTER_NOTE, TICKS_PER_WHOLE_NOTE};
 use vocabulary::time_signature::TimeSignature;
 
@@ -122,6 +123,23 @@ pub fn describe_place_after_bars(
     } else {
         format!("bar {bar} beat {beat}")
     }
+}
+
+/// The same, for a place `start_ticks` into a section whose bars have the
+/// meters `bar_meters`, which may differ from bar to bar. `bars_before` is
+/// the number of bars of the song before the section.
+#[must_use]
+pub fn describe_place_in_bars(
+    start_ticks: u64,
+    bar_meters: &BarMeters,
+    bars_before: u64,
+) -> String {
+    let (bar_index, within_bar_ticks): (usize, u64) = bar_meters.bar_at(start_ticks);
+    describe_place_after_bars(
+        within_bar_ticks,
+        bar_meters.meter_of_bar(bar_index),
+        bars_before + bar_index as u64,
+    )
 }
 
 fn greatest_common_divisor(first: u64, second: u64) -> u64 {

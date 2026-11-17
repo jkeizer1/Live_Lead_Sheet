@@ -1,0 +1,9 @@
+# Canonical test library (deliberately wrong): crates/song_text/tests/progression_library.rs, test `the_standard_goes_at_the_top`.
+# chord_numeral_standard written after a progression. The loader must refuse it.
+progression "ii-V"
+  group "Jazz" "Cadence"
+  mode major
+  meter 4/4
+  | ii7 V7 |
+
+chord_numeral_standard key_dependent

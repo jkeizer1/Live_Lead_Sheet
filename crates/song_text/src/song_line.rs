@@ -3,18 +3,21 @@
 //! sections 3, 4 and 5). A line may go on over several text lines: a text line starting
 //! with `|` adds its bars to the line above.
 
+use vocabulary::bar_meters::BarMeters;
 use vocabulary::dynamics::DynamicMark;
 use vocabulary::rhythm_pattern::{ElementKind, RhythmElement, RhythmPatternError};
 use vocabulary::score_length::ScoreLength;
 use vocabulary::song::{
     ElementContents, Line, LineElement, LineRole, SongError, Track, TrackKind, VoiceKind,
+    VoiceLayerNumber,
 };
-use vocabulary::time_signature::TimeSignature;
+use vocabulary::tempo_mark::TempoMark;
 
 use crate::contents_text::parse_voice_contents;
-use crate::length_words::describe_place;
+use crate::length_words::describe_place_in_bars;
 use crate::repeat_signs::write_out_repeat_signs;
 use crate::rhythm_bar::{BarElement, BarNotation, LineCarry, parse_bars, parse_source_bars};
+use crate::tempo_mark_text::take_tempo_marks;
 
 /// One text line holding bars of a song line: the `line "Keys" | … |` line
 /// itself, or a line that continues it, `| … |`.
@@ -45,13 +48,15 @@ pub fn build_line(
     role: LineRole,
     line_number: usize,
     parts: &[BarsText],
-    time_signature: TimeSignature,
+    bar_meters: impl Into<BarMeters>,
 ) -> Result<Line, LineError> {
-    let bar_length_ticks: u64 = time_signature.bar_length().ticks();
+    let bar_meters: BarMeters = bar_meters.into();
     let mut bars: Vec<Vec<BarElement>> = Vec::new();
     // The file line each bar is written on, by bar index.
     let mut bar_line_numbers: Vec<usize> = Vec::new();
     let mut carry: LineCarry = LineCarry::start_of_line();
+    let takes_tempo_marks: bool = takes_tempo_marks(track, role);
+    let mut tempo_marks: Vec<TempoMark> = Vec::new();
     for part in parts {
         // Repeat signs are written out first, so every bar below is a bar of the line.
         let written_out: String =
@@ -59,24 +64,20 @@ pub fn build_line(
                 line_number: part.line_number,
                 message,
             })?;
-        // A sample source writes contents and no lengths: its elements share
-        // each bar evenly. Every other line writes both.
+        // A bar may start with a tempo mark; the bar parser reads what is left.
+        let (written_out, part_marks): (String, Vec<TempoMark>) = take_tempo_marks(
+            &written_out,
+            bars.len(),
+            bar_meters.first().beat_length(),
+            takes_tempo_marks,
+        )
+        .map_err(|message: String| LineError {
+            line_number: part.line_number,
+            message,
+        })?;
+        tempo_marks.extend(part_marks);
         let read: Result<Vec<Vec<BarElement>>, String> =
-            if matches!(role, LineRole::SampleSource(_)) {
-                parse_source_bars(&written_out, bars.len(), bar_length_ticks)
-            } else {
-                parse_bars(
-                    &written_out,
-                    bars.len(),
-                    bar_length_ticks,
-                    if role == LineRole::Dynamics {
-                        BarNotation::Dynamics
-                    } else {
-                        BarNotation::SongLine
-                    },
-                    &mut carry,
-                )
-            };
+            read_bars(&written_out, bars.len(), &bar_meters, role, &mut carry);
         let part_bars: Vec<Vec<BarElement>> = read.map_err(|message| LineError {
             line_number: part.line_number,
             message,
@@ -97,8 +98,7 @@ pub fn build_line(
     // bar (an error about the line's end) is on the last bar's line; only a
     // line number for a message, so no value is invented.
     let line_at = |start_ticks: u64| -> usize {
-        let bar_index: usize =
-            usize::try_from(start_ticks / bar_length_ticks).unwrap_or(usize::MAX);
+        let bar_index: usize = bar_meters.bar_at(start_ticks).0;
         bar_line_numbers
             .get(bar_index)
             .or(bar_line_numbers.last())
@@ -110,16 +110,16 @@ pub fn build_line(
     // section 4). Voices only.
     let mut carried: Option<Carried> = None;
     for (bar_index, bar) in bars.iter().enumerate() {
-        // bar index × ticks/bar → ticks since the start of the line; a line
+        // Ticks from the start of the line to the start of this bar; a line
         // is at most a section's bars, so this cannot overflow.
-        let bar_start_ticks: u64 = bar_index as u64 * bar_length_ticks;
+        let bar_start_ticks: u64 = bar_meters.bar_start_ticks(bar_index);
         for placed in bar {
             let start_ticks: u64 = bar_start_ticks + placed.start_ticks;
             let at = |message: String| LineError {
                 line_number: line_at(start_ticks),
                 message,
             };
-            let place: String = describe_place(start_ticks, time_signature);
+            let place: String = describe_place_in_bars(start_ticks, &bar_meters, 0);
             let contents: Option<ElementContents> = contents_of(track, role, placed, &mut carried)
                 .map_err(|why| at(format!("{place}: {why}")))?;
             let element: RhythmElement = RhythmElement::new(
@@ -135,7 +135,7 @@ pub fn build_line(
                     .map(|line_element: LineElement| {
                         line_element.with_octave_shift_octaves(placed.octave_shift_octaves)
                     })
-                    .map_err(|error| at(describe_song_error(&error, time_signature)))?,
+                    .map_err(|error| at(describe_song_error(&error, &bar_meters)))?,
             );
         }
     }
@@ -143,10 +143,39 @@ pub fn build_line(
         line_number,
         message: String::from("this line has too many bars. Split the section"),
     })?;
-    Line::new(track, role, time_signature, bar_count, elements).map_err(|error| LineError {
-        line_number: error_start_ticks(&error).map_or(line_number, line_at),
-        message: describe_song_error(&error, time_signature),
-    })
+    Line::new(track, role, bar_meters.clone(), bar_count, elements)
+        .and_then(|line: Line| line.with_tempo_marks(tempo_marks))
+        .map_err(|error| LineError {
+            line_number: error_start_ticks(&error).map_or(line_number, line_at),
+            message: describe_song_error(&error, &bar_meters),
+        })
+}
+
+/// Reads the bars of `text`, which starts at bar `first_bar_index`.
+fn read_bars(
+    text: &str,
+    first_bar_index: usize,
+    bar_meters: &BarMeters,
+    role: LineRole,
+    carry: &mut LineCarry,
+) -> Result<Vec<Vec<BarElement>>, String> {
+    // A sample source writes contents and no lengths: its elements share
+    // each bar evenly. Every other line writes both.
+    if matches!(role, LineRole::SampleSource(_)) {
+        return parse_source_bars(text, first_bar_index, bar_meters);
+    }
+    let notation: BarNotation = if role == LineRole::Dynamics {
+        BarNotation::Dynamics
+    } else {
+        BarNotation::SongLine
+    };
+    parse_bars(text, first_bar_index, bar_meters, notation, carry)
+}
+
+/// Only the lead track's first voice layer takes tempo marks.
+fn takes_tempo_marks(track: &Track, role: LineRole) -> bool {
+    matches!(track.kind(), TrackKind::Voice { lead: true, .. })
+        && role == LineRole::VoiceLayer(VoiceLayerNumber::FIRST)
 }
 
 /// Where in the line a whole-line error points, if it names a place.
@@ -245,13 +274,13 @@ fn contents_of(
             "a / cannot stand on a cue track. Name each cue, e.g. \"Start SQ-1\":w",
         )),
         // A clock track with anything is refused later, for the whole line.
-        (TrackKind::ClockAndTransport, _) => Ok(None),
+        (TrackKind::ClockAndTransport | TrackKind::MeterControl, _) => Ok(None),
     }
 }
 
 /// A song error in the musician's words: where in the line, in bars and
 /// beats, rather than ticks.
-fn describe_song_error(error: &SongError, time_signature: TimeSignature) -> String {
+fn describe_song_error(error: &SongError, bar_meters: &BarMeters) -> String {
     match error {
         SongError::ElementWithoutContents {
             track_name,
@@ -259,7 +288,7 @@ fn describe_song_error(error: &SongError, time_signature: TimeSignature) -> Stri
         } => format!(
             "{}: track \"{track_name}\" needs this note to say what it plays. Write it \
              before the length, e.g. C2:q",
-            describe_place(*start_ticks, time_signature)
+            describe_place_in_bars(*start_ticks, bar_meters, 0)
         ),
         SongError::ContentsNotAllowed {
             track_name,
@@ -267,20 +296,20 @@ fn describe_song_error(error: &SongError, time_signature: TimeSignature) -> Stri
             why,
         } => format!(
             "{}: track \"{track_name}\" cannot play that: {why}",
-            describe_place(*start_ticks, time_signature)
+            describe_place_in_bars(*start_ticks, bar_meters, 0)
         ),
         SongError::RestInSampleSource { start_ticks, .. } => format!(
             "{}: a sample_source line holds chords or notes, not rests. Put the rests on the \
              rhythm line below it, e.g. r:q",
-            describe_place(*start_ticks, time_signature)
+            describe_place_in_bars(*start_ticks, bar_meters, 0)
         ),
         SongError::ContentsOnRest { start_ticks } => format!(
             "{}: a rest plays nothing. Write r, or a note instead of the rest",
-            describe_place(*start_ticks, time_signature)
+            describe_place_in_bars(*start_ticks, bar_meters, 0)
         ),
         SongError::Rhythm(RhythmPatternError::TieWithoutNote { start_ticks, .. }) => format!(
             "the tie at {} has no note after it to join. Remove the ~ or put a note after it",
-            describe_place(*start_ticks, time_signature)
+            describe_place_in_bars(*start_ticks, bar_meters, 0)
         ),
         other => other.to_string(),
     }
@@ -290,6 +319,7 @@ fn describe_song_error(error: &SongError, time_signature: TimeSignature) -> Stri
 mod tests {
     use super::*;
     use vocabulary::song::Clef;
+    use vocabulary::time_signature::TimeSignature;
 
     fn four_four() -> TimeSignature {
         TimeSignature::new(4, 4).unwrap()
@@ -390,7 +420,7 @@ mod tests {
         let error: String = build_line(&keys(), first_layer(), 1, &one("| I:q / / |"), four_four())
             .unwrap_err()
             .message;
-        assert!(error.contains("bar 1 is short by a quarter note"));
+        assert!(error.contains("bar 1 is 4/4 and short by a quarter note"));
     }
 
     #[test]
@@ -428,7 +458,7 @@ mod tests {
             build_line(&bass(), first_layer(), 20, &short, four_four()).unwrap_err();
         assert_eq!(error.line_number, 21);
         assert!(
-            error.message.starts_with("bar 3 is short"),
+            error.message.starts_with("bar 3 is 4/4 and short"),
             "{}",
             error.message
         );

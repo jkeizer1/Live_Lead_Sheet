@@ -1,0 +1,7 @@
+# Canonical test library: crates/song_text/tests/progression_library.rs, test `a_major_only_library_needs_no_standard`; reads this file and expects exactly this content.
+# Major progressions only, with no chord_numeral_standard line. It loads.
+progression "I-V-vi-IV"
+  group "Pop and rock" "Loop"
+  mode major
+  meter 4/4
+  | I | V | vi | IV |

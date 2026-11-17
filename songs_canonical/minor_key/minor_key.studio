@@ -1,0 +1,17 @@
+# Canonical test studio for the minor_key songs. Tests expect exactly this.
+studio "Minor key studio"
+
+port "Clock"
+port "Keys"
+port "Bass"
+
+track "Clock"
+  port "Clock"
+
+track "Keys"
+  port "Keys"  channel 1
+  velocity normal 90  accent 115
+
+track "Bass"
+  port "Bass"  channel 2
+  velocity normal 100  accent 115

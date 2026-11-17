@@ -1,0 +1,15 @@
+# Canonical test song (deliberately wrong): crates/song_text/tests/tempo_marks_plan.rs, test `two_marks_in_a_bar`.
+# Two tempo marks in one bar. The loader must refuse it: a bar holds one mark.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+track "Bass"
+  type mono_voice
+  clef bass
+section "A"
+  key C major  meter 4/4  tempo 100 beats/min
+  line "Keys"  | tempo 90 beats/min tempo 80 beats/min I:w | I:w |

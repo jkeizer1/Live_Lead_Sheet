@@ -8,11 +8,14 @@
 pub mod contents_text;
 pub mod euclid_pattern;
 pub mod length_words;
+pub mod meter_pattern;
 pub mod parse_error;
+pub mod progression_library;
 pub mod repeat_signs;
 pub mod rhythm_bar;
 pub mod rhythm_library;
 pub mod song_file;
 pub mod song_line;
 pub mod studio_file;
+pub mod tempo_mark_text;
 pub mod text_line;

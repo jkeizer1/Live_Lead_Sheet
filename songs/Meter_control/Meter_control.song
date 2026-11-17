@@ -1,0 +1,64 @@
+# Meter control sample for the Live Lead Sheet. Each section either writes
+# a meter or has a meter_control line: one pattern of meters that repeats to
+# the end of the section. A bar's chords and notes fill that bar's meter.
+#
+# To hear it:
+#   cargo run --release -p song_text --example song_play_test -- \
+#     songs/Meter_control/Meter_control.song songs/Meter_control/Meter_control.studio
+song "Meter control"
+
+track "Clock"
+  type clock_and_transport
+
+track "Meter"
+  type meter_control
+
+track "Beat"
+  type mono_voice
+  clef treble
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+track "Bass"
+  type mono_voice
+  clef bass
+
+# A 4/4 bar, then a 5/4 bar, twice through, and the whole section twice.
+section "Four and five"  repeat 2
+  key C major  tempo 100 beats/min
+  line "Meter"  | mp [4_4 5_4] |
+  line "Beat"  | C4:q> / / / | C4:q> / / / / | C4:q> / / / | C4:q> / / / / |
+  line "Keys"  | I:w | IV:w IV:q | V:w | I:w I:q |
+  line "Bass"  | C2:q / / / | F2:q / / / / | G2:q / / / | C2:q / / / / |
+
+# Three bars: 3/4, 3/4, 4/4. The tempo carries on, and so does the beat.
+section "Cadence"
+  line "Meter"  | mp [3_4 3_4 4_4] |
+  line "Beat"  | C4:q> / / | C4:q> / / | C4:q> / / / |
+  line "Keys"  | vi:h. | IV:h. | V:w |
+  line "Bass"  | A1:q / / | F1:q / / | G1:q / / / |
+
+# A plain meter, no pattern: every bar is 3/4.
+section "Waltz"  repeat 2
+  meter 3/4
+  line "Beat"  | C4:q> / / | C4:q> / / |
+  line "Keys"  | I:h. | V:h. |
+  line "Bass"  | C2:q / / | G2:q / / |
+
+# 6/8 then 9/8: both have a dotted quarter note as the beat, so 100 beats/min
+# is now 100 dotted quarter notes a minute.
+section "Six and nine"  repeat 2
+  line "Meter"  | mp [6_8 9_8] |
+  line "Beat"  | C4:q.> / | C4:q.> / / |
+  line "Keys"  | I:h. | IV:h. IV:q. |
+  line "Bass"  | C2:q. / | F2:q. / / |
+
+# Back to 4/4 to finish.
+section "Home"
+  meter 4/4
+  line "Beat"  | C4:q> / / / |
+  line "Keys"  | I:w |
+  line "Bass"  | C2:q / / / |

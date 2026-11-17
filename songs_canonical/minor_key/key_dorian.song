@@ -1,0 +1,12 @@
+# Canonical test song (deliberately wrong): crates/song_text/tests/minor_key.rs, test `a_mode_other_than_major_or_minor_is_refused`.
+# key D dorian. The loader must refuse it: a mode is an annotation, and a key is major or minor.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+section "A"
+  key D dorian  meter 4/4  tempo 100 beats/min
+  line "Keys"  | C4:w |

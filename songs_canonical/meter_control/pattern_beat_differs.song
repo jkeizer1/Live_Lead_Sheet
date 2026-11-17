@@ -1,0 +1,15 @@
+# Canonical test song (deliberately wrong): crates/song_text/tests/meter_control_plan.rs, test `pattern_beat_differs`.
+# The pattern [3_4 6_8] mixes a quarter-note beat and a dotted-quarter beat. The loader must refuse it: every meter of a pattern has the same beat.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Meter"
+  type meter_control
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+section "A"
+  key C major  tempo 100 beats/min
+  line "Meter"  | mp [3_4 6_8] |
+  line "Keys"  | I:h. | IV:h. |

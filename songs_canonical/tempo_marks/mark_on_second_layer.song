@@ -1,0 +1,16 @@
+# Canonical test song (deliberately wrong): crates/song_text/tests/tempo_marks_plan.rs, test `mark_on_second_layer`.
+# A tempo mark on voice layer 2 of the lead track. The loader must refuse it: only voice layer 1 takes marks.
+song "T"
+track "Clock"
+  type clock_and_transport
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+track "Bass"
+  type mono_voice
+  clef bass
+section "A"
+  key C major  meter 4/4  tempo 100 beats/min
+  line "Keys"  | I:w | I:w |
+  line "Keys"  voice_layer 2  | tempo 90 beats/min C4:w | C4:w |

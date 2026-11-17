@@ -25,7 +25,7 @@ use std::process::ExitCode;
 use player::schedule::{EventSource, OutputAction, ScheduledEvent, schedule};
 use player::song_plan::{SectionPass, SongPlan, plan_song};
 use player::studio_configuration::StudioConfiguration;
-use song_text::length_words::describe_place_after_bars;
+use song_text::length_words::{describe_place_after_bars, describe_place_in_bars};
 use song_text::parse_error::ParseError;
 use song_text::song_file::parse_song;
 use song_text::studio_file::parse_studio;
@@ -172,17 +172,14 @@ fn place_in_song(position_ticks: u64, passes: &[SectionPass]) -> String {
                 describe_place_after_bars(position_ticks, first.time_signature, 0)
             });
     };
-    // bars before = sum over earlier passes of (ticks of the pass ÷ ticks/bar).
+    // bars before = the bars of every earlier pass.
     let bars_before: u64 = passes[..index]
         .iter()
-        .zip(&passes[1..=index])
-        .map(|(pass, next): (&SectionPass, &SectionPass)| {
-            (next.start_ticks - pass.start_ticks) / pass.time_signature.bar_length().ticks()
-        })
+        .map(|pass: &SectionPass| u64::from(pass.bar_count))
         .sum();
-    describe_place_after_bars(
+    describe_place_in_bars(
         position_ticks - passes[index].start_ticks,
-        passes[index].time_signature,
+        &passes[index].bar_meters,
         bars_before,
     )
 }

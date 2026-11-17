@@ -240,6 +240,10 @@ impl StudioConfiguration {
             }
             return;
         }
+        if matches!(track.kind(), TrackKind::MeterControl) {
+            // A meter control track sends no MIDI, so it needs no block.
+            return;
+        }
         let Some(output) = self.output_of(track_name) else {
             unmet.push(UnmetNeed::NoTrackBlock {
                 track_name: track_name.to_string(),

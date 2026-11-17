@@ -1,0 +1,15 @@
+# Canonical test song (deliberately wrong): crates/song_text/tests/minor_key.rs, test `numerals_in_a_minor_key_need_the_standard`.
+# A song in C minor that writes chord numerals and no chord_numeral_standard line. The loader must refuse it and say what to add.
+song "Minor key chords"
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+section "C minor"
+  key C minor  meter 4/4  tempo 100 beats/min
+  line "Keys"  | i:w | iv:w | V:w | i:w |
