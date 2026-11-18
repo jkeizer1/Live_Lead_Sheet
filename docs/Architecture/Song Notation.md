@@ -209,7 +209,10 @@ a colon, the length. `trp(F2:q A2:q C2:q)` plays F2, A2 and C2, three
 quarters in the time of a half note. The function fits the lengths as it
 always does, keeping their proportions, so `trp(F2:q A2:e C2:e)` keeps the
 quarter twice as long as each eighth. A length left off inside the
-parentheses is the one before it, and the first element writes its own. The
+parentheses is the one before it, and the first element writes its own. When
+no element of a `fit` function writes a length, the elements are equal parts:
+`fitH(D2 F1 A1 D3 A2 F1)` is six equal notes in a half note. `trp` needs
+lengths, since they say how long the three are together. The
 elements can be notes, chords or `r`, and the same works in `fitQ`, `fitE`,
 `fitH`, `fitW` and `fitBar`.
 

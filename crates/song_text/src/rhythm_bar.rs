@@ -83,6 +83,9 @@ pub struct LineCarry {
     /// length, as written. An element that writes no length plays it again
     /// (Song Notation, section 3, "Repeating"); a length written clears it.
     function_text: Option<String>,
+    /// How many lengths elements have written; a group reads it to tell
+    /// whether it holds any length of its own.
+    lengths_written: u32,
     /// `+8va` is 1, `-8va` is -1, `loco` is 0, until the next annotation.
     octave_shift_octaves: i8,
 }
@@ -95,6 +98,7 @@ impl LineCarry {
         LineCarry {
             written: None,
             function_text: None,
+            lengths_written: 0,
             octave_shift_octaves: 0,
         }
     }
@@ -860,22 +864,14 @@ fn group_length_named(name: &str, bar_length_ticks: u64) -> Result<GroupLength, 
     }
 }
 
-/// `trp (...)`, `fitQ(...)`, `fitE`, `fitH`, `fitW`, `fitBar`.
-fn parse_group(
+/// The elements of a group, from after its `(` to and including its `)`.
+fn parse_group_elements(
     cursor: &mut Cursor,
-    bar_length_ticks: u64,
+    name: &str,
     notation: BarNotation,
     bare_lengths: bool,
     carry: &mut LineCarry,
-) -> Result<(GroupLength, Vec<WrittenElement>), String> {
-    let name: String = cursor.take_while(char::is_ascii_alphabetic);
-    let group_length: GroupLength = group_length_named(&name, bar_length_ticks)?;
-    cursor.skip_whitespace();
-    if cursor.next() != Some('(') {
-        return Err(format!(
-            "{name} must be followed by ( and the elements, e.g. {name} (q q q)"
-        ));
-    }
+) -> Result<Vec<WrittenElement>, String> {
     let mut inner: Vec<WrittenElement> = Vec::new();
     loop {
         cursor.skip_whitespace();
@@ -928,6 +924,7 @@ fn parse_group(
                         .peek()
                         .is_some_and(|first: char| "whqest".contains(first));
                 if bare_length {
+                    carry.lengths_written += 1;
                     inner.push(parse_rhythm_element(cursor)?);
                 } else {
                     inner.push(parse_element(cursor, notation, carry)?);
@@ -935,6 +932,51 @@ fn parse_group(
             }
         }
     }
+    Ok(inner)
+}
+
+/// `trp (...)`, `fitQ(...)`, `fitE`, `fitH`, `fitW`, `fitBar`.
+fn parse_group(
+    cursor: &mut Cursor,
+    bar_length_ticks: u64,
+    notation: BarNotation,
+    bare_lengths: bool,
+    carry: &mut LineCarry,
+) -> Result<(GroupLength, Vec<WrittenElement>), String> {
+    let name: String = cursor.take_while(char::is_ascii_alphabetic);
+    let group_length: GroupLength = group_length_named(&name, bar_length_ticks)?;
+    cursor.skip_whitespace();
+    if cursor.next() != Some('(') {
+        return Err(format!(
+            "{name} must be followed by ( and the elements, e.g. {name} (q q q)"
+        ));
+    }
+    // A group of notes with no length written anywhere inside (`fitH(D2 F1 A1)`)
+    // is equal parts, with or without a length carried into it. Read it first
+    // with a quarter note to stand for each; if any element writes a length,
+    // read it again as written, so a missing length is reported.
+    let after_bracket_position: usize = cursor.position;
+    let equal_parts_possible: bool = notation == BarNotation::SongLine
+        && carry.written.is_none()
+        && matches!(group_length, GroupLength::Fixed { .. });
+    let mut equal_parts: Option<Vec<WrittenElement>> = None;
+    if equal_parts_possible {
+        let mut probe: LineCarry = carry.clone();
+        probe.written = Some(WrittenLength {
+            base_ticks: TICKS_PER_QUARTER_NOTE,
+            dots: 0,
+        });
+        equal_parts = parse_group_elements(cursor, &name, notation, bare_lengths, &mut probe)
+            .ok()
+            .filter(|_| probe.lengths_written == 0);
+        if equal_parts.is_none() {
+            cursor.position = after_bracket_position;
+        }
+    }
+    let inner: Vec<WrittenElement> = match equal_parts {
+        Some(parsed) => parsed,
+        None => parse_group_elements(cursor, &name, notation, bare_lengths, carry)?,
+    };
     if inner.is_empty() {
         return Err(format!(
             "the group {name} () is empty. Put notes or rests in it"
@@ -1143,6 +1185,7 @@ fn parse_song_element(
         Some(written) => {
             carry.written = Some(written);
             carry.function_text = None;
+            carry.lengths_written += 1;
             written
         }
         None => carry.written.ok_or_else(|| {
@@ -1725,6 +1768,24 @@ mod tests {
             ]
         );
         assert_eq!(bars[0][3].0, 10_080);
+    }
+
+    #[test]
+    fn notes_with_no_lengths_in_a_fit_group_are_equal_parts() {
+        // Nothing carried into the line: six equal parts of a half note
+        // (10080 ticks), 1680 ticks each, then the same again.
+        let bar: PlacedBar =
+            song_with_carry(&["fitH(D2 F1 A1 D3 A2 F1) fitH(A1 C1 E2 A2 C2 E3)"]).remove(0);
+        assert_eq!(bar.len(), 12);
+        assert_eq!((bar[1].0, bar[1].1), (1680, 1680));
+        assert_eq!(bar[6].0, 10_080);
+        // A length written anywhere inside means the lengths are as written,
+        // and the first element must write its own.
+        assert!(song("fitH(D2 F1:q) G2:h").is_err());
+        // A length carried in changes nothing: the parts are still equal.
+        let carried: PlacedBar =
+            song_with_carry(&["D1:q F1:e A1:e fitH(A1 C1 E2 A2 C2 E3)"]).remove(0);
+        assert_eq!(carried[3].1, 1680);
     }
 
     #[test]
