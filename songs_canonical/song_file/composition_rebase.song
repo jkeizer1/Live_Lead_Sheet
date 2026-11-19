@@ -1,0 +1,22 @@
+# Canonical test song: crates/song_text/src/song_file.rs, test `a_key_and_tempo_line_between_entries_sets_the_base_for_those_below`.
+# "Riff" plays in C major at 100 beats/min; a line of its own then sets D major and 190 beats/min, and the two entries below it both play in that.
+song "Rebase"
+
+track "Clock"
+  type clock_and_transport
+
+track "Bass"
+  type mono_voice
+  clef bass
+  lead
+
+section "Riff"  meter 4/4
+  line "Bass" | C2:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "Riff"
+  key D major  tempo 190 beats/min
+  "Riff"
+  "Riff"
+song_composition_close

@@ -33,7 +33,7 @@ section "B"
   line "NTBass"  sample_source    | D2    A2   F2   D2  A3  G3  F3  F2             | C3     D2    |
   line "NTBass"                   | :e_   :e_  :e_  :e  :e_  /  /   r:e            | C3:h_  D2:h  |  
 
-section "C"
+section "C"  meter 4/4
   line "NTBass"                   | D2:e_  /    F2:e  D2:e  A2:e  r:e   F2:e  r:e  | C3:h   D3:h  |  
 
 

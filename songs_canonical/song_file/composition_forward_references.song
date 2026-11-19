@@ -17,8 +17,8 @@ song_composition
   "Verse"
 song_composition_close
 
-section "Chorus"
+section "Chorus"  meter 4/4
   line "Bass" | G2:w |
 
-section "Verse"
+section "Verse"  meter 4/4
   line "Bass" | C2:w |

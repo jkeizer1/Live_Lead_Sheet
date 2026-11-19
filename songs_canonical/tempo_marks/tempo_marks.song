@@ -1,5 +1,5 @@
 # Canonical test song: crates/song_text/tests/tempo_marks_plan.rs reads this file and expects exactly this content.
-# Tempo marks on the lead line: a step, a section that carries the tempo, a ramp that holds, and a repeated section that restarts at its own tempo.
+# Tempo marks on the lead line: a step, a section after it that plays at the composition's tempo (a section's marks do not pass on), a ramp that holds, and a repeated section that restarts at its own tempo.
 # To hear it:
 #   cargo run --release -p song_text --example song_play_test -- \
 #     songs_canonical/tempo_marks/tempo_marks.song songs_canonical/tempo_marks/tempo_marks.studio
@@ -22,16 +22,16 @@ section "Steps"
   line "Keys"  | I:w | I:w | tempo 120 beats/min IV:w | IV:w |
   line "Bass"  | C2:q / / / | C2:q / / / | F2:q / / / | F2:q / / / |
 
-section "Carried"
+section "Carried"  meter 4/4
   line "Keys"  | V:w | I:w |
   line "Bass"  | G2:q / / / | C2:q / / / |
 
-section "Ramp"
+section "Ramp"  meter 4/4
   tempo 120 beats/min
   line "Keys"  | I:w | tempo 120 ramp_to 60 beats/min 2_bars IV:w | V:w | I:w |
   line "Bass"  | C2:q / / / | F2:q / / / | G2:q / / / | C2:q / / / |
 
-section "Again"
+section "Again"  meter 4/4
   tempo 100 beats/min
   line "Keys"  | I:w | tempo 80 beats/min V:w |
   line "Bass"  | C2:q / / / | G2:q / / / |

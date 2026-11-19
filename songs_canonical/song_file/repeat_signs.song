@@ -14,10 +14,10 @@ section "twice"
   key C major  meter 4/4  tempo 120 beats/min
   line "Keys" | I:w |% ii7:w | V:w %| IV:w |
   line "Bass" |% C2:w | G2:w | D2:w %|
-section "three"
+section "three"  meter 4/4
   line "Keys" |%3 I:w %|
   line "Bass" |%3 C2:w %|
-section "carried"
+section "carried"  meter 4/4
   line "Keys" | I:w |% / %|
   line "Bass" | C2:w |% / %|
 

@@ -142,7 +142,9 @@ Stop sends MIDI Stop and silences every track
 
 **EFS-2.2 Tempo.** The song's composition gives the tempo the song starts
 in. Each entry of the composition may give a tempo of its own, else the
-section has its own, else the tempo carries on from the entry before. A key
+section has its own, else the composition's current tempo (its starting
+tempo, or the last tempo line above the entry). A section's own tempo and
+tempo marks affect that section only. A key
 change happens at a section boundary; tempo and meter may also change bar by
 bar inside a section (EFS-2.2a).
 Tempo marks inside a section are written on the lead track's line, in the
@@ -352,7 +354,7 @@ tempo (EFS-2.5).
 **EFS-5.2 Sections.** Add, name, reorder and remove sections, and mark
 the first as a count-in section. For each:
 key (twelve roots, major or minor, chosen from a list),
-meter with its beat grouping (or a repeating meter pattern, EFS-2.2a), and tempo (written, or carry on), with optional tempo marks on the lead line (EFS-2.2). A section is a
+meter, always written, with its beat grouping (or a repeating meter pattern, EFS-2.2a), and tempo (written, or the composition's), with optional tempo marks on the lead line (EFS-2.2). A section is a
 definition with a unique name; it plays only when the composition names it
 (EFS-5.2b). A section the composition does not name is allowed and does not
 play.
@@ -366,9 +368,10 @@ named by their actual notes. A section never has to choose a minor form.
 block that lists the sections in the order they play. It gives the key,
 meter and tempo the song starts in. Each entry names a section and may give
 a repeat count (the number of times it plays, default 1), and a key and a
-tempo that replace the section's own for that entry, so one section is
-reused in another key or at another tempo; the meter cannot be changed in an
-entry. A repeat count of 0 leaves the entry out, so the player can mute and
+tempo that replace the section's own for that entry alone, so one section is
+reused in another key or at another tempo. A key or tempo line between
+entries instead sets the base for every entry below it. The meter cannot be
+changed in the composition. A repeat count of 0 leaves the entry out, so the player can mute and
 restore an entry by changing one number, which is how a musician skips it
 while testing. A section may be named by several entries, which gives the
 usual song forms, such as AABBAA, without copying bars. The notation is in

@@ -10,7 +10,7 @@ track "Bass"
   clef bass
   lead
 
-section "A"  repeat 2
+section "A"  repeat 2  meter 4/4
   line "Bass" | C2:w |
 
 song_composition

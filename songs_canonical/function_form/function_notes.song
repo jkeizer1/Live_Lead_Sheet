@@ -17,16 +17,16 @@ section "notes in a triplet"
   key C major  meter 4/4  tempo 100 beats/min
   line "Bass"  | trp(F2:q A2:q C2:q) D2:h |
 
-section "notes in a triplet, repeated by a slash"
+section "notes in a triplet, repeated by a slash"  meter 4/4
   line "Bass"  | trp(F2:q A2:q C2:q) / |
 
-section "bare lengths and notes mixed"
+section "bare lengths and notes mixed"  meter 4/4
   line "Bass"  | C2:trp(q E2:q q) G2:h |
 
-section "three eighths in a quarter"
+section "three eighths in a quarter"  meter 4/4
   line "Bass"  | fitQ(F2:e A2:e C2:e) G2:q A2:h |
 
-section "fitBar with four notes"
+section "fitBar with four notes"  meter 4/4
   line "Bass"  | fitBar(C2:q D2:e E2:e F2:h) |
 
 song_composition

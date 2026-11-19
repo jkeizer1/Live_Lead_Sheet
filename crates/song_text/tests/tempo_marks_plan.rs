@@ -45,11 +45,13 @@ fn a_step_changes_the_tempo_at_its_bar() {
 }
 
 #[test]
-fn a_section_that_writes_no_tempo_carries_the_tempo_in_force_at_the_end() {
+fn a_sections_tempo_marks_affect_only_that_section() {
     let song: Song = song();
+    // "Steps" ends at 120 beats/min after its mark, but "Carried" plays at the
+    // composition's 100: a section's marks do not pass on.
     assert_eq!(
         song.sections()[1].tempo().milli_quarters_per_minute(),
-        120_000
+        100_000
     );
     // The ramp section ends on the ramp's end tempo.
     assert_eq!(

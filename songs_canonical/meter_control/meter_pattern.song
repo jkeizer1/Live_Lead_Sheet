@@ -1,5 +1,5 @@
 # Canonical test song: crates/song_text/tests/meter_control_plan.rs reads this file and expects exactly this content.
-# Meter patterns: [4_4 5_4] over four bars, the same pattern carried, a plain 3/4 section, then [6_8 9_8] (a dotted quarter beat).
+# Meter patterns: [4_4 5_4] over four bars, the same pattern written again in the next section, a plain 3/4 section, then [6_8 9_8] (a dotted quarter beat).
 # To hear it:
 #   cargo run --release -p song_text --example song_play_test -- \
 #     songs_canonical/meter_control/meter_pattern.song songs_canonical/meter_control/meter_pattern.studio
@@ -27,6 +27,7 @@ section "Four and five"
   line "Bass"  | C2:q / / / | F2:q / / / / | G2:q / / / | C2:q / / / / |
 
 section "Carried"
+  line "Meter"  | mp [4_4 5_4] |
   line "Keys"  | I:w | IV:w IV:q |
   line "Bass"  | C2:q / / / | F2:q / / / / |
 

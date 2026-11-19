@@ -14,11 +14,11 @@ section "A"
   key C major  meter 4/4  tempo 100 beats/min
   line "Bass" | C2:w |
 
-section "B"
+section "B"  meter 4/4
   tempo 140 beats/min
   line "Bass" | D2:w |
 
-section "C"
+section "C"  meter 4/4
   line "Bass" | G2:w |
 
 song_composition

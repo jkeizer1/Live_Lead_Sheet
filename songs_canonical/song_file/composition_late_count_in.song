@@ -10,10 +10,10 @@ track "Bass"
   clef bass
   lead
 
-section "Riff"
+section "Riff"  meter 4/4
   line "Bass" | C2:w |
 
-section "Intro"  count-in
+section "Intro"  count-in  meter 4/4
   line "Bass" | G2:w |
 
 song_composition

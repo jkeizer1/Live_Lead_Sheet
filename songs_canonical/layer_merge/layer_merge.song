@@ -20,17 +20,17 @@ section "overlapping"
   line "Keys" voice_layer 2  | r:q C4:h r:q |
 
 # Bar 2: layer 1 holds C4 on beat 1, layer 2 on beat 2: they only touch, so two notes.
-section "touching"
+section "touching"  meter 4/4
   line "Keys" voice_layer 1  | C4:q r:h. |
   line "Keys" voice_layer 2  | r:q C4:q r:h |
 
 # Bar 3: both layers hold C4 for the whole bar: one note.
-section "identical"
+section "identical"  meter 4/4
   line "Keys" voice_layer 1  | C4:w |
   line "Keys" voice_layer 2  | C4:w |
 
 # Bar 4: C4 in layer 1 and E4 in layer 2, overlapping: two notes, as they are different pitches.
-section "different pitches"
+section "different pitches"  meter 4/4
   line "Keys" voice_layer 1  | C4:h r:h |
   line "Keys" voice_layer 2  | r:q E4:h r:q |
 

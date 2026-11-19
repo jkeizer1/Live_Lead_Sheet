@@ -1,5 +1,5 @@
 # Canonical test song: crates/song_text/src/song_file.rs, test `a_composition_entry_may_change_key_and_tempo`.
-# One section "Riff" is played three times: as written, in D major at 120 beats/min, then again with no override (it carries D major and 120 on).
+# One section "Riff" is played three times: as written, in D major at 120 beats/min, then again with no override (the override held for one entry, so it is back in C major at 100 beats/min).
 song "Entry overrides"
 
 track "Clock"
@@ -10,7 +10,7 @@ track "Bass"
   clef bass
   lead
 
-section "Riff"
+section "Riff"  meter 4/4
   line "Bass" | C2:w |
 
 song_composition

@@ -69,6 +69,7 @@ More on the measurements: `crates/alsa_output/examples/explainer.md`.
 | `cargo run --release -p atlas_tool` | Rebuilds the glyph atlas from `assets/fonts`. Run after changing the fonts or the glyph list | `assets/atlas/glyphs.pgm`, `assets/atlas/glyphs.txt` |
 | `cargo run --release -p atlas_tool --example check_glyphs` | Checks the distance fields of a few glyphs | `scratch/atlas_check/` |
 | `python3 scratch/migrate_to_composition.py [--at-end] [--default-header] FILE.song ...` | Tool: moves a song written the old way (`repeat n` on sections, a section written again with only `repeat n`) to the `song_composition` block. The block goes before the first section (`--at-end`: at the end, keeping line numbers). Rewrites each file in place, so keep a copy; review the starting key, meter and tempo it picks. A file that already has a `song_composition` is left alone | The files given |
+| `python3 scratch/add_section_meters.py FILE.song ...` | Tool: writes a `meter` on every section that has none (a section no longer takes the meter of the one before it), copying the meter of the nearest section above, else the song_composition header's. Run it after `migrate_to_composition.py`. Rewrites each file in place, so keep a copy. A section with a `meter_control` line is left alone | The files given |
 
 ## Keeping this file current
 

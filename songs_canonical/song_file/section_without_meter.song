@@ -1,0 +1,23 @@
+# Canonical test song (deliberately wrong): crates/song_text/src/song_file.rs, test `a_section_without_a_meter_is_refused`.
+# "B" writes no meter. The loader must refuse it and say to add a meter: a section never takes its meter from the section before it.
+song "No meter"
+
+track "Clock"
+  type clock_and_transport
+
+track "Bass"
+  type mono_voice
+  clef bass
+  lead
+
+section "A"  meter 4/4
+  line "Bass" | C2:w |
+
+section "B"
+  line "Bass" | G2:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+  "B"
+song_composition_close

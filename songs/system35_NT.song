@@ -26,7 +26,7 @@ section "tune"
   meter 4/4  tempo 100 beats/min
   line "Bass"     | A2:w |
 
-section "1"
+section "1"  meter 4/4
 
   line "Bass"     | D2:e_ A2:e_ F2:e_ D2:e  A2:e_ G2:e_ F2:e  r:e  | C3:h_  D2:h  |  
                   | D2:e  A2:e  F2:e  D2:e  A2:e  r:e   F2:e  r:e  | C2:h   D1:h  |  

@@ -56,7 +56,7 @@ fn a_section_takes_its_bars_meters_from_the_pattern() {
 }
 
 #[test]
-fn a_section_that_writes_no_meter_carries_the_pattern() {
+fn a_section_writes_its_pattern_again_and_it_is_the_same() {
     let song: Song = song();
     assert_eq!(
         song.sections()[1].bar_meters(),

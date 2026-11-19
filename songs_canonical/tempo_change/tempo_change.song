@@ -1,5 +1,5 @@
 # Canonical test song: crates/song_text/tests/tempo_change_plan.rs reads this file and expects exactly this content.
-# Tempo between sections: 100 to 120 beats/min (a change), 4/4 to 3/4 carried (no change), 3/4 to 6/8 carried (dotted quarter beat, a change), a repeat (no change).
+# Tempo between sections: 100 to 120 beats/min (a tempo line in song_composition: a change), 4/4 to 3/4 carried (no change), 3/4 to 6/8 carried (dotted quarter beat, a change), a repeat (no change).
 # To hear it:
 #   cargo run --release -p song_text --example song_play_test -- \
 #     songs_canonical/tempo_change/tempo_change.song songs_canonical/tempo_change/tempo_change.studio
@@ -17,8 +17,7 @@ section "slow"
   key C major  meter 4/4  tempo 100 beats/min
   line "Keys"  | I:w | IV:w |
 
-section "faster"
-  tempo 120 beats/min
+section "faster"  meter 4/4
   line "Keys"  | V:w | I:w |
 
 section "waltz"
@@ -33,6 +32,7 @@ section "six eight"
 song_composition
   key C major  meter 4/4  tempo 100 beats/min
   "slow"
+  tempo 120 beats/min
   "faster"
   "waltz"
   "six eight"  repeat 2

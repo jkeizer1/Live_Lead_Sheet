@@ -35,14 +35,14 @@ section "tune"
   meter 4/4  tempo 100 beats/min
   line "Bass"     | D1:w |
 
-section "unison"   
+section "unison"  meter 4/4
   line "Bass"                    | D2:w  |
 
   line "MCO_SID" sample_source   | D2    |
   line "MCO_SID"                 | :w    |
                    
 
-section "1"
+section "1"  meter 4/4
     
   line "Bass"                    | D2:e_ A2:e_ F2:e_ D2:e  A2:e_ G2:e_ F2:e  r:e  | C2:h_  E2:h           | D2:e  A2:e  F2:e  D2:e  A2:e  r:e   A3:e  r:e       | C2:h_   D1:h  |  
 
@@ -53,7 +53,7 @@ section "1"
   line "MCO_SID"                 | :h   :h                                        | :h :h                 | :h :h                                               | :w            |                  
                    
 
-section "2"
+section "2"  meter 4/4
     
   line "Bass"                    | F2:e_ A2:e_ F2:e_ C2:e  A2:e_ C2:e_ F2:e  r:e  | C2:h_  G2:h           | B3:e  G1:e  E2:e  G1:e_  B3:e  r:e   B2:e  r:e      | C2:h_   D1:h  |  
 
@@ -63,7 +63,7 @@ section "2"
   line "MCO_SID" sample_source   | F1                                             |  C1                   | B1                                                  | C1 G2 D1 A2   |
   line "MCO_SID"                 | :h   :h                                        | :h :h                 | :h :h                                               | :w            |                     
 
-section "3"
+section "3"  meter 4/4
     
   line "Bass"                    | D2:e_ A2:e_ F2:e_ D2:e  A2:e_ G2:e_ F2:e  r:e  | C2:h_  E2:h           | D2:e  A2:e  F2:e  D2:e  A2:e  r:e   A3:e  r:e       | C2:h_   D1:h  |  
 
@@ -73,7 +73,7 @@ section "3"
   line "MCO_SID" sample_source   |  D1                                            |  C1                   | D1                                                  | C1 G2 D1 A2   |
   line "MCO_SID"                 | :h   :h                                        | :h :h                 | :h :h                                               | :w            |   
 
-section "4"
+section "4"  meter 4/4
     
   line "Bass"                    | F2:e_ A2:e_ F2:e_ C2:e  A2:e_ C2:e_ F2:e  r:e  | C2:h_  G2:h           | B3:e_  G1:e  E2:e  G1:e_  B3:e  r:e   B2:e  r:e     | C2:h_   D1:h  |  
 
@@ -83,7 +83,7 @@ section "4"
   line "MCO_SID" sample_source   | F1                                            |  C1                    | B1                                                  | C1 G2 D1 A2   |
   line "MCO_SID"                 | :h   :h                                        | :h :h                 | :h :h                                               | :w            |                     
 
-section "5"
+section "5"  meter 4/4
     
   line "Bass"                    | D2:e_ A2:e_ F2:e_ D2:e  A2:e_ G2:e_ F2:e  r:e  | C2:h_  E2:h           | D2:e  A2:e  F2:e  D2:e  A2:e  r:e   A3:e  r:e       | C2:h_   D1:h  |  
 

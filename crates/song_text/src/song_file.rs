@@ -107,6 +107,9 @@ struct CompositionEntry {
     repeat_count: u32,
     key: Option<Key>,
     tempo: Option<WrittenTempo>,
+    /// True for a `key` or `tempo` line standing between entries: it plays
+    /// nothing, and every entry after it takes its values as the base.
+    rebase: bool,
 }
 
 /// The `song_composition` block while it is being read: the key, meter and
@@ -128,8 +131,8 @@ struct EntryOverrides {
 }
 
 /// A tempo as the song file writes it. How long a beat is comes from the
-/// section's meter, which may be written after the tempo or carried from
-/// the section before, so the conversion waits until the section closes.
+/// section's meter, which may be written after the tempo, so the conversion
+/// waits until the section closes.
 #[derive(Debug, Clone)]
 enum WrittenTempo {
     BeatsPerMinute(MilliBeats),
@@ -173,35 +176,32 @@ impl WrittenTempo {
     }
 }
 
-/// The key, meter and tempo a section carries on from the one before. The
-/// tempo carries as beats per minute, so the beat feel stays the same
-/// across a meter change: 4/4 at 120 beats/min then 3/4 is still 120
-/// beats/min (Jim, 8 Nov 2026, decided 15 Nov 2026).
-#[derive(Default, Clone)]
-struct Carried {
-    key: Option<Key>,
-    time_signature: Option<TimeSignature>,
-    /// The meter of every bar, so a section that omits `meter` carries a
-    /// meter pattern as well as a single meter.
-    bar_meters: Option<BarMeters>,
-    /// The grouping goes with the meter it was written for.
-    beat_grouping: Option<Vec<u8>>,
-    tempo: Option<Tempo>,
+/// The key and tempo the composition is in at an entry: its starting values,
+/// then those of each `key` or `tempo` line above the entry. A section with
+/// no key or tempo of its own plays in these. The tempo is kept with the
+/// meter whose beat it counts, so it can be given the beat of a section's
+/// meter and stay the same beats per minute.
+#[derive(Clone)]
+struct CompositionBase {
+    key: Key,
+    tempo: Tempo,
+    /// The meter whose beat `tempo` counts: the composition's own meter.
+    beat_meter: TimeSignature,
 }
 
-/// The tempo of the section before, kept as beats per minute and given the
-/// beat of the new meter. In the same meter this is the same tempo.
+/// A tempo kept as beats per minute and given the beat of another meter. In
+/// the same meter this is the same tempo.
 ///
 /// ticks/beat of the old meter: `mbeats/min = mq/min × 5040 ticks/q ÷ L_beat
 /// ticks/beat` (exact: the old tempo was a whole number of mq/min made from
 /// whole mbeats/min).
-fn carry_tempo(
-    carried: Tempo,
-    carried_time_signature: TimeSignature,
+fn tempo_in_meter(
+    base_tempo: Tempo,
+    base_time_signature: TimeSignature,
     time_signature: TimeSignature,
 ) -> Result<Tempo, String> {
-    let old_beat_ticks: u64 = carried_time_signature.beat_length().ticks();
-    let milli_beats_per_minute: u64 = carried
+    let old_beat_ticks: u64 = base_time_signature.beat_length().ticks();
+    let milli_beats_per_minute: u64 = base_tempo
         .milli_quarters_per_minute()
         .saturating_mul(TICKS_PER_QUARTER_NOTE)
         / old_beat_ticks;
@@ -595,10 +595,9 @@ impl SongReader<'_> {
     }
 
     /// Builds a section as the composition plays it: with the key and tempo
-    /// the entry gives, else the section's own, else what carries on from the
-    /// section before. Answers the section and what the next one carries on,
-    /// or `None` after reporting why not.
-    // One pass over a section's settings, lines and carried values; split
+    /// the entry gives, else the section's own, else the composition's
+    /// current ones. Answers the section, or `None` after reporting why not.
+    // One pass over a section's settings, lines and the composition's values; split
     // apart it would pass the same state between several helpers.
     #[allow(clippy::too_many_lines)]
     fn build_section(
@@ -606,15 +605,14 @@ impl SongReader<'_> {
         open: &OpenSection,
         repeat_count: u32,
         overrides: &EntryOverrides,
-        carried: &Carried,
-    ) -> Option<(Section, Carried)> {
+        base: &CompositionBase,
+    ) -> Option<Section> {
         let errors_before: usize = self.errors.len();
         // The entry's tempo wins over the section's own.
         let written_tempo: Option<&WrittenTempo> = overrides.tempo.as_ref().or(open.tempo.as_ref());
         let Ok(pattern) = self.meter_pattern_of(open) else {
             return None;
         };
-        let pattern_written: bool = pattern.is_some();
         let bar_meters: BarMeters = match (pattern, open.time_signature) {
             (Some(_), Some(_)) => {
                 self.report(
@@ -631,44 +629,24 @@ impl SongReader<'_> {
             (Some(pattern), None) => pattern,
             (None, Some(time_signature)) => BarMeters::uniform(time_signature),
             (None, None) => {
-                let Some(carried) = carried.bar_meters.clone() else {
-                    self.report(
-                        open.line_number,
-                        format!(
-                            "section \"{}\" has no meter. Add meter 4/4 (or the meter you want), \
-                             or a meter_control line",
-                            open.name
-                        ),
-                    );
-                    return None;
-                };
-                carried
+                // A section never takes its meter from what plays before it,
+                // so it can be edited without knowing the order of play.
+                self.report(
+                    open.line_number,
+                    format!(
+                        "section \"{}\" has no meter. Add meter 4/4 (or the meter you want), \
+                         or a meter_control line",
+                        open.name
+                    ),
+                );
+                return None;
             }
         };
         // Every meter of a section has the same beat, so the first bar's
         // meter gives the beat of the section's tempo.
         let time_signature: TimeSignature = bar_meters.first();
-        let carried_tempo: Option<Tempo> = match (carried.tempo, carried.time_signature) {
-            (Some(tempo), Some(carried_signature)) if written_tempo.is_none() => {
-                match carry_tempo(tempo, carried_signature, time_signature) {
-                    Ok(carried) => Some(carried),
-                    Err(message) => {
-                        self.report(
-                            open.line_number,
-                            format!(
-                                "section \"{}\": the tempo carried on from the section before \
-                                 does not fit this meter: {message}. Write a tempo for this section",
-                                open.name
-                            ),
-                        );
-                        return None;
-                    }
-                }
-            }
-            _ => None,
-        };
-        let tempo: Tempo = match (written_tempo, carried_tempo) {
-            (Some(written), _) => match written.to_tempo(time_signature) {
+        let tempo: Tempo = match written_tempo {
+            Some(written) => match written.to_tempo(time_signature) {
                 Ok(tempo) => tempo,
                 Err(message) => {
                     self.report(
@@ -678,38 +656,33 @@ impl SongReader<'_> {
                     return None;
                 }
             },
-            (None, Some(carried)) => carried,
-            (None, None) => {
-                self.report(
-                    open.line_number,
-                    format!(
-                        "section \"{}\" has no tempo. Add tempo 120 beats/min (or the tempo \
-                         you want)",
-                        open.name
-                    ),
-                );
-                return None;
-            }
+            None => match tempo_in_meter(base.tempo, base.beat_meter, time_signature) {
+                Ok(tempo) => tempo,
+                Err(message) => {
+                    self.report(
+                        open.line_number,
+                        format!(
+                            "section \"{}\": the composition's tempo does not fit this \
+                             meter: {message}. Write a tempo for this section",
+                            open.name
+                        ),
+                    );
+                    return None;
+                }
+            },
         };
         // A count-in section needs no key, so it does not take the song's.
         let key: Option<Key> = if open.count_in {
             overrides.key.or(open.key)
         } else {
-            overrides.key.or(open.key).or(carried.key)
+            Some(overrides.key.or(open.key).unwrap_or(base.key))
         };
         let lines: Vec<Line> = self.build_lines(open, &bar_meters);
         if self.errors.len() > errors_before {
             return None;
         }
-        // A grouping goes with the meter: written with it, or carried along
-        // with a meter that is carried on.
-        let beat_grouping: Option<Vec<u8>> = if open.time_signature.is_some() {
-            open.beat_grouping.clone()
-        } else if pattern_written {
-            None
-        } else {
-            carried.beat_grouping.clone()
-        };
+        // A grouping goes with the meter it is written with.
+        let beat_grouping: Option<Vec<u8>> = open.beat_grouping.clone();
         let built: Result<Section, SongError> = Section::new(
             &open.name,
             open.count_in,
@@ -724,20 +697,7 @@ impl SongReader<'_> {
             None => Ok(section),
         });
         match built {
-            Ok(section) => {
-                let next: Carried = Carried {
-                    key,
-                    time_signature: Some(time_signature),
-                    bar_meters: Some(bar_meters),
-                    beat_grouping: section
-                        .beat_grouping()
-                        .map(|grouping| grouping.group_pulses().to_vec()),
-                    // What the next section carries on is the tempo at the
-                    // end of this one, after any tempo marks.
-                    tempo: Some(section.end_tempo()),
-                };
-                Some((section, next))
-            }
+            Ok(section) => Some(section),
             Err(error) => {
                 self.report(open.line_number, error.to_string());
                 None
@@ -784,7 +744,27 @@ impl SongReader<'_> {
             return Ok(());
         };
         if !line.starts_with('"') {
-            return read_composition_start(&mut composition.start, line);
+            if composition.entries.is_empty() {
+                return read_composition_start(&mut composition.start, line);
+            }
+            // After the first entry, a key or tempo line sets a new base for
+            // the entries below it.
+            let mut written: OpenSection = OpenSection::new("", line_number, 0);
+            read_composition_start(&mut written, line)?;
+            if written.time_signature.is_some() {
+                return Err(String::from(
+                    "the meter cannot change in song_composition. Write the meter on a section",
+                ));
+            }
+            composition.entries.push(CompositionEntry {
+                name: String::new(),
+                line_number,
+                repeat_count: 1,
+                key: written.key,
+                tempo: written.tempo,
+                rebase: true,
+            });
+            return Ok(());
         }
         let Some((name, settings)) = quoted_prefix(line) else {
             return Err(String::from(
@@ -810,6 +790,7 @@ impl SongReader<'_> {
             repeat_count: written.repeat_count.unwrap_or(1),
             key: written.key,
             tempo: written.tempo,
+            rebase: false,
         });
         Ok(())
     }
@@ -831,7 +812,7 @@ impl SongReader<'_> {
 
     /// The key, meter and tempo the composition starts in, or `None` after
     /// reporting what is missing or wrong.
-    fn starting_values_of(&mut self, composition: &OpenComposition) -> Option<Carried> {
+    fn starting_values_of(&mut self, composition: &OpenComposition) -> Option<CompositionBase> {
         let start: &OpenSection = &composition.start;
         let (Some(key), Some(time_signature), Some(written_tempo)) =
             (start.key, start.time_signature, start.tempo.clone())
@@ -855,18 +836,16 @@ impl SongReader<'_> {
                 return None;
             }
         };
-        Some(Carried {
-            key: Some(key),
-            time_signature: Some(time_signature),
-            bar_meters: Some(BarMeters::uniform(time_signature)),
-            beat_grouping: start.beat_grouping.clone(),
-            tempo: Some(tempo),
+        Some(CompositionBase {
+            key,
+            tempo,
+            beat_meter: time_signature,
         })
     }
 
     /// Plays the composition's entries in order: each is built from its
     /// definition with the key and tempo the entry gives, else its own, else
-    /// what carries on. A definition no entry plays is checked once, as
+    /// the composition's current ones. A definition no entry plays is checked once, as
     /// written, against the composition's starting key, meter and tempo.
     fn build_composition(&mut self, song_line: usize) {
         let Some(composition) = self.composition.take() else {
@@ -890,10 +869,14 @@ impl SongReader<'_> {
             return;
         };
         let definitions: Vec<OpenSection> = std::mem::take(&mut self.definitions);
-        let mut carried: Carried = starting.clone();
+        let mut base: CompositionBase = starting.clone();
         let mut played_names: Vec<String> = Vec::new();
         let mut failed_names: Vec<String> = Vec::new();
         for entry in &composition.entries {
+            if entry.rebase {
+                self.rebase(&mut base, entry);
+                continue;
+            }
             let Some(definition) = definitions
                 .iter()
                 .find(|defined: &&OpenSection| defined.name == entry.name)
@@ -919,10 +902,10 @@ impl SongReader<'_> {
                 tempo: entry.tempo.clone(),
             };
             // repeat 0 leaves the entry out, as if commented out: it is
-            // checked where it stands, but does not play or carry anything on.
+            // checked where it stands, but does not play or change anything.
             if entry.repeat_count == 0 {
                 if self
-                    .build_section(definition, 1, &overrides, &carried)
+                    .build_section(definition, 1, &overrides, &base)
                     .is_some()
                 {
                     played_names.push(entry.name.clone());
@@ -931,9 +914,8 @@ impl SongReader<'_> {
                 }
                 continue;
             }
-            match self.build_section(definition, entry.repeat_count, &overrides, &carried) {
-                Some((section, next)) => {
-                    carried = next;
+            match self.build_section(definition, entry.repeat_count, &overrides, &base) {
+                Some(section) => {
                     self.sections.push(section);
                     played_names.push(entry.name.clone());
                 }
@@ -955,6 +937,21 @@ impl SongReader<'_> {
                  them repeat 1 or more"
             };
             self.report(composition.line_number, String::from(message));
+        }
+    }
+
+    /// A `key` or `tempo` line between entries: the new base for the entries
+    /// below it.
+    fn rebase(&mut self, base: &mut CompositionBase, entry: &CompositionEntry) {
+        if let Some(key) = entry.key {
+            base.key = key;
+        }
+        let Some(written) = entry.tempo.clone() else {
+            return;
+        };
+        match written.to_tempo(base.beat_meter) {
+            Ok(tempo) => base.tempo = tempo,
+            Err(message) => self.report(entry.line_number, format!("song_composition: {message}")),
         }
     }
 
@@ -1657,7 +1654,7 @@ mod tests {
 
     #[test]
     fn a_section_with_repeat_0_is_left_out_as_if_commented_out() {
-        // B (140 beats/min) is not played and does not carry its tempo on:
+        // B (140 beats/min) is not played and does not change the tempo for the entries after it:
         // C plays at A's 100 beats/min = 100000 milli-quarters/min.
         assert_eq!(
             plays_of(include_str!(
@@ -1676,9 +1673,9 @@ mod tests {
             named_plays(&[
                 ("A", 1, 100_000),
                 ("B", 1, 140_000),
-                // A has no tempo of its own, so it carries B's on.
-                ("A", 3, 140_000),
-                ("D", 1, 140_000),
+                // B's own tempo affects B only.
+                ("A", 3, 100_000),
+                ("D", 1, 100_000),
             ])
         );
     }
@@ -1771,7 +1768,52 @@ mod tests {
             played[1].0.contains('D') && played[1].1 == 120_000,
             "{played:?}"
         );
-        assert_eq!(played[2], played[1], "the next entry carries them on");
+        assert_eq!(
+            played[2], played[0],
+            "an entry's override holds for that entry only"
+        );
+    }
+
+    #[test]
+    fn a_key_and_tempo_line_between_entries_sets_the_base_for_those_below() {
+        let song: Song = parse_song(
+            "test.song",
+            include_str!("../../../songs_canonical/song_file/composition_rebase.song"),
+        )
+        .unwrap();
+        let played: Vec<(String, u64)> = song
+            .sections()
+            .iter()
+            .map(|section: &Section| {
+                (
+                    format!("{:?}", section.key()),
+                    section.tempo().milli_quarters_per_minute(),
+                )
+            })
+            .collect();
+        assert_eq!(played.len(), 3);
+        assert!(
+            played[0].0.contains('C') && played[0].1 == 100_000,
+            "{played:?}"
+        );
+        assert_eq!(played[1], played[2], "both follow the new base");
+        assert!(
+            played[1].0.contains('D') && played[1].1 == 190_000,
+            "{played:?}"
+        );
+    }
+
+    #[test]
+    fn a_section_without_a_meter_is_refused() {
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/section_without_meter.song"
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(
+            errors[0].contains("section \"B\" has no meter"),
+            "{}",
+            errors[0]
+        );
     }
 
     #[test]
@@ -1900,13 +1942,13 @@ mod tests {
     }
 
     #[test]
-    fn a_carried_tempo_keeps_the_beats_per_minute_across_a_meter_change() {
+    fn the_composition_tempo_keeps_its_beats_per_minute_across_meters() {
         // 120 beats/min in 4/4 stays 120 beats/min in 3/4 (a quarter note
         // beat both times: 120 q/min) and in 6/8 (a dotted quarter beat:
         // 120 beats/min × 1.5 q/beat = 180 q/min), and back in 4/4.
         assert_eq!(
             tempos_of(include_str!(
-                "../../../songs_canonical/song_file/tempo_carried_across_meter_change.song"
+                "../../../songs_canonical/song_file/tempo_across_meter_change.song"
             )),
             vec![120_000, 120_000, 180_000, 120_000]
         );
@@ -2030,7 +2072,7 @@ mod tests {
             .iter()
             .map(|section: &Section| section.beat_grouping().map(ToString::to_string))
             .collect();
-        // B carries 7/8 and its grouping; C writes its own; D has a new
+        // B writes 7/8 and the same grouping; C writes its own; D has a new
         // meter and so no grouping.
         assert_eq!(
             groupings,

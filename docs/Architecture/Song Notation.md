@@ -619,7 +619,9 @@ key changes, as standard notation requires.
   in what order, like `main` in a C program. Every song has exactly one.
   It may stand anywhere in the file, before or after the sections it
   names. Its first lines give the key, meter and tempo the song starts in;
-  all three are required. Each entry then names a section in quotes:
+  all three are required. The tempo is in beats per minute, so the meter
+  there only says which beat it counts; each section still writes its own
+  meter. Each entry then names a section in quotes:
 
   ```
   song_composition
@@ -629,6 +631,8 @@ key changes, as standard notation requires.
     "B"  repeat 2
     "A"  repeat 2
     "Bridge"  key D major  tempo 120 beats/min
+    key E major  tempo 140 beats/min
+    "A"
     "B"  repeat 0
   song_composition_close
   ```
@@ -636,19 +640,27 @@ key changes, as standard notation requires.
   - `repeat n` is the total number of times the entry plays: `repeat 2`
     plays it twice. With no `repeat` it plays once. `repeat 0` leaves the
     entry out. The section is still read and checked, but it plays nothing
-    and passes nothing on: the next entry carries its key, meter and tempo
-    from the last entry that plays. A composition whose entries all have
+    and changes nothing for the entries after it. A composition whose entries all have
     `repeat 0`, or that lists no entries, is refused.
   - A section may be named by several entries, so a song takes a form such
     as AABBAA.
-  - An entry may also write `key` and `tempo`, so one section is reused
-    in another key or at another tempo. An entry may not change the meter:
-    the meter belongs to the section, because the bars are written for it.
-    The notes the section writes are not transposed: an entry's key sets
-    the key signature and what a chord numeral means.
+  - An entry may also write `key` and `tempo`, which apply to that entry
+    only, so one section is reused in another key or at another tempo; the
+    entry after it is back to what it was. An entry may not change the
+    meter: the meter belongs to the section, because the bars are written
+    for it. The notes the section writes are not transposed: an entry's key
+    sets the key signature and what a chord numeral means.
+  - To change the key or the tempo for everything that follows, write
+    `key` and `tempo` on a line of their own between entries (as `key E
+    major  tempo 140 beats/min` above). Every entry below that line takes
+    them as the new base, until another such line. The meter cannot be
+    changed here either.
   - What an entry plays in is taken, for each of key and tempo, from the
-    entry, else the section's own, else what carries on from the entry
-    before, else (for the first entry) the composition's starting value.
+    entry, else the section's own, else the composition's current value: the
+    starting key and tempo, or those of the last `key` or `tempo` line
+    above the entry. A section's own key, tempo and tempo marks affect that
+    section only; they do not change what the composition passes to the
+    entries below.
   - `count-in` stays on the section, and is allowed only on the section of
     the first entry that plays.
   - A section written with `repeat n`, or a section with no lines to
@@ -661,9 +673,11 @@ key changes, as standard notation requires.
   for `repeat n`: `|%2` is twice and `|%3` three times; with no number
   the bars play twice. There  is no sign for "the previous bar again":
   `/` already plays the previous  note or chord again. 
-- **Carrying on.** A section that omits `key`, `meter` or `tempo` carries
-  on the one before it in the order of play; the first plays with the
-  composition's starting values.
+- **Carrying on.** A section that omits `key` or `tempo` plays in the
+  composition's current key and tempo. A section must write its own
+  `meter` (or have a `meter_control` line): it never takes the meter of
+  the section played before it, so it can be edited without knowing the
+  order of play. A section with no meter is refused.
 - A section with chords needs a key, written or carried; a count-in section
   needs none. `count-in` is for the first section played only, one or two
   bars.
@@ -677,10 +691,10 @@ key changes, as standard notation requires.
   quarters a minute: 60 beats/min × 3 eighths/beat = 180 eighths a minute.
   `q/min`, `e/min` and the like are refused, with a message saying what to
   write.
-  - **A carried tempo keeps the beats per minute** A section that changes 
-   the meter but writes no tempo keeps the beats per minute so the beat feel
-    is the same. After `meter 4/4 tempo 120 beats/min`, a section with
-    only `meter 3/4` still plays 120 beats/min. Each beat is a quarter 
+  - **A tempo keeps the beats per minute across meters.** A section that
+    writes a meter but no tempo plays the composition's tempo in beats per
+    minute, so the beat feel is the same. With the composition at `tempo 120
+    beats/min`, a section with `meter 3/4` still plays 120 beats/min. Each beat is a quarter 
     note in both, so the notes keep their speed and the bar is three beats
     instead of four. In 6/8 the beat is each group of three eighths, 
     falling on the 1 and the 4.
@@ -923,11 +937,11 @@ track "Cues"
   `| tempo 130 beats/min I:q / / / |`. The unit is written, as for a section's
   `tempo`.
 - The tempo applies from the start of that bar and holds until the next mark.
-- When a section repeats, the section's tempo, written or carried, applies again
-  from its first bar. The first mark of the section then takes effect when its
+- When a section repeats, the section's tempo, written or the composition's,
+  applies again from its first bar. The first mark of the section then takes effect when its
   bar is reached, as on the first play.
-- The next section that carries its tempo takes the tempo in force at the end of
-  the last bar.
+- A section's marks affect that section only: the next entry plays at the
+  composition's tempo, not at the tempo in force at the end of the section.
 - A bar holds at most one mark.
 - Only the first voice layer of the lead track takes marks. A mark on any other
   line or layer is an error, and so is a mark in a section that has no lead line.

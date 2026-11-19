@@ -53,7 +53,7 @@ section "Stollen"
     | r A3:sx B3 C4 B3 C4:e r:sx G3 Ab3 F3 G3 F3 G3:e |
     | r:sx G3 Ab3 E3 F3 E3 F3:e r:sx E3 F3 B2 C3 B2 C3:e |
 
-section "Abgesang"
+section "Abgesang"  meter 4/4
   line "Manual"  voice_layer 1
     | G4:q G4 Ab4 G4 |
     | F4:q. F4:e Eb4:h^ |

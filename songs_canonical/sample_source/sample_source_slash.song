@@ -15,7 +15,7 @@ section "slash resamples"
   line "Bass" sample_source | D2 A2 F2 D2 | G2 |
   line "Bass"               | :q  /  /  /  | :w |
 
-section "slash after a written note"
+section "slash after a written note"  meter 4/4
   line "Bass" sample_source | D2 A2 F2 D2 |
   line "Bass"               | G3:q / :q /  |
 

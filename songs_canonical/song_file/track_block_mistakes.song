@@ -7,7 +7,7 @@ track "A"
   wobble
 track "B"
   type bass_synth
-section "S"
+section "S"  meter 4/4
   line "A" | C4:w |
 
 song_composition
