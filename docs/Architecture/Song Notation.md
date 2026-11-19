@@ -527,9 +527,11 @@ Attributes of a voice track:
   a name is called by its number, and the editor shows the number until a
   name is given. Numbers and names may not repeat within a track.
 - **Octave annotations.** `+8va` and `-8va` move what follows one octave
-  up or down from the clef's octave. One may be written at the start of
-  any bar, most often at the start of a section, on any track with notes
-  or chords, and it stays in effect until it is changed. `loco`, the
+  up or down from the clef's octave. One may be written before any
+  element, most often at the start of a bar or section, on any track with
+  notes or chords, and it stays in effect until it is changed, so
+  `| I:e r:e V:q -8va viidim:h |` plays the viidim chord an octave down and
+  so does everything after it, until a `+8va` or `loco`. `loco`, the
   word print uses, returns to the clef's octave. The register of a
   device is a different matter, set by `octave_offset` in the studio
   configuration (section 6). 

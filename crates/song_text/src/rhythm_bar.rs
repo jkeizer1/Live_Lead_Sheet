@@ -163,6 +163,9 @@ pub fn parse_bar(
 
     loop {
         cursor.skip_whitespace();
+        if notation == BarNotation::SongLine {
+            take_octave_annotations(&mut cursor, carry);
+        }
         if cursor.peek().is_none() {
             break;
         }
@@ -173,8 +176,14 @@ pub fn parse_bar(
                      e.g. | C2:euclid(3,8) |"
                 ));
             }
-            return parse_euclid_bar(&mut cursor, bar_number, bar_length_ticks);
+            let mut euclid: Vec<BarElement> =
+                parse_euclid_bar(&mut cursor, bar_number, bar_length_ticks)?;
+            for element in &mut euclid {
+                element.octave_shift_octaves = carry.octave_shift_octaves;
+            }
+            return Ok(euclid);
         }
+        let placed_before: usize = placed.len();
         let function: Option<(GroupLength, Vec<WrittenElement>)> =
             if notation == BarNotation::SongLine {
                 parse_song_function(&mut cursor, bar_length_ticks, carry)?
@@ -213,8 +222,25 @@ pub fn parse_bar(
             )?);
             position_subticks += element_subticks;
         }
+        // The octave annotation in force when the element was written.
+        for element in &mut placed[placed_before..] {
+            element.octave_shift_octaves = carry.octave_shift_octaves;
+        }
     }
 
+    check_bar_is_full(&placed, position_subticks, bar_number, bar_meter, notation)?;
+    Ok(placed)
+}
+
+/// The bar has elements and they add up exactly to the length of its meter.
+fn check_bar_is_full(
+    placed: &[BarElement],
+    position_subticks: u64,
+    bar_number: usize,
+    bar_meter: TimeSignature,
+    notation: BarNotation,
+) -> Result<(), String> {
+    let bar_length_ticks: u64 = bar_meter.bar_length().ticks();
     if placed.is_empty() {
         let example: &str = match notation {
             BarNotation::Rhythm => "q q q q",
@@ -248,7 +274,27 @@ pub fn parse_bar(
             describe_length(over_ticks).description
         ));
     }
-    Ok(placed)
+    Ok(())
+}
+
+/// `+8va`, `-8va` or `loco` standing before an element, at any place in a
+/// bar: it sets the octave of what follows, until the next annotation (Song
+/// Notation, section 3).
+fn take_octave_annotations(cursor: &mut Cursor, carry: &mut LineCarry) {
+    loop {
+        let word: String = cursor.element_text();
+        let octave_shift_octaves: i8 = match word.as_str() {
+            "+8va" => 1,
+            "-8va" => -1,
+            "loco" => 0,
+            _ => return,
+        };
+        carry.octave_shift_octaves = octave_shift_octaves;
+        for _ in word.chars() {
+            cursor.next();
+        }
+        cursor.skip_whitespace();
+    }
 }
 
 /// A group written as an element of its own: `trp(q q q)` in a rhythm,
@@ -462,11 +508,7 @@ pub fn parse_bars(
         };
         // bar_number counts from 1; the meters count bars from 0.
         let bar_meter: TimeSignature = bar_meters.meter_of_bar(bar_number - 1);
-        let mut bar: Vec<BarElement> = parse_bar(bar_text, bar_number, bar_meter, notation, carry)?;
-        for element in &mut bar {
-            element.octave_shift_octaves = carry.octave_shift_octaves;
-        }
-        bars.push(bar);
+        bars.push(parse_bar(bar_text, bar_number, bar_meter, notation, carry)?);
     }
     Ok(bars)
 }
@@ -1786,6 +1828,20 @@ mod tests {
         let carried: PlacedBar =
             song_with_carry(&["D1:q F1:e A1:e fitH(A1 C1 E2 A2 C2 E3)"]).remove(0);
         assert_eq!(carried[3].1, 1680);
+    }
+
+    #[test]
+    fn an_octave_annotation_may_stand_before_any_element_in_a_bar() {
+        let bar: Vec<BarElement> = song("C4:q -8va D4:q E4:h").unwrap();
+        let shifts: Vec<i8> = bar.iter().map(|e| e.octave_shift_octaves).collect();
+        assert_eq!(shifts, vec![0, -1, -1]);
+        let back: Vec<BarElement> = song("+8va C4:q loco D4:q -8va E4 F4").unwrap();
+        let shifts: Vec<i8> = back.iter().map(|e| e.octave_shift_octaves).collect();
+        assert_eq!(shifts, vec![1, 0, -1, -1]);
+        // After a chord and an eighth rest, as on a chord line.
+        let chords: Vec<BarElement> = song("I:e r:e V:q -8va viidim:h").unwrap();
+        let shifts: Vec<i8> = chords.iter().map(|e| e.octave_shift_octaves).collect();
+        assert_eq!(shifts, vec![0, 0, 0, -1]);
     }
 
     #[test]
