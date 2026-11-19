@@ -23,3 +23,9 @@ section "A minor"
   key A minor
   line "Keys"  | A3:w | E3:w |
   line "Bass"  | A1:q / / / | E1:q / / / |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "C minor"
+  "A minor"
+song_composition_close

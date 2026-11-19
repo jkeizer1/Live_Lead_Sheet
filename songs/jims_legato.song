@@ -27,11 +27,17 @@ track "Cymbol"
   type mono_voice
   clef treble
 
-section "Count-in"  count-in repeat 1
+song_composition
+  key C major  meter 4/4  tempo 80 beats/min
+  "Count-in"
+  "Bass 1"  repeat 12
+song_composition_close
+
+section "Count-in"  count-in
   meter 4/4  tempo 80 beats/min
   line "Beat" | B3:q>> B3:q< B3:q< B3:q<< |  
 
-section "Bass 1"  repeat 12
+section "Bass 1"
   key C major
   line "Keys"                   | ii:w                  | IV:w                  |  r:w                | ii:w                     | I:w                   | r:w                   | I:w                   |
   line "Bass" sample_source     | D2 E2 F2 G2           |  D2 E2 F2 G2 A2       |  D2 E2 F2 G2        | D2 E2 F2 G2 A2 B3        | C3 E2 G2 D2 E2        | C3 E2 G2 D2 E2        | C3 E2 G2 D2 E3 D3 G4  |                  

@@ -13,3 +13,8 @@ track "Bass"
 section "A"
   key C major  meter 4/16  tempo 100.001 beats/min
   line "Keys" | I:q |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+song_composition_close

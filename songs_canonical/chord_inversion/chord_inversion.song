@@ -16,3 +16,8 @@ track "Keys"
 section "inversions"
   key C major  meter 4/4  tempo 100 beats/min
   line "Keys"  | I:w | I[1stInversion]:w | I[2ndInversion]:w | ii7:w | ii7[3rdInversion]:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "inversions"
+song_composition_close

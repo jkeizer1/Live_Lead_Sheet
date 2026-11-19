@@ -42,3 +42,14 @@ section "chain"
 # Bar 8: staccato cuts the note to an eighth note, so it touches nothing.
 section "staccato"
   line "Bass"  | D2:q'_ A2:q F2:h |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "joined"
+  "unmarked"
+  "rest after"
+  "across the barline"
+  "same pitch"
+  "chain"
+  "staccato"
+song_composition_close

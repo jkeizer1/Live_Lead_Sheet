@@ -10,3 +10,8 @@ track "Keys"
 section "A"
   key D dorian  meter 4/4  tempo 100 beats/min
   line "Keys"  | C4:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+song_composition_close

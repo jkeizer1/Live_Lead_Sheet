@@ -1,5 +1,5 @@
-# Canonical test song (deliberately wrong): crates/song_text/src/song_file.rs, test `missing_meter_and_tempo`.
-# A section with a line but no meter and no tempo. The loader must refuse it: asks for the meter.
+# Canonical test song (deliberately wrong): crates/song_text/src/song_file.rs, test `a_composition_without_meter_and_tempo_is_refused`.
+# The song_composition header gives only the key. The loader must refuse it: it must say the header needs the key, meter and tempo.
 song "T"
 track "Clock"
   type clock_and_transport
@@ -9,3 +9,8 @@ track "Bass"
   lead
 section "A"
   line "Bass" | C2:w |
+
+song_composition
+  key C major
+  "A"
+song_composition_close

@@ -16,3 +16,8 @@ track "Cues"
 section "A"
   key C major  meter 6/8  tempo 60 beats/min
   line "Bass"  | C2:q. G2 |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+song_composition_close

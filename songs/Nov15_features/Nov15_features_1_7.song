@@ -26,7 +26,29 @@ track "Beat"
 # 1. GROUPING. 7/8 grouped 2+2+3 eighths: three beats, two short and one long. Played twice.
 #    In 7/8 the beat is an eighth note, so 200 beats/min is a quarter note at 100.
 #    Listen: the bass steps fall on the groups (short, short, long).
-section "1 grouping"  repeat 0
+song_composition
+  key C major  meter 7/8 grouping 2+2+3  tempo 400 beats/min
+  "1 grouping"  repeat 0
+  "2 inversions"  repeat 0
+  "3 repeat signs"  repeat 0
+  "4 F minor"  repeat 2
+  "4 F Major"  repeat 2
+  "4 euclid B"  repeat 0
+  "5 layer merge"  repeat 0
+  "6 dynamic levels"  repeat 0
+  "6b crescendo diminuendo"  repeat 0
+  "6b2crescendo diminuendo"  repeat 0
+  "6c accent under p"  repeat 0
+  "7 octaves"  repeat 0
+  "8a slow"  repeat 0
+  "8b faster"  repeat 0
+  "8c three four"  repeat 0
+  "8ca three four"  repeat 0
+  "8d six eight"  repeat 0
+  "8e back to slow"  repeat 0
+song_composition_close
+
+section "1 grouping"
   key C major  meter 7/8  grouping 2+2+3  tempo 400 beats/min
   line "Keys"  | I:q ii:q V:q.    |
   line "Bass"  | C2:q D2:q G2:q.  |
@@ -34,13 +56,13 @@ section "1 grouping"  repeat 0
 
 # 2. INVERSIONS. The same C chord four ways, then ii7 in third inversion.
 #    Listen: the lowest note of the chord changes: C, E, G, then C7... (ii7 = D F A C: C lowest).
-section "2 inversions" repeat 0
+section "2 inversions"
   key C major  meter 4/4  tempo 100 beats/min
   line "Keys"  | I:w  | I[1stInversion]:w | I[2ndInversion]:w | ii7[3rdInversion]:w |
   line "Bass"  | C2:w | /                 | /                 | /                   |
 
 # 3. REPEAT SIGNS. |% ... %| plays the two bars inside twice: I, IV, V, IV, V, I.
-section "3 repeat signs" repeat 0
+section "3 repeat signs"
   key C major  meter 4/4  tempo 100 beats/min
   line "Keys"  | I:w   |% IV:w | V:w  %| I:w  |
   line "Bass"  | C2:w  |% F2:w | G2:w %| C2:w |
@@ -48,7 +70,7 @@ section "3 repeat signs" repeat 0
 # 4. EUCLID. Three hits spread over eight steps, then five over eight: Bjorklund's patterns
 #    (x..x..x. and x.xx.xx.). Listen: the Beat track.
 #    minor dominant uses Eb
-section "4 F minor" repeat 2
+section "4 F minor"
 #  key C major  meter 4/4  tempo 7999 beats/min --- 8000 beats/min is too fast (rejected), 7999 bpm works.
    key F minor  meter 4/4  tempo 140 beats/min --- 8000 beats/min is too fast (rejected), 7999 bpm works.
 #                             | Fm (F Ab C), Bb minor (Bb Db F)    |      Cm (C Eb G) Fm (F Ab C)   |
@@ -60,7 +82,7 @@ section "4 F minor" repeat 2
 
 # 4. EUCLID. Three hits spread over eight steps, then five over eight: Bjorklund's patterns
 #    (x..x..x. and x.xx.xx.). Listen: the Beat track.
-section "4 F Major" repeat 2
+section "4 F Major"
 #  key C major  meter 4/4  tempo 7999 beats/min --- 8000 beats/min is too fast (rejected), 7999 bpm works.
    key F major  meter 4/4  tempo 140 beats/min --- 8000 beats/min is too fast (rejected), 7999 bpm works.
    line "Keys" sample_source  | I  vi                     |      IV          vii°          |
@@ -70,7 +92,7 @@ section "4 F Major" repeat 2
 
 # 4. EUCLID. Three hits spread over eight steps, then five over eight: Bjorklund's patterns
 #    (x..x..x. and x.xx.xx.). Listen: the Beat track.
-section "4 euclid B" repeat 0
+section "4 euclid B"
   key C major  meter 8/8  tempo 420 beats/min
    line "Keys"  |%2 I:w      | -8va V:w  %|%2 loco ii:w | V:w %|
    line "Bass"  | G3:q / / / | G2:euclid(3,8)                       |  G2:euclid(4,8)          |  G2:euclid(5,6)          |  G2:euclid(2,3)          | G2:euclid(7,8)          | G2:euclid(8,8) |  r:w |       
@@ -79,7 +101,7 @@ section "4 euclid B" repeat 0
 # 5. SAME PITCH IN TWO LAYERS. Bar 1: layer 1 holds C4 on beats 1-2, layer 2 on beats 2-3:
 #    one C4 sounds from beat 1 to the end of beat 3. Bar 2: the C4s only touch (beat 1, then beat 2):
 #    two separate notes.
-section "5 layer merge" repeat 0
+section "5 layer merge"
   key C major  meter 4/4  tempo 100 beats/min
   line "Keys" voice_layer 1  | C4:h r:h       | C4:q r:h.    |
   line "Keys" voice_layer 2  | r:q  C4:h> r:q | r:q C4:q r:h |
@@ -88,7 +110,7 @@ section "5 layer merge" repeat 0
  
 # 6. DYNAMICS. A line "Keys" dynamics: the six levels, one bar each: pp p mp mf f ff.
 #    Listen: the chord on Keys gets louder bar by bar (Bass stays the same).
-section "6 dynamic levels" repeat 0
+section "6 dynamic levels"
   key C major  meter 4/4  tempo 140 beats/min
   line "Keys"            | I:w  | / | I:w  | /  | / | /  |
   line "Keys"  dynamics  | pp:w | p | mp | mf | f | ff |
@@ -96,7 +118,7 @@ section "6 dynamic levels" repeat 0
 
 # 6b. CRESCENDO AND DIMINUENDO. p, then a crescendo over two bars to f, then a diminuendo over
 #     two bars to p, then mf. The < and > end where the next level starts.
-section "6b crescendo diminuendo" repeat 0
+section "6b crescendo diminuendo"
   key C major  meter 4/4  tempo 100 beats/min
   line "Keys"  | I:w | / | / | / | / | / | / | / |
   line "Keys"  dynamics  | pp:w | <:w | r:w | f:w | >:w | r:w | p:w | mf:w |
@@ -105,14 +127,14 @@ section "6b crescendo diminuendo" repeat 0
 
 # 6b2. CRESCENDO AND DIMINUENDO. p, then a crescendo over two bars to f, then a diminuendo over
 #     two bars to p, then mf. The < and > end where the next level starts.
-section "6b2crescendo diminuendo" repeat 0
+section "6b2crescendo diminuendo"
   key C major  meter 4/4  tempo 100 beats/min
    line "Bass"            | C2:w    | / |   / | / | / | / | / | / |
    line "Bass"  dynamics  | pp:w    | <:w | r:w | f:w | >:w | r:w | p:w | mf:w |
 
 # 6c. ACCENT UNDER p. The studio's accent (velocity 100) is absolute: the first chord in the
 #     bar is loud though the line says p. The next bar's < marks are softer than p.
-section "6c accent under p" repeat 0
+section "6c accent under p"
   key C major  meter 4/4  tempo 100 beats/min
   line "Keys"            | I:q> / / / | I:q< / / / |
   line "Keys"  dynamics  | p:w        | r:w        |
@@ -121,7 +143,7 @@ section "6c accent under p" repeat 0
 
 # 7. OCTAVE ANNOTATIONS. C E G C each bar: plain, then +8va (an octave up, stays on), then plain
 #    text still up, then -8va (an octave down), then loco (back to the clef's octave).
-section "7 octaves" repeat 0
+section "7 octaves"
   key C major  meter 4/4  tempo 150 beats/min
   line "Keys"  | C4:q E4 G4 C5 | +8va C4:q E4 G4 C5 | C4:q E4 G4 C5 | -8va C4:q E4 G4 C5 | loco C4:q E4 G4 C5 | r:w               |
   line "Bass"  | C2:w          | /                  | /             | /                  | /                  | C2:q> /<< /<< /<< |
@@ -129,42 +151,42 @@ section "7 octaves" repeat 0
 # 8. TEMPO BETWEEN SECTIONS (and the meter change). 100 beats/min, then 140, then 3/4 keeps
 #    140 beats/min (same beat speed), then 6/8 keeps 140 beats/min (the beat is now a dotted
 #    quarter, so it feels faster), then back to 4/4 at 100.
-section "8a slow" repeat 0
+section "8a slow"
   key C major  meter 4/4 
   tempo 100 beats/min
   line "Keys"  | I:w        | IV:w    |
   line "Bass"  | C2:w       | F2:w    |
   line "Beat"  | C2:q / / / | / / / / |
 
-section "8b faster" repeat 0
+section "8b faster"
   key C major  meter 4/4 
   tempo 140 beats/min
   line "Keys"  | V:w        | I:w     |
   line "Bass"  | G2:w       | C2:w    |
   line "Beat"  | C2:q / / / | / / / / |
 
-section "8c three four" repeat 0
+section "8c three four"
   key C major meter 3/4
   tempo 140 beats/min
   line "Keys"  | I:h.      | IV:h. | V:h.  | I:h.  |
   line "Bass"  | C2:h.     | F2:h. | G2:h. | C2:h. |
   line "Beat"  | C2:q / /  | / / / | / / / | / / / |
 
-section "8ca three four" repeat 0
+section "8ca three four"
   key C major meter 3/4
   tempo 140 beats/min
 #  line "Keys"  | I:h.      | IV:h. |
 #  line "Bass"  | C2:h.     | F2:h. |
   line "Beat"  | C2:q / /  | / / / |
 
-section "8d six eight" repeat 0
+section "8d six eight"
   key C major meter 6/8
   tempo 140 beats/min
   line "Keys"  | I:h.                       | IV:h.                     | V:h.                      | I:h.                      |
 #  line "Bass" | C2:h.                      | F2:h.                     | G2:h.                     | C2:h.                     |
   line "Beat"  |%4 C2:e r:e C2:e C2:e r:e C2:e %| 
 
-section "8e back to slow" repeat 0
+section "8e back to slow"
   key C major meter 4/4  tempo 100 beats/min
   line "Keys"  | I:w |
   line "Bass"  | C2:w |

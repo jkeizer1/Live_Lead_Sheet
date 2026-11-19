@@ -17,3 +17,8 @@ section "A"
   key C major  meter 4/4  tempo 60 beats/min
   line "Bass"  | trp (C2:q D2 E2) F2:q_ G2~ | G2:w^ |
   line "Cues"  | "Go":h r | r:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+song_composition_close

@@ -1,0 +1,9 @@
+# Canonical test studio (valid): crates/song_text/src/studio_file.rs, test `a_track_without_a_mezzo_forte_velocity_plays_at_64`.
+# Track A gives an accent velocity but no mezzo_forte velocity; track B gives no velocity at all. Both play at 64.
+studio "S"
+port "P"
+track "A"
+  port "P"  channel 1
+  velocity accent 100
+track "B"
+  port "P"  channel 2

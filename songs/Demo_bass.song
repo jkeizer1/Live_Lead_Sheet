@@ -12,6 +12,11 @@ track "Bass"
   clef bass
   lead
 
-section "Gate test"  repeat 1
+song_composition
+  key C major  meter 4/4  tempo 120 beats/min
+  "Gate test"
+song_composition_close
+
+section "Gate test"
   key C major  meter 4/4  tempo 120 beats/min
   line "Bass"  | C2:e r G2 r D2 r A2 r           | C2 r C2 r C2 r C2 r             |

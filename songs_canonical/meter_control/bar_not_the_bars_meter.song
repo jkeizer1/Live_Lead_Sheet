@@ -13,3 +13,8 @@ section "A"
   key C major  tempo 100 beats/min
   line "Meter"  | mp [3_4 5_4] |
   line "Keys"  | I:h. | IV:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+song_composition_close

@@ -10,3 +10,8 @@ track "Keys"
 section "A"
   key C major  meter 4/4  tempo 120 beats/min
   line "Keys"  | fitQ(C4:e D4 E4 F4 G4) A4:q B4:h |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+song_composition_close

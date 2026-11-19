@@ -13,3 +13,8 @@ track "Bass"
 section "A"
   key C major  meter 4/4  tempo 100 beats/min
   line "Keys"  | tempo 100 ramp_to 120 beats/min 2_bars I:w | tempo 90 beats/min I:w | I:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+song_composition_close

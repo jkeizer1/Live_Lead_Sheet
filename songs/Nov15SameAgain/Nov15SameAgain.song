@@ -13,24 +13,31 @@ track "NTBass"
   lead
 
 
-section "A" repeat 2
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"  repeat 2
+  "B"  repeat 2
+  "C"
+  "A"  repeat 2
+song_composition_close
+
+section "A"
   key C major
   meter 4/4  tempo 100 beats/min
   line "NTBass"                   | D2:e_ A2:e_ F2:e_ D2:e  A2:e_ G2:e_ F2:e  r:e  | C3:h_  /  |  
                                   | D2:e  A2:e  F2:e  D2:e  A2:e  r:e   F2:e  r:e  | C2:h   /  |  
 
-section "B" repeat 2
+section "B"
   key C major
   meter 4/4  tempo 100 beats/min
   line "NTBass"  sample_source    | D2    A2   F2   D2  A3  G3  F3  F2             | C3     D2    |
   line "NTBass"                   | :e_   :e_  :e_  :e  :e_  /  /   r:e            | C3:h_  D2:h  |  
 
-section "C" repeat 1
+section "C"
   line "NTBass"                   | D2:e_  /    F2:e  D2:e  A2:e  r:e   F2:e  r:e  | C3:h   D3:h  |  
 
 
 #section "B" repeat 2
-section "A" repeat 2
 
   
                   

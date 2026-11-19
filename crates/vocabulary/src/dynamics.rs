@@ -4,11 +4,12 @@
 
 use std::fmt;
 
-use crate::midi_values::{Velocity, VelocityLimit};
+use crate::midi_values::Velocity;
 
 /// A level of loudness, relative to the track's normal velocity, which is
-/// `mf`. The softer levels move the normal velocity a share of the room left
-/// toward 1, the louder ones toward 127, so no level reaches the limit.
+/// `mf`. The softer levels move the normal velocity a share of the way toward
+/// the softest level, the louder ones toward the loudest, so `pp` to `ff`
+/// use the range of velocities, less a safety gap at each end.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DynamicLevel {
     Pianissimo,
@@ -33,18 +34,23 @@ impl DynamicLevel {
         }
     }
 
-    /// `pp` 3/4, `p` 3/8, `mp` 3/16 of the way from `normal` to 1; `mf` is
-    /// `normal`; `f` 3/8 and `ff` 3/4 of the way to 127 (Song Notation,
-    /// section 6), rounded to the nearest whole velocity.
+    /// `pp` all the way from `normal` to the softest level (6), `p` half way
+    /// and `mp` a quarter of the way; `mf` is `normal`; `f` half way and
+    /// `ff` all the way to the loudest level (121). So `pp` to `ff` use the
+    /// whole range, less a safety gap at each end (Song Notation, section
+    /// 6). A normal velocity already past an end keeps the levels on that
+    /// side at `normal`. Rounded to the nearest whole velocity.
     #[must_use]
     pub fn velocity(self, normal: Velocity) -> Velocity {
+        let softest: Velocity = normal.min(Velocity::SOFTEST_LEVEL);
+        let loudest: Velocity = normal.max(Velocity::LOUDEST_LEVEL);
         match self {
-            DynamicLevel::Pianissimo => normal.sixteenths_of_the_way_to(VelocityLimit::Softest, 12),
-            DynamicLevel::Piano => normal.sixteenths_of_the_way_to(VelocityLimit::Softest, 6),
-            DynamicLevel::MezzoPiano => normal.sixteenths_of_the_way_to(VelocityLimit::Softest, 3),
+            DynamicLevel::Pianissimo => normal.sixteenths_of_the_way_toward(softest, 16),
+            DynamicLevel::Piano => normal.sixteenths_of_the_way_toward(softest, 8),
+            DynamicLevel::MezzoPiano => normal.sixteenths_of_the_way_toward(softest, 4),
             DynamicLevel::MezzoForte => normal,
-            DynamicLevel::Forte => normal.sixteenths_of_the_way_to(VelocityLimit::Loudest, 6),
-            DynamicLevel::Fortissimo => normal.sixteenths_of_the_way_to(VelocityLimit::Loudest, 12),
+            DynamicLevel::Forte => normal.sixteenths_of_the_way_toward(loudest, 8),
+            DynamicLevel::Fortissimo => normal.sixteenths_of_the_way_toward(loudest, 16),
         }
     }
 }
@@ -127,9 +133,17 @@ mod tests {
     #[test]
     fn the_levels_match_the_table_in_song_notation() {
         // pp, p, mp, mf, f, ff at normal velocity 64, 90 and 100.
-        assert_eq!(at_normal(64), vec![17, 40, 52, 64, 88, 111]);
-        assert_eq!(at_normal(90), vec![23, 57, 73, 90, 104, 118]);
-        assert_eq!(at_normal(100), vec![26, 63, 81, 100, 110, 120]);
+        assert_eq!(at_normal(64), vec![6, 35, 50, 64, 93, 121]);
+        assert_eq!(at_normal(90), vec![6, 48, 69, 90, 106, 121]);
+        assert_eq!(at_normal(100), vec![6, 53, 77, 100, 111, 121]);
+    }
+
+    #[test]
+    fn a_normal_past_an_end_keeps_the_levels_on_that_side_at_normal() {
+        // Normal 3 is already softer than the softest level.
+        assert_eq!(at_normal(3)[..4], [3, 3, 3, 3]);
+        // Normal 125 is already louder than the loudest level.
+        assert_eq!(at_normal(125)[3..], [125, 125, 125]);
     }
 
     #[test]

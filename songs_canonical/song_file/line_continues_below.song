@@ -17,3 +17,8 @@ section "A"
                | vi | IV |
   line "Bass"
     | C2:w | G2 | A2 | F2 |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+song_composition_close

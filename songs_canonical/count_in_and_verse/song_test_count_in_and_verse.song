@@ -29,9 +29,15 @@ section "Count-in"  count-in
   meter 4/4  tempo 120 beats/min
   line "Beat"  | C4:q> / / / |
 
-section "Verse"  repeat 2
+section "Verse"
   key C major  meter 4/4  tempo 120 beats/min
   line "Beat"  | C4:q> / / /   | /> / / /       |
   line "Keys"  | I:q / / /     | r ii7:h V7:q   |
   line "Bass"  | C2:q / / / | G2 /:h /:q |
   line "Cues"  | "Start SQ-1":w | r             |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "Count-in"
+  "Verse"  repeat 2
+song_composition_close

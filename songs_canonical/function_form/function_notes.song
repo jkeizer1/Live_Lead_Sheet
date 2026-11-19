@@ -28,3 +28,12 @@ section "three eighths in a quarter"
 
 section "fitBar with four notes"
   line "Bass"  | fitBar(C2:q D2:e E2:e F2:h) |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "notes in a triplet"
+  "notes in a triplet, repeated by a slash"
+  "bare lengths and notes mixed"
+  "three eighths in a quarter"
+  "fitBar with four notes"
+song_composition_close

@@ -24,6 +24,14 @@ track "Bass"
   clef bass
 
 # 90 beats/min, then 120 beats/min from bar 5.
+song_composition
+  key C major  meter 4/4  tempo 90 beats/min
+  "Steps"
+  "Carried"
+  "Slowing"
+  "Again"  repeat 2
+song_composition_close
+
 section "Steps"
   key C major  meter 4/4  tempo 90 beats/min
   line "Keys"  | I:w | IV:w | V:w | I:w | tempo 120 beats/min I:w | IV:w | V:w | I:w |
@@ -40,7 +48,7 @@ section "Slowing"
   line "Bass"  | C2:q / / / | F2:q / / / | G2:q / / / | C2:q / / / |
 
 # Each play starts at 100 beats/min and drops to 80 beats/min in bar 3.
-section "Again"  repeat 2
+section "Again"
   tempo 100 beats/min
   line "Keys"  | I:w | IV:w | tempo 80 beats/min V:w | I:w |
   line "Bass"  | C2:q / / / | F2:q / / / | G2:q / / / | C2:q / / / |

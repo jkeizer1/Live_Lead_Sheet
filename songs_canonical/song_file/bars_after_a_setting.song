@@ -1,5 +1,5 @@
 # Canonical test song (deliberately wrong): crates/song_text/src/song_file.rs, test `bars_after_a_setting`.
-# Bars after a setting (repeat 2), which ends the line above. The loader must refuse it: bars with no line above them.
+# Bars after a setting (tempo), which ends the line above. The loader must refuse it: bars with no line above them.
 song "T"
 track "Clock"
   type clock_and_transport
@@ -11,7 +11,12 @@ track "Bass"
   type mono_voice
   clef bass
 section "A"
-  key C major  meter 4/4  tempo 120 beats/min
+  key C major  meter 4/4
   line "Keys"  | I:w |
-  repeat 2
+  tempo 120 beats/min
   | V:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+song_composition_close

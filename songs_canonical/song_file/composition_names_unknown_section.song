@@ -1,0 +1,20 @@
+# Canonical test song (deliberately wrong): crates/song_text/src/song_file.rs, test `a_composition_entry_must_name_a_defined_section`.
+# The song_composition names "B", which no section defines. The loader must refuse it and say "B" is not a section of this song.
+song "Unknown section"
+
+track "Clock"
+  type clock_and_transport
+
+track "Bass"
+  type mono_voice
+  clef bass
+  lead
+
+section "A"
+  line "Bass" | C2:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+  "B"  repeat 2
+song_composition_close

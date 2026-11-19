@@ -20,11 +20,17 @@ track "Bass"
   type mono_voice
   clef bass
 
-section "Count-in"  count-in repeat 2
+song_composition
+  key C major  meter 3/8  tempo 100 beats/min
+  "Count-in"  repeat 2
+  "Gate test"  repeat 300
+song_composition_close
+
+section "Count-in"  count-in
   meter 3/8  tempo 100 beats/min
   line "Beat"  | C5:e>  C2 /   |
 
-section "Gate test"  repeat 300
+section "Gate test"
   key C major  meter 3/8  tempo 100 beats/min
 #                  Phrase 1                                                                                         
   line "Harmony"  | I:q.            | IV:e   /   IV      |  vii°:q  /:e                         |

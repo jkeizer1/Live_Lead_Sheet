@@ -1,9 +1,0 @@
-# Canonical test studio (valid): crates/song_text/src/studio_file.rs, test `no_normal_velocity`.
-# Track A gives an accent velocity but no normal velocity; track B gives no velocity at all. Both play at 64.
-studio "S"
-port "P"
-track "A"
-  port "P"  channel 1
-  velocity accent 100
-track "B"
-  port "P"  channel 2

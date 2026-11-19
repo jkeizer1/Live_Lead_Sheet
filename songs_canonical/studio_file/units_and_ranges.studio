@@ -7,4 +7,4 @@ track "A"
 track "B"
   port "P"  retrigger_gap 2
 track "C"
-  port "P"  velocity normal 0
+  port "P"  velocity mezzo_forte 0

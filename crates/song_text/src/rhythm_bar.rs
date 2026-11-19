@@ -156,6 +156,9 @@ pub fn parse_bar(
     notation: BarNotation,
     carry: &mut LineCarry,
 ) -> Result<Vec<BarElement>, String> {
+    if notation == BarNotation::Dynamics {
+        return parse_dynamics_bar(bar_text, bar_number, bar_meter, carry);
+    }
     let bar_length_ticks: u64 = bar_meter.bar_length().ticks();
     let mut cursor: Cursor = Cursor::new(bar_text);
     let mut placed: Vec<BarElement> = Vec::new();
@@ -306,7 +309,7 @@ fn parse_standalone_group(
     carry: &mut LineCarry,
 ) -> Result<(GroupLength, Vec<WrittenElement>), String> {
     let group_start_position: usize = cursor.position;
-    let parsed: (GroupLength, Vec<WrittenElement>) =
+    let (group_length, mut inner): (GroupLength, Vec<WrittenElement>) =
         parse_group(cursor, bar_length_ticks, notation, false, carry)?;
     if notation == BarNotation::SongLine {
         // A group that holds its own notes is the function the next `/`
@@ -316,8 +319,32 @@ fn parse_standalone_group(
                 .iter()
                 .collect(),
         );
+        // Marks after the ) apply to every note the group gives, as they do
+        // after a function written after a colon.
+        let marks: ElementMarks = parse_marks(cursor)?;
+        if cursor.peek() == Some('~') {
+            return Err(String::from(
+                "a tie cannot follow a group. Tie notes one by one if you need one",
+            ));
+        }
+        match cursor.peek() {
+            None => {}
+            Some(character) if character.is_whitespace() => {}
+            Some(character) => {
+                return Err(format!(
+                    "'{character}' after the group. Write marks right after the ), then a space"
+                ));
+            }
+        }
+        if marks != ElementMarks::NONE {
+            for element in &mut inner {
+                if element.kind == ElementKind::Sounding {
+                    element.marks = marks;
+                }
+            }
+        }
     }
-    Ok(parsed)
+    Ok((group_length, inner))
 }
 
 /// How long a group plays, in subticks: `trp` is 2/3 of its written
@@ -1027,6 +1054,8 @@ fn parse_group(
     match cursor.peek() {
         None => {}
         Some(character) if character.is_whitespace() => {}
+        // On a song line the marks after the ) are read by the caller.
+        Some('>' | '<' | '\'' | '_' | '^' | '~') if notation == BarNotation::SongLine => {}
         Some(character) => {
             return Err(format!(
                 "'{character}' after the group {name} (...). Leave a space after the )"
@@ -1045,37 +1074,55 @@ fn parse_element(
     match notation {
         BarNotation::Rhythm => parse_rhythm_element(cursor),
         BarNotation::SongLine => parse_song_element(cursor, carry),
-        BarNotation::Dynamics => parse_dynamics_element(cursor, carry),
+        BarNotation::Dynamics => Err(String::from(
+            "internal error: a dynamics line is read bar by bar, not element by element",
+        )),
     }
 }
 
-/// A dynamics line's element: a level word, `<`, `>` or `r`, then its length
-/// (the colon may be left off). `p:w`, `<:h`, `mf`, `r:q`. A length left off
-/// is the one before it, as on every song line.
-fn parse_dynamics_element(
-    cursor: &mut Cursor,
-    carry: &mut LineCarry,
-) -> Result<WrittenElement, String> {
+/// What a dynamics line's element is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DynamicsKind {
+    /// `pp p mp mf f ff`.
+    Level,
+    /// `<` or `>`.
+    Ramp,
+    /// `r`: no change.
+    Rest,
+}
+
+/// A dynamics line's element as written: its word, and its length if it
+/// wrote one (`p:w`, `<:h`, `mf`, `r:q`; the colon may be left off).
+struct DynamicsToken {
+    word: String,
+    kind: DynamicsKind,
+    written_length: Option<WrittenLength>,
+}
+
+fn parse_dynamics_token(cursor: &mut Cursor) -> Result<DynamicsToken, String> {
     let element_text: String = cursor.element_text();
     let word: String = cursor.take_while(|character: &char| {
         character.is_ascii_alphabetic() || *character == '<' || *character == '>'
     });
-    // `r` alone is a stretch with no change; the letters of a level are
-    // taken as one word, so `pp` is not `p` then `p`.
-    let is_rest: bool = word == "r";
-    let is_mark: bool = DynamicMark::from_text(&word).is_some();
-    if !is_rest && !is_mark {
+    // The letters of a level are taken as one word, so `pp` is not `p` then `p`.
+    let kind: DynamicsKind = if word == "r" {
+        DynamicsKind::Rest
+    } else if word == "<" || word == ">" {
+        DynamicsKind::Ramp
+    } else if DynamicMark::from_text(&word).is_some() {
+        DynamicsKind::Level
+    } else {
         return Err(format!(
             "\"{element_text}\" is not a dynamics mark. Write pp, p, mp, mf, f, ff, \
              < (crescendo), > (diminuendo) or r (no change), then its length, e.g. p:w"
         ));
-    }
+    };
     if cursor.peek() == Some(':') {
         cursor.next();
     }
     let written_length: Option<WrittenLength> = parse_written_length(cursor)?;
     match cursor.peek() {
-        None | Some(')') => {}
+        None => {}
         Some(character) if character.is_whitespace() => {}
         Some(character) => {
             return Err(format!(
@@ -1084,31 +1131,180 @@ fn parse_dynamics_element(
             ));
         }
     }
-    let length: WrittenLength = match written_length {
-        Some(written) => {
+    Ok(DynamicsToken {
+        word,
+        kind,
+        written_length,
+    })
+}
+
+/// A bar of a dynamics line. A level or `r` writes its length, or takes the
+/// one before it. A `<` or `>` with no length fills what the other elements
+/// leave of the bar. A level with no length that stands next to a `<` or `>`
+/// is a point where the ramp starts or ends: it takes one tick, the least a
+/// score length can be, from that ramp, except the level that ends the bar,
+/// which takes the last beat (Song Notation, section 5, "Dynamics, in rhythm
+/// notation").
+fn parse_dynamics_bar(
+    bar_text: &str,
+    bar_number: usize,
+    bar_meter: TimeSignature,
+    carry: &mut LineCarry,
+) -> Result<Vec<BarElement>, String> {
+    let mut cursor: Cursor = Cursor::new(bar_text);
+    let mut tokens: Vec<DynamicsToken> = Vec::new();
+    loop {
+        cursor.skip_whitespace();
+        if cursor.peek().is_none() {
+            break;
+        }
+        tokens.push(parse_dynamics_token(&mut cursor)?);
+    }
+    let bar_subticks: u64 = bar_meter.bar_length().ticks() * SUBTICKS_PER_TICK;
+    let beat_subticks: u64 = bar_meter.beat_length().ticks() * SUBTICKS_PER_TICK;
+    let lengths_subticks: Vec<u64> =
+        resolve_dynamics_lengths(&tokens, bar_subticks, beat_subticks, bar_number, carry)?;
+    let written: Vec<WrittenElement> = tokens
+        .iter()
+        .zip(&lengths_subticks)
+        .map(|(token, length_subticks): (&DynamicsToken, &u64)| {
+            let is_rest: bool = token.kind == DynamicsKind::Rest;
+            WrittenElement {
+                length_subticks: *length_subticks,
+                kind: if is_rest {
+                    ElementKind::Rest
+                } else {
+                    ElementKind::Sounding
+                },
+                marks: ElementMarks::NONE,
+                tied_to_next: false,
+                contents_text: if is_rest {
+                    None
+                } else {
+                    Some(token.word.clone())
+                },
+                from_source: false,
+            }
+        })
+        .collect();
+    let total_subticks: u64 = lengths_subticks.iter().sum();
+    let placed: Vec<BarElement> = if written.is_empty() {
+        Vec::new()
+    } else {
+        place(0, total_subticks, &written, bar_number)?
+    };
+    check_bar_is_full(
+        &placed,
+        total_subticks,
+        bar_number,
+        bar_meter,
+        BarNotation::Dynamics,
+    )?;
+    Ok(placed)
+}
+
+/// The length of each element of a dynamics bar, in subticks.
+fn resolve_dynamics_lengths(
+    tokens: &[DynamicsToken],
+    bar_subticks: u64,
+    beat_subticks: u64,
+    bar_number: usize,
+    carry: &mut LineCarry,
+) -> Result<Vec<u64>, String> {
+    let is_ramp = |index: usize| -> bool { tokens[index].kind == DynamicsKind::Ramp };
+    let is_point = |index: usize| -> bool {
+        tokens[index].kind == DynamicsKind::Level
+            && tokens[index].written_length.is_none()
+            && ((index > 0 && is_ramp(index - 1))
+                || (index + 1 < tokens.len() && is_ramp(index + 1)))
+    };
+    let is_fill =
+        |index: usize| -> bool { is_ramp(index) && tokens[index].written_length.is_none() };
+    // The level that ends the bar after a ramp takes the last beat, so the
+    // notes of the bar run the whole way from the first level to the last.
+    // Any other point takes one tick.
+    let point_subticks = |index: usize| -> u64 {
+        if index + 1 == tokens.len() && index > 0 && is_ramp(index - 1) {
+            beat_subticks
+        } else {
+            SUBTICKS_PER_TICK
+        }
+    };
+    // A point pays its length to the ramp before it, or else the ramp after it.
+    let mut points_paid_by_subticks: Vec<u64> = vec![0; tokens.len()];
+    for index in 0..tokens.len() {
+        if is_point(index) {
+            let payer: usize = if index > 0 && is_ramp(index - 1) {
+                index - 1
+            } else {
+                index + 1
+            };
+            points_paid_by_subticks[payer] += point_subticks(index);
+        }
+    }
+
+    // Lengths written, or carried from the element before.
+    let mut nominal_subticks: Vec<u64> = vec![0; tokens.len()];
+    for (index, token) in tokens.iter().enumerate() {
+        if is_point(index) || is_fill(index) {
+            continue;
+        }
+        let length: WrittenLength = if let Some(written) = token.written_length {
             carry.written = Some(written);
             carry.function_text = None;
             written
-        }
-        None => carry.written.ok_or_else(|| {
-            format!(
-                "\"{element_text}\" has no length, and nothing before it in this line \
-                 gives one. Write it, e.g. {word}:w"
-            )
-        })?,
-    };
-    Ok(WrittenElement {
-        length_subticks: dotted_length_subticks(length.base_ticks, length.dots, SUBTICKS_PER_TICK),
-        kind: if is_rest {
-            ElementKind::Rest
         } else {
-            ElementKind::Sounding
-        },
-        marks: ElementMarks::NONE,
-        tied_to_next: false,
-        contents_text: if is_rest { None } else { Some(word) },
-        from_source: false,
-    })
+            carry.written.ok_or_else(|| {
+                format!(
+                    "bar {bar_number}: \"{}\" has no length, and nothing before it in this \
+                     line gives one. Write it, e.g. {}:w",
+                    token.word, token.word
+                )
+            })?
+        };
+        nominal_subticks[index] =
+            dotted_length_subticks(length.base_ticks, length.dots, SUBTICKS_PER_TICK);
+    }
+
+    // The ramps with no length share what is left of the bar.
+    let fills: Vec<usize> = (0..tokens.len()).filter(|&index| is_fill(index)).collect();
+    if !fills.is_empty() {
+        let fixed_subticks: u64 = nominal_subticks.iter().sum();
+        let left_subticks: u64 = bar_subticks.saturating_sub(fixed_subticks);
+        if left_subticks == 0 {
+            return Err(format!(
+                "bar {bar_number}: the other elements already fill the bar, so the ramp has no \
+                 time. Give the ramp a length and shorten the others"
+            ));
+        }
+        let share_subticks: u64 = left_subticks / fills.len() as u64;
+        for &index in &fills {
+            nominal_subticks[index] = share_subticks;
+        }
+        // The last one takes what rounding leaves over.
+        if let Some(&last) = fills.last() {
+            nominal_subticks[last] = left_subticks - share_subticks * (fills.len() as u64 - 1);
+        }
+    }
+
+    // A point takes its length; its ramp is that much shorter.
+    let mut lengths_subticks: Vec<u64> = Vec::with_capacity(tokens.len());
+    for index in 0..tokens.len() {
+        if is_point(index) {
+            lengths_subticks.push(point_subticks(index));
+        } else {
+            let paid_subticks: u64 = points_paid_by_subticks[index];
+            if nominal_subticks[index] <= paid_subticks {
+                return Err(format!(
+                    "bar {bar_number}: the ramp \"{}\" is too short to hold the levels beside \
+                     it. Give it a longer length",
+                    tokens[index].word
+                ));
+            }
+            lengths_subticks.push(nominal_subticks[index] - paid_subticks);
+        }
+    }
+    Ok(lengths_subticks)
 }
 
 /// A rhythm library's element: value, then `r` and dots in either order
@@ -1842,6 +2038,80 @@ mod tests {
         let chords: Vec<BarElement> = song("I:e r:e V:q -8va viidim:h").unwrap();
         let shifts: Vec<i8> = chords.iter().map(|e| e.octave_shift_octaves).collect();
         assert_eq!(shifts, vec![0, 0, 0, -1]);
+    }
+
+    /// (start ticks, length ticks) of the elements of a dynamics bar.
+    fn dynamics_places(bar_text: &str) -> Result<Vec<(u64, u64)>, String> {
+        let mut carry: LineCarry = LineCarry::start_of_line();
+        parse_bar(bar_text, 1, four_four(), BarNotation::Dynamics, &mut carry).map(
+            |bar: Vec<BarElement>| {
+                bar.into_iter()
+                    .map(|element: BarElement| (element.start_ticks, element.length_ticks))
+                    .collect()
+            },
+        )
+    }
+
+    #[test]
+    fn a_level_beside_a_ramp_is_a_point_that_takes_a_tick_from_the_ramp() {
+        // pp 1 tick, the ramp up to the last beat, ff the last beat (5040 ticks).
+        assert_eq!(
+            dynamics_places("pp < ff").unwrap(),
+            vec![(0, 1), (1, 15_119), (15_120, 5040)]
+        );
+        // The same for a diminuendo.
+        assert_eq!(
+            dynamics_places("ff > pp").unwrap(),
+            vec![(0, 1), (1, 15_119), (15_120, 5040)]
+        );
+        // A level that does not end the bar takes one tick.
+        assert_eq!(
+            dynamics_places("pp < ff r:q").unwrap(),
+            vec![(0, 1), (1, 15_118), (15_119, 1), (15_120, 5040)]
+        );
+        // A level with a length is not a point: the ramp is exactly the half note.
+        assert_eq!(
+            dynamics_places("pp:q <:h ff:q").unwrap(),
+            vec![(0, 5040), (5040, 10_080), (15_120, 5040)]
+        );
+        // A point beside a ramp that wrote its length still adds up to the bar.
+        assert_eq!(
+            dynamics_places("pp <:h ff:h").unwrap(),
+            vec![(0, 1), (1, 10_079), (10_080, 10_080)]
+        );
+        // Two ramps with no length share what is left.
+        assert_eq!(dynamics_places("p:q < mf:q >").unwrap().len(), 4);
+    }
+
+    #[test]
+    fn a_ramp_with_no_time_or_a_level_with_no_length_is_reported() {
+        assert!(
+            dynamics_places("p:h f:h <")
+                .unwrap_err()
+                .contains("has no time")
+        );
+        // Not beside a ramp, a level still needs a length from somewhere.
+        assert!(
+            dynamics_places("p f:h")
+                .unwrap_err()
+                .contains("has no length")
+        );
+    }
+
+    #[test]
+    fn marks_after_a_group_apply_to_every_note_in_it() {
+        // fitQ of four notes then C2:q: the group is one quarter, then a quarter.
+        let bar: Vec<BarElement> = song("C3:h< fitQ(D4 E4 F4 G4)>> C2:q").unwrap();
+        let marked: Vec<bool> = bar
+            .iter()
+            .map(|element| element.marks.accent() == AccentLevel::Marcato)
+            .collect();
+        assert_eq!(marked, vec![false, true, true, true, true, false]);
+        // A mark on a note inside is kept where no mark follows the ).
+        let inside: Vec<BarElement> = song("trp(F2:q> A2:q C2:q) D2:h").unwrap();
+        assert_ne!(inside[0].marks.accent(), AccentLevel::Normal);
+        assert_eq!(inside[1].marks.accent(), AccentLevel::Normal);
+        assert!(song("fitQ(D4 E4)~ C2:h").unwrap_err().contains("tie"));
     }
 
     #[test]

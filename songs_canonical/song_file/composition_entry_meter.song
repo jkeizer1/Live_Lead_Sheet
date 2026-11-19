@@ -1,0 +1,19 @@
+# Canonical test song (deliberately wrong): crates/song_text/src/song_file.rs, test `a_composition_entry_may_not_change_the_meter`.
+# An entry writes meter 3/4. The loader must refuse it and say an entry may change the key and the tempo, not the meter.
+song "Entry meter"
+
+track "Clock"
+  type clock_and_transport
+
+track "Bass"
+  type mono_voice
+  clef bass
+  lead
+
+section "Riff"
+  line "Bass" | C2:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "Riff"  meter 3/4
+song_composition_close

@@ -10,3 +10,8 @@ track "Keys"
 section "A"
   key C major  meter 4/4  tempo 120 beats/min
   line "Keys"  | trp (C4:q D4 E4) trp (F4:e G4 A4) B4:q |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+song_composition_close

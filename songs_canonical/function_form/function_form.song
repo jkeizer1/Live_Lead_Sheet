@@ -22,3 +22,10 @@ section "triplet repeated by a slash"
 
 section "rest and accents"
   line "Bass"  | C2:trp(q r q)> D2:h |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "triplet then quarters"
+  "triplet repeated by a slash"
+  "rest and accents"
+song_composition_close

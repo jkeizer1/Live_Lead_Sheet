@@ -14,3 +14,8 @@ section "ramp"
   key C major  meter 4/4  tempo 100 beats/min
   line "Keys"  | C4:w | / |
   line "Keys"  dynamics  | p:w | <:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "ramp"
+song_composition_close

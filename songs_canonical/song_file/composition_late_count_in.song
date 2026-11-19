@@ -1,0 +1,23 @@
+# Canonical test song (deliberately wrong): crates/song_text/src/song_file.rs, test `a_count_in_is_only_allowed_on_the_first_section_played`.
+# "Intro" has a count-in but is not the first section played. The loader must refuse it.
+song "Late count-in"
+
+track "Clock"
+  type clock_and_transport
+
+track "Bass"
+  type mono_voice
+  clef bass
+  lead
+
+section "Riff"
+  line "Bass" | C2:w |
+
+section "Intro"  count-in
+  line "Bass" | G2:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "Riff"
+  "Intro"
+song_composition_close

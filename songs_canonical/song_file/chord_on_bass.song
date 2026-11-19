@@ -14,3 +14,8 @@ section "A"
   key C major  meter 4/4  tempo 120 beats/min
   line "Keys"  | I:q / / / |
   line "Bass"  | C2:q / / V7 |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+song_composition_close

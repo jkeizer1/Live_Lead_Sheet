@@ -31,7 +31,15 @@ section "Ramp"
   line "Keys"  | I:w | tempo 120 ramp_to 60 beats/min 2_bars IV:w | V:w | I:w |
   line "Bass"  | C2:q / / / | F2:q / / / | G2:q / / / | C2:q / / / |
 
-section "Again"  repeat 2
+section "Again"
   tempo 100 beats/min
   line "Keys"  | I:w | tempo 80 beats/min V:w |
   line "Bass"  | C2:q / / / | G2:q / / / |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "Steps"
+  "Carried"
+  "Ramp"
+  "Again"  repeat 2
+song_composition_close

@@ -15,11 +15,11 @@ language, library or internal design.
 counter, the tempo, the cues panel, and the voice tracks.
 
 **EFS-1.2 Song overview.** A strip across the top shows every section in
-order, by name, with its repeat count. The current section and the
-position within it are marked. A section played again by name (EFS-5.2b)
-is its own entry in the strip, in its place in the order, so a song of
-the form AABBAA shows six entries. A section with a repeat count of 0 is
-not shown.
+order of play, by name, with its repeat count. The current section and the
+position within it are marked. A section named by several entries of the
+song's composition (EFS-5.2b) is its own entry in the strip for each, in
+its place in the order, so a song of the form AABBAA shows six entries. An
+entry with a repeat count of 0 is not shown.
 
 **EFS-1.3 Counter.** Large and plain: `Repeat: 3 of 4   Bar: 2   Beat: 1`.
 Beat follows the time signature as the rudiments define it, the same beat
@@ -140,10 +140,11 @@ set on the play screen, whichever clock source is in use (EFS-2.9).
 Stop sends MIDI Stop and silences every track
 (All Notes Off) on every output port in use.
 
-**EFS-2.2 Tempo.** Each section has a written tempo, or carries on the
-previous section's tempo. The tempo of the first section that plays is the
-song's initial tempo; a key change happens at a section boundary; tempo and meter may also change bar by bar inside a section (EFS-2.2a). A section played again by name has the tempo of the
-section it repeats, and the section after it carries on from that tempo.
+**EFS-2.2 Tempo.** The song's composition gives the tempo the song starts
+in. Each entry of the composition may give a tempo of its own, else the
+section has its own, else the tempo carries on from the entry before. A key
+change happens at a section boundary; tempo and meter may also change bar by
+bar inside a section (EFS-2.2a).
 Tempo marks inside a section are written on the lead track's line, in the
 bar where they start (Song Notation, "Tempo marks on the lead line"). A mark
 changes the tempo at the start of its bar and holds until the next mark. A
@@ -350,25 +351,28 @@ tempo (EFS-2.5).
 
 **EFS-5.2 Sections.** Add, name, reorder and remove sections, and mark
 the first as a count-in section. For each:
-repeat count, key (twelve roots, major or minor, chosen from a list),
-meter with its beat grouping (or a repeating meter pattern, EFS-2.2a), and tempo (written, or carry on), with optional tempo marks on the lead line (EFS-2.2). A repeat
-count of 0 is allowed: the song plays as if that section were commented
-out, which is how a musician skips it while testing.
+key (twelve roots, major or minor, chosen from a list),
+meter with its beat grouping (or a repeating meter pattern, EFS-2.2a), and tempo (written, or carry on), with optional tempo marks on the lead line (EFS-2.2). A section is a
+definition with a unique name; it plays only when the composition names it
+(EFS-5.2b). A section the composition does not name is allowed and does not
+play.
 
 **EFS-5.2a Minor keys.** A minor key uses the natural-minor key
 signature, as in standard notation. Chords that use the raised sixth or
 seventh degree (*e.g.* E7 in A minor) are written with accidentals,
 named by their actual notes. A section never has to choose a minor form.
 
-**EFS-5.2b Playing a section again.** A song can play a section it has
-already defined, by name, with its own repeat count: `section "A"` written
-again with `repeat 3` and no lines of its own. The repeated section keeps
-the original's key, meter, tempo and bars, and cannot be changed where it
-is repeated. In this way sections are composed into the usual song forms,
-such as AABBAA, without copying their bars. Each entry may have a repeat
-count of 0, which leaves it out, so the player can mute and restore an
-entry by changing one number. The notation is in Song Notation, section 5,
-"Sections". *Decided (Jim, 15 Nov 2026).*
+**EFS-5.2b The song's composition.** A song has exactly one composition, a
+block that lists the sections in the order they play. It gives the key,
+meter and tempo the song starts in. Each entry names a section and may give
+a repeat count (the number of times it plays, default 1), and a key and a
+tempo that replace the section's own for that entry, so one section is
+reused in another key or at another tempo; the meter cannot be changed in an
+entry. A repeat count of 0 leaves the entry out, so the player can mute and
+restore an entry by changing one number, which is how a musician skips it
+while testing. A section may be named by several entries, which gives the
+usual song forms, such as AABBAA, without copying bars. The notation is in
+Song Notation, section 5, "Sections".
 
 **EFS-5.3 Chords.** Start a section from a library progression, then
 change any chord, or the rhythm element it starts on.

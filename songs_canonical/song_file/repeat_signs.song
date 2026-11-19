@@ -20,3 +20,10 @@ section "three"
 section "carried"
   line "Keys" | I:w |% / %|
   line "Bass" | C2:w |% / %|
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "twice"
+  "three"
+  "carried"
+song_composition_close

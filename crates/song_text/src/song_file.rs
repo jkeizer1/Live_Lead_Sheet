@@ -80,6 +80,53 @@ struct OpenSection {
     errors_at_start: usize,
 }
 
+impl OpenSection {
+    /// A block with nothing written yet.
+    fn new(name: &str, line_number: usize, errors_at_start: usize) -> OpenSection {
+        OpenSection {
+            name: name.to_string(),
+            line_number,
+            count_in: false,
+            repeat_count: None,
+            key: None,
+            time_signature: None,
+            beat_grouping: None,
+            tempo: None,
+            lines: Vec::new(),
+            continuing_line: false,
+            errors_at_start,
+        }
+    }
+}
+
+/// One entry of the `song_composition` block: a section to play, how many
+/// times, and the key or tempo it plays in if the entry changes them.
+struct CompositionEntry {
+    name: String,
+    line_number: usize,
+    repeat_count: u32,
+    key: Option<Key>,
+    tempo: Option<WrittenTempo>,
+}
+
+/// The `song_composition` block while it is being read: the key, meter and
+/// tempo the song starts in (read like a section's settings), then the
+/// entries in play order.
+struct OpenComposition {
+    line_number: usize,
+    start: OpenSection,
+    entries: Vec<CompositionEntry>,
+    closed: bool,
+}
+
+/// What an entry of the composition changes in the section it plays: the
+/// key and tempo, which win over the section's own.
+#[derive(Default)]
+struct EntryOverrides {
+    key: Option<Key>,
+    tempo: Option<WrittenTempo>,
+}
+
 /// A tempo as the song file writes it. How long a beat is comes from the
 /// section's meter, which may be written after the tempo or carried from
 /// the section before, so the conversion waits until the section closes.
@@ -130,7 +177,7 @@ impl WrittenTempo {
 /// tempo carries as beats per minute, so the beat feel stays the same
 /// across a meter change: 4/4 at 120 beats/min then 3/4 is still 120
 /// beats/min (Jim, 8 Nov 2026, decided 15 Nov 2026).
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Carried {
     key: Option<Key>,
     time_signature: Option<TimeSignature>,
@@ -189,13 +236,22 @@ struct SongReader<'a> {
     /// also reported.
     failed_track_names: Vec<String>,
     track: Option<OpenTrack>,
-    /// The sections that play, in play order.
+    /// The sections that play, in play order: built from the definitions
+    /// when the file has been read, as the composition names them.
     sections: Vec<Section>,
-    /// Every section written with lines, repeat 0 ones too, so a later
-    /// section can play one again by name.
-    defined: Vec<Section>,
+    /// Every section as written. A section is built when the composition
+    /// plays it, since its key, meter and tempo may come from what plays
+    /// before it or from the entry.
+    definitions: Vec<OpenSection>,
     section: Option<OpenSection>,
-    carried: Carried,
+    /// Sections that were written but are not usable, so an entry naming one
+    /// is not also reported.
+    failed_section_names: Vec<String>,
+    /// The `song_composition` block, once started.
+    composition: Option<OpenComposition>,
+    /// True while the lines of a refused second `song_composition` are being
+    /// skipped, so they are not reported one by one.
+    skipping_second_composition: bool,
 }
 
 /// Reads a song file.
@@ -213,9 +269,11 @@ pub fn parse_song(file_name: &str, text: &str) -> Result<Song, Vec<ParseError>> 
         failed_track_names: Vec::new(),
         track: None,
         sections: Vec::new(),
-        defined: Vec::new(),
+        definitions: Vec::new(),
         section: None,
-        carried: Carried::default(),
+        failed_section_names: Vec::new(),
+        composition: None,
+        skipping_second_composition: false,
     };
     for (index, raw_line) in text.lines().enumerate() {
         let line: &str = without_comment(raw_line).trim();
@@ -233,7 +291,23 @@ impl SongReader<'_> {
     }
 
     fn read_line(&mut self, line_number: usize, line: &str) {
-        let result: Result<(), String> = if let Some(rest) = keyword_rest(line, "song") {
+        if self.skipping_second_composition {
+            if keyword_rest(line, "song_composition_close").is_some() {
+                self.skipping_second_composition = false;
+            }
+            return;
+        }
+        let result: Result<(), String> = if keyword_rest(line, "song_composition_close").is_some() {
+            self.close_composition(line_number)
+        } else if let Some(rest) = keyword_rest(line, "song_composition") {
+            self.start_composition(line_number, rest)
+        } else if self
+            .composition
+            .as_ref()
+            .is_some_and(|c: &OpenComposition| !c.closed)
+        {
+            self.read_composition_line(line_number, line)
+        } else if let Some(rest) = keyword_rest(line, "song") {
             self.start_song(line_number, rest)
         } else if let Some(rest) = keyword_rest(line, "chord_numeral_standard") {
             self.read_numeral_standard(rest)
@@ -296,7 +370,7 @@ impl SongReader<'_> {
     fn start_track(&mut self, line_number: usize, rest: &str) -> Result<(), String> {
         self.finish_track();
         self.finish_section();
-        if !self.sections.is_empty() {
+        if !self.definitions.is_empty() || self.composition.is_some() {
             return Err(String::from(
                 "a track after the first section. Declare all tracks before the sections",
             ));
@@ -401,19 +475,7 @@ impl SongReader<'_> {
                 "write the section's name in quotes, e.g. section \"Verse\"",
             ));
         };
-        let mut section: OpenSection = OpenSection {
-            name: name.to_string(),
-            line_number,
-            count_in: false,
-            repeat_count: None,
-            key: None,
-            time_signature: None,
-            beat_grouping: None,
-            tempo: None,
-            lines: Vec::new(),
-            continuing_line: false,
-            errors_at_start: self.errors.len(),
-        };
+        let mut section: OpenSection = OpenSection::new(name, line_number, self.errors.len());
         let result: Result<(), String> = read_settings(&mut section, settings);
         self.section = Some(section);
         result
@@ -479,23 +541,78 @@ impl SongReader<'_> {
         }
     }
 
-    /// Turns the open section into a `Section`, or reports why not.
-    // One pass over a section's settings, lines and carried values; split
-    // apart it would pass the same state between several helpers.
-    #[allow(clippy::too_many_lines)]
+    /// Keeps the open section as a definition, once its settings and lines
+    /// have been read. It is built when the composition plays it, or checked
+    /// when no entry does.
     fn finish_section(&mut self) {
         let Some(open) = self.section.take() else {
             return;
         };
         if self.errors.len() > open.errors_at_start {
+            self.failed_section_names.push(open.name);
+            return;
+        }
+        if open.repeat_count.is_some() {
+            self.failed_section_names.push(open.name.clone());
+            self.report(
+                open.line_number,
+                format!(
+                    "section \"{0}\" has a repeat. A section is a definition: write repeat n on \
+                     its entry in song_composition, e.g. \"{0}\" repeat 2",
+                    open.name
+                ),
+            );
             return;
         }
         if open.lines.is_empty() {
-            self.finish_section_again(&open);
+            self.failed_section_names.push(open.name.clone());
+            self.report(
+                open.line_number,
+                format!(
+                    "section \"{0}\" has no lines. Write its lines. To play a section again, \
+                     name it in song_composition, e.g. \"{0}\" repeat 2",
+                    open.name
+                ),
+            );
             return;
         }
-        let Ok(pattern) = self.meter_pattern_of(&open) else {
+        if self
+            .definitions
+            .iter()
+            .any(|defined: &OpenSection| defined.name == open.name)
+        {
+            self.report(
+                open.line_number,
+                format!(
+                    "two sections are named \"{0}\". Give each section its own name; to play \
+                     \"{0}\" again, name it twice in song_composition",
+                    open.name
+                ),
+            );
             return;
+        }
+        self.definitions.push(open);
+    }
+
+    /// Builds a section as the composition plays it: with the key and tempo
+    /// the entry gives, else the section's own, else what carries on from the
+    /// section before. Answers the section and what the next one carries on,
+    /// or `None` after reporting why not.
+    // One pass over a section's settings, lines and carried values; split
+    // apart it would pass the same state between several helpers.
+    #[allow(clippy::too_many_lines)]
+    fn build_section(
+        &mut self,
+        open: &OpenSection,
+        repeat_count: u32,
+        overrides: &EntryOverrides,
+        carried: &Carried,
+    ) -> Option<(Section, Carried)> {
+        let errors_before: usize = self.errors.len();
+        // The entry's tempo wins over the section's own.
+        let written_tempo: Option<&WrittenTempo> = overrides.tempo.as_ref().or(open.tempo.as_ref());
+        let Ok(pattern) = self.meter_pattern_of(open) else {
+            return None;
         };
         let pattern_written: bool = pattern.is_some();
         let bar_meters: BarMeters = match (pattern, open.time_signature) {
@@ -509,12 +626,12 @@ impl SongReader<'_> {
                         open.name
                     ),
                 );
-                return;
+                return None;
             }
             (Some(pattern), None) => pattern,
             (None, Some(time_signature)) => BarMeters::uniform(time_signature),
             (None, None) => {
-                let Some(carried) = self.carried.bar_meters.clone() else {
+                let Some(carried) = carried.bar_meters.clone() else {
                     self.report(
                         open.line_number,
                         format!(
@@ -523,7 +640,7 @@ impl SongReader<'_> {
                             open.name
                         ),
                     );
-                    return;
+                    return None;
                 };
                 carried
             }
@@ -531,8 +648,8 @@ impl SongReader<'_> {
         // Every meter of a section has the same beat, so the first bar's
         // meter gives the beat of the section's tempo.
         let time_signature: TimeSignature = bar_meters.first();
-        let carried_tempo: Option<Tempo> = match (self.carried.tempo, self.carried.time_signature) {
-            (Some(tempo), Some(carried_signature)) if open.tempo.is_none() => {
+        let carried_tempo: Option<Tempo> = match (carried.tempo, carried.time_signature) {
+            (Some(tempo), Some(carried_signature)) if written_tempo.is_none() => {
                 match carry_tempo(tempo, carried_signature, time_signature) {
                     Ok(carried) => Some(carried),
                     Err(message) => {
@@ -544,13 +661,13 @@ impl SongReader<'_> {
                                 open.name
                             ),
                         );
-                        return;
+                        return None;
                     }
                 }
             }
             _ => None,
         };
-        let tempo: Tempo = match (&open.tempo, carried_tempo) {
+        let tempo: Tempo = match (written_tempo, carried_tempo) {
             (Some(written), _) => match written.to_tempo(time_signature) {
                 Ok(tempo) => tempo,
                 Err(message) => {
@@ -558,7 +675,7 @@ impl SongReader<'_> {
                         open.line_number,
                         format!("section \"{}\": {message}", open.name),
                     );
-                    return;
+                    return None;
                 }
             },
             (None, Some(carried)) => carried,
@@ -571,19 +688,19 @@ impl SongReader<'_> {
                         open.name
                     ),
                 );
-                return;
+                return None;
             }
         };
-        let key: Option<Key> = open.key.or(self.carried.key);
-        let lines: Vec<Line> = self.build_lines(&open, &bar_meters);
-        if self.errors.len() > open.errors_at_start {
-            return;
+        // A count-in section needs no key, so it does not take the song's.
+        let key: Option<Key> = if open.count_in {
+            overrides.key.or(open.key)
+        } else {
+            overrides.key.or(open.key).or(carried.key)
+        };
+        let lines: Vec<Line> = self.build_lines(open, &bar_meters);
+        if self.errors.len() > errors_before {
+            return None;
         }
-        // Repeating once is the plain reading of a section with no repeat.
-        let repeat_count: u32 = open.repeat_count.unwrap_or(1);
-        // A section with repeat 0 is checked as written, as a section that
-        // plays once, and then left out of the song as if commented out.
-        let checked_count: u32 = repeat_count.max(1);
         // A grouping goes with the meter: written with it, or carried along
         // with a meter that is carried on.
         let beat_grouping: Option<Vec<u8>> = if open.time_signature.is_some() {
@@ -591,12 +708,12 @@ impl SongReader<'_> {
         } else if pattern_written {
             None
         } else {
-            self.carried.beat_grouping.clone()
+            carried.beat_grouping.clone()
         };
         let built: Result<Section, SongError> = Section::new(
             &open.name,
             open.count_in,
-            checked_count,
+            repeat_count,
             key,
             bar_meters.clone(),
             tempo,
@@ -608,89 +725,236 @@ impl SongReader<'_> {
         });
         match built {
             Ok(section) => {
-                if self.defined.iter().any(|d: &Section| d.name() == open.name) {
-                    self.report(
-                        open.line_number,
-                        format!(
-                            "two sections are named \"{0}\". To play \"{0}\" again, write \
-                             section \"{0}\" repeat 2 with no lines of its own",
-                            open.name
-                        ),
-                    );
-                    return;
-                }
-                self.defined.push(section.clone());
-                if repeat_count > 0 {
-                    self.carried = Carried {
-                        key,
-                        time_signature: Some(time_signature),
-                        bar_meters: Some(bar_meters),
-                        beat_grouping: section
-                            .beat_grouping()
-                            .map(|grouping| grouping.group_pulses().to_vec()),
-                        // What the next section carries on is the tempo at
-                        // the end of this one, after any tempo marks.
-                        tempo: Some(section.end_tempo()),
-                    };
-                    self.sections.push(section);
-                }
+                let next: Carried = Carried {
+                    key,
+                    time_signature: Some(time_signature),
+                    bar_meters: Some(bar_meters),
+                    beat_grouping: section
+                        .beat_grouping()
+                        .map(|grouping| grouping.group_pulses().to_vec()),
+                    // What the next section carries on is the tempo at the
+                    // end of this one, after any tempo marks.
+                    tempo: Some(section.end_tempo()),
+                };
+                Some((section, next))
             }
-            Err(error) => self.report(open.line_number, error.to_string()),
+            Err(error) => {
+                self.report(open.line_number, error.to_string());
+                None
+            }
         }
     }
 
-    /// A section written with no lines of its own plays the earlier section
-    /// of that name again, with that section's key, meter and tempo.
-    fn finish_section_again(&mut self, open: &OpenSection) {
-        let Some(earlier) = self
-            .defined
-            .iter()
-            .find(|defined: &&Section| defined.name() == open.name)
-            .cloned()
+    /// `song_composition`, with the song's starting key, meter and tempo on
+    /// the line or the lines below it.
+    fn start_composition(&mut self, line_number: usize, rest: &str) -> Result<(), String> {
+        self.finish_track();
+        self.finish_section();
+        if self.composition.is_some() {
+            self.skipping_second_composition = true;
+            return Err(String::from(
+                "a second song_composition. A song has only one song_composition",
+            ));
+        }
+        let mut composition: OpenComposition = OpenComposition {
+            line_number,
+            start: OpenSection::new("song_composition", line_number, self.errors.len()),
+            entries: Vec::new(),
+            closed: false,
+        };
+        let result: Result<(), String> = if rest.is_empty() {
+            Ok(())
+        } else {
+            read_composition_start(&mut composition.start, rest)
+        };
+        self.composition = Some(composition);
+        result
+    }
+
+    /// A line inside the `song_composition` block: an entry (a section's name
+    /// in quotes, then `repeat n`, `key` or `tempo` if it changes them), or
+    /// the starting key, meter and tempo.
+    fn read_composition_line(&mut self, line_number: usize, line: &str) -> Result<(), String> {
+        if keyword_rest(line, "section").is_some() || keyword_rest(line, "track").is_some() {
+            return Err(String::from(
+                "end song_composition with song_composition_close before a track or a section",
+            ));
+        }
+        let Some(composition) = self.composition.as_mut() else {
+            return Ok(());
+        };
+        if !line.starts_with('"') {
+            return read_composition_start(&mut composition.start, line);
+        }
+        let Some((name, settings)) = quoted_prefix(line) else {
+            return Err(String::from(
+                "write the section's name in quotes, e.g. \"Verse\" repeat 2",
+            ));
+        };
+        let mut written: OpenSection = OpenSection::new(name, line_number, 0);
+        read_settings(&mut written, settings)?;
+        if written.time_signature.is_some() {
+            return Err(format!(
+                "\"{name}\": an entry may change the key and the tempo, not the meter. \
+                 Write the meter on the section"
+            ));
+        }
+        if written.count_in {
+            return Err(format!(
+                "\"{name}\": count-in belongs on the section, not on its entry"
+            ));
+        }
+        composition.entries.push(CompositionEntry {
+            name: name.to_string(),
+            line_number,
+            repeat_count: written.repeat_count.unwrap_or(1),
+            key: written.key,
+            tempo: written.tempo,
+        });
+        Ok(())
+    }
+
+    fn close_composition(&mut self, line_number: usize) -> Result<(), String> {
+        match self.composition.as_mut() {
+            Some(composition) if !composition.closed => {
+                composition.closed = true;
+                Ok(())
+            }
+            _ => {
+                let _ = line_number;
+                Err(String::from(
+                    "song_composition_close with no song_composition above it",
+                ))
+            }
+        }
+    }
+
+    /// The key, meter and tempo the composition starts in, or `None` after
+    /// reporting what is missing or wrong.
+    fn starting_values_of(&mut self, composition: &OpenComposition) -> Option<Carried> {
+        let start: &OpenSection = &composition.start;
+        let (Some(key), Some(time_signature), Some(written_tempo)) =
+            (start.key, start.time_signature, start.tempo.clone())
         else {
             self.report(
-                open.line_number,
-                format!(
-                    "section \"{0}\" has no lines, and no earlier section is named \"{0}\". \
-                     Write its lines, or define \"{0}\" above this",
-                    open.name
+                composition.line_number,
+                String::from(
+                    "song_composition needs the key, meter and tempo the song starts in, e.g. \
+                     key C major  meter 4/4  tempo 100 beats/min",
+                ),
+            );
+            return None;
+        };
+        let tempo: Tempo = match written_tempo.to_tempo(time_signature) {
+            Ok(tempo) => tempo,
+            Err(message) => {
+                self.report(
+                    composition.line_number,
+                    format!("song_composition: {message}"),
+                );
+                return None;
+            }
+        };
+        Some(Carried {
+            key: Some(key),
+            time_signature: Some(time_signature),
+            bar_meters: Some(BarMeters::uniform(time_signature)),
+            beat_grouping: start.beat_grouping.clone(),
+            tempo: Some(tempo),
+        })
+    }
+
+    /// Plays the composition's entries in order: each is built from its
+    /// definition with the key and tempo the entry gives, else its own, else
+    /// what carries on. A definition no entry plays is checked once, as
+    /// written, against the composition's starting key, meter and tempo.
+    fn build_composition(&mut self, song_line: usize) {
+        let Some(composition) = self.composition.take() else {
+            self.report(
+                song_line,
+                String::from(
+                    "the song has no song_composition. List the sections that play between \
+                     song_composition and song_composition_close",
                 ),
             );
             return;
         };
-        if open.count_in
-            || open.key.is_some()
-            || open.time_signature.is_some()
-            || open.tempo.is_some()
-        {
+        if !composition.closed {
             self.report(
-                open.line_number,
-                format!(
-                    "section \"{0}\" plays the earlier \"{0}\" again, so it takes only repeat \
-                     n, not count-in, key, meter or tempo",
-                    open.name
-                ),
+                composition.line_number,
+                String::from("song_composition is not closed. End it with song_composition_close"),
             );
             return;
         }
-        let repeat_count: u32 = open.repeat_count.unwrap_or(1);
-        if repeat_count == 0 {
-            return; // as if commented out
-        }
-        match earlier.played_again(repeat_count) {
-            Ok(section) => {
-                self.carried = Carried {
-                    key: section.key(),
-                    time_signature: Some(section.time_signature()),
-                    bar_meters: Some(section.bar_meters().clone()),
-                    beat_grouping: section
-                        .beat_grouping()
-                        .map(|grouping| grouping.group_pulses().to_vec()),
-                    tempo: Some(section.end_tempo()),
-                };
-                self.sections.push(section);
+        let Some(starting) = self.starting_values_of(&composition) else {
+            return;
+        };
+        let definitions: Vec<OpenSection> = std::mem::take(&mut self.definitions);
+        let mut carried: Carried = starting.clone();
+        let mut played_names: Vec<String> = Vec::new();
+        let mut failed_names: Vec<String> = Vec::new();
+        for entry in &composition.entries {
+            let Some(definition) = definitions
+                .iter()
+                .find(|defined: &&OpenSection| defined.name == entry.name)
+            else {
+                if self.failed_section_names.contains(&entry.name) {
+                    continue; // already reported where it is written
+                }
+                self.report(
+                    entry.line_number,
+                    format!(
+                        "\"{0}\" is not a section of this song. Define it with section \"{0}\" \
+                         and its lines, or fix the name",
+                        entry.name
+                    ),
+                );
+                continue;
+            };
+            if failed_names.contains(&entry.name) {
+                continue;
             }
-            Err(error) => self.report(open.line_number, error.to_string()),
+            let overrides: EntryOverrides = EntryOverrides {
+                key: entry.key,
+                tempo: entry.tempo.clone(),
+            };
+            // repeat 0 leaves the entry out, as if commented out: it is
+            // checked where it stands, but does not play or carry anything on.
+            if entry.repeat_count == 0 {
+                if self
+                    .build_section(definition, 1, &overrides, &carried)
+                    .is_some()
+                {
+                    played_names.push(entry.name.clone());
+                } else {
+                    failed_names.push(entry.name.clone());
+                }
+                continue;
+            }
+            match self.build_section(definition, entry.repeat_count, &overrides, &carried) {
+                Some((section, next)) => {
+                    carried = next;
+                    self.sections.push(section);
+                    played_names.push(entry.name.clone());
+                }
+                None => failed_names.push(entry.name.clone()),
+            }
+        }
+        for definition in &definitions {
+            if played_names.contains(&definition.name) || failed_names.contains(&definition.name) {
+                continue;
+            }
+            // Not played: still checked, so a mistake is found when written.
+            let _ = self.build_section(definition, 1, &EntryOverrides::default(), &starting);
+        }
+        if self.errors.is_empty() && self.sections.is_empty() {
+            let message: &str = if composition.entries.is_empty() {
+                "song_composition lists no sections. Name the sections that play, e.g. \"Verse\""
+            } else {
+                "every entry in song_composition has repeat 0, so nothing plays. Give one of \
+                 them repeat 1 or more"
+            };
+            self.report(composition.line_number, String::from(message));
         }
     }
 
@@ -821,18 +1085,10 @@ impl SongReader<'_> {
             );
             return Err(self.errors);
         };
+        self.build_composition(name_line);
         if !self.errors.is_empty() {
-            return Err(self.errors);
-        }
-        if self.sections.is_empty() && !self.defined.is_empty() {
-            self.errors.push(ParseError::new(
-                self.file_name,
-                name_line,
-                String::from(
-                    "every section has repeat 0, so nothing plays. Give one of them repeat 1 \
-                     or more",
-                ),
-            ));
+            // The sections are built at the end, so put the mistakes in line order.
+            self.errors.sort_by_key(ParseError::line_number);
             return Err(self.errors);
         }
         let numeral_standard: Option<NumeralStandard> = self.numeral_standard;
@@ -1069,6 +1325,22 @@ fn parse_cue_message(message_words: &[Word]) -> Option<Result<CueMessage, String
         }),
         _ => None,
     }
+}
+
+/// The key, meter and tempo of the `song_composition` block, read like a
+/// section's settings. `repeat` and `count-in` belong to entries and
+/// sections.
+fn read_composition_start(start: &mut OpenSection, text: &str) -> Result<(), String> {
+    read_settings(start, text)?;
+    if start.repeat_count.is_some() {
+        return Err(String::from(
+            "repeat belongs on an entry, e.g. \"Verse\" repeat 2",
+        ));
+    }
+    if start.count_in {
+        return Err(String::from("count-in belongs on a section"));
+    }
+    Ok(())
 }
 
 /// Reads `count-in`, `repeat n`, `key C major`, `meter 4/4`, `tempo 120
@@ -1329,11 +1601,15 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_meter_and_tempo_are_asked_for() {
+    fn a_composition_without_meter_and_tempo_is_refused() {
         let errors: Vec<String> = errors_of(include_str!(
             "../../../songs_canonical/song_file/missing_meter_and_tempo.song"
         ));
-        assert!(errors[0].contains("has no meter"), "{}", errors[0]);
+        assert!(
+            errors[0].contains("song_composition needs the key, meter and tempo"),
+            "{}",
+            errors[0]
+        );
     }
 
     #[test]
@@ -1341,17 +1617,11 @@ mod tests {
         let errors: Vec<String> = errors_of(include_str!(
             "../../../songs_canonical/song_file/track_block_mistakes.song"
         ));
-        assert_eq!(errors.len(), 2, "{errors:?}");
+        // A third error follows (section "S" has no usable line, as track "A"
+        // failed): the two track mistakes come first.
+        assert!(errors.len() >= 2, "{errors:?}");
         assert!(errors[0].contains("test.song line 7:"));
         assert!(errors[1].contains("\"bass_synth\" is not a track type"));
-    }
-
-    #[test]
-    fn chords_in_a_section_without_a_key_are_refused() {
-        let errors: Vec<String> = errors_of(include_str!(
-            "../../../songs_canonical/song_file/chords_without_key.song"
-        ));
-        assert!(errors[0].contains("has chords but no key"), "{}", errors[0]);
     }
 
     #[test]
@@ -1398,7 +1668,7 @@ mod tests {
     }
 
     #[test]
-    fn a_section_written_again_by_name_plays_the_earlier_one() {
+    fn a_section_named_twice_in_the_composition_plays_twice() {
         assert_eq!(
             plays_of(include_str!(
                 "../../../songs_canonical/song_file/section_played_again.song"
@@ -1406,8 +1676,9 @@ mod tests {
             named_plays(&[
                 ("A", 1, 100_000),
                 ("B", 1, 140_000),
-                ("A", 3, 100_000),
-                ("D", 1, 100_000),
+                // A has no tempo of its own, so it carries B's on.
+                ("A", 3, 140_000),
+                ("D", 1, 140_000),
             ])
         );
     }
@@ -1423,25 +1694,29 @@ mod tests {
     }
 
     #[test]
-    fn a_section_written_again_must_be_defined_above() {
+    fn a_composition_entry_must_name_a_defined_section() {
         let errors: Vec<String> = errors_of(include_str!(
-            "../../../songs_canonical/song_file/section_again_not_defined.song"
+            "../../../songs_canonical/song_file/composition_names_unknown_section.song"
         ));
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert!(
-            errors[0].contains("no earlier section is named \"B\""),
+            errors[0].contains("\"B\" is not a section of this song"),
             "{}",
             errors[0]
         );
     }
 
     #[test]
-    fn a_section_written_again_takes_only_a_repeat() {
+    fn a_section_with_a_repeat_is_refused() {
         let errors: Vec<String> = errors_of(include_str!(
-            "../../../songs_canonical/song_file/section_again_with_tempo.song"
+            "../../../songs_canonical/song_file/section_with_repeat.song"
         ));
         assert_eq!(errors.len(), 1, "{errors:?}");
-        assert!(errors[0].contains("takes only repeat n"), "{}", errors[0]);
+        assert!(
+            errors[0].contains("section \"A\" has a repeat"),
+            "{}",
+            errors[0]
+        );
     }
 
     #[test]
@@ -1464,10 +1739,114 @@ mod tests {
         ));
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert!(
-            errors[0].contains("every section has repeat 0"),
+            errors[0].contains("every entry in song_composition has repeat 0"),
             "{}",
             errors[0]
         );
+    }
+
+    #[test]
+    fn a_composition_entry_may_change_key_and_tempo() {
+        let song: Song = parse_song(
+            "test.song",
+            include_str!("../../../songs_canonical/song_file/composition_entry_overrides.song"),
+        )
+        .unwrap();
+        let played: Vec<(String, u64)> = song
+            .sections()
+            .iter()
+            .map(|section: &Section| {
+                (
+                    format!("{:?}", section.key()),
+                    section.tempo().milli_quarters_per_minute(),
+                )
+            })
+            .collect();
+        assert_eq!(played.len(), 3);
+        assert!(
+            played[0].0.contains('C') && played[0].1 == 100_000,
+            "{played:?}"
+        );
+        assert!(
+            played[1].0.contains('D') && played[1].1 == 120_000,
+            "{played:?}"
+        );
+        assert_eq!(played[2], played[1], "the next entry carries them on");
+    }
+
+    #[test]
+    fn a_composition_entry_may_not_change_the_meter() {
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/composition_entry_meter.song"
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(
+            errors[0].contains("an entry may change the key and the tempo, not the meter"),
+            "{}",
+            errors[0]
+        );
+    }
+
+    #[test]
+    fn a_section_defined_after_the_composition_plays() {
+        assert_eq!(
+            plays_of(include_str!(
+                "../../../songs_canonical/song_file/composition_forward_references.song"
+            )),
+            named_plays(&[
+                ("Verse", 1, 100_000),
+                ("Chorus", 1, 100_000),
+                ("Verse", 1, 100_000),
+            ])
+        );
+    }
+
+    #[test]
+    fn a_song_has_exactly_one_composition() {
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/composition_two_blocks.song"
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(
+            errors[0].contains("only one song_composition"),
+            "{}",
+            errors[0]
+        );
+    }
+
+    #[test]
+    fn a_song_without_a_composition_is_refused() {
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/composition_missing.song"
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(
+            errors[0].contains("has no song_composition"),
+            "{}",
+            errors[0]
+        );
+    }
+
+    #[test]
+    fn a_composition_must_be_closed() {
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/composition_unclosed.song"
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(
+            errors[0].contains("End it with song_composition_close"),
+            "{}",
+            errors[0]
+        );
+    }
+
+    #[test]
+    fn a_count_in_is_only_allowed_on_the_first_section_played() {
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/composition_late_count_in.song"
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(errors[0].contains("count-in"), "{}", errors[0]);
     }
 
     fn tempos_of(text: &str) -> Vec<u64> {

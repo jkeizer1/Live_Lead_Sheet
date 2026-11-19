@@ -39,3 +39,11 @@ section "Six and nine"
   line "Meter"  | mp [6_8 9_8] |
   line "Keys"  | I:h. | IV:h. IV:q. |
   line "Bass"  | C2:q. / | F2:q. / / |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "Four and five"
+  "Carried"
+  "Waltz"
+  "Six and nine"
+song_composition_close

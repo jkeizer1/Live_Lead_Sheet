@@ -18,7 +18,7 @@ the end on the studio's clock port.
 What to hear in the Demo:
 
 - **Count-in:** one bar of four beats on the `Beat` track (channel 15,
-  note C4 = 60). The studio gives the Beat track `velocity normal 80
+  note C4 = 60). The studio gives the Beat track `velocity mezzo_forte 80
   accent 127`, so beat 1 (marked `>`) is velocity 127 and beats 2 to 4
   are 80. Checked on a MIDI monitor, 11 Nov 2026.
 - **Beat** continues through the verses: beats 1 and 3 of the first bar

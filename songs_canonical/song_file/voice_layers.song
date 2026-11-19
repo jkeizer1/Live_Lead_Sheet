@@ -18,3 +18,8 @@ section "A"
     | r:h A3~ |
     | A3 r |
   line "Bass"  | C3:w | / |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+song_composition_close

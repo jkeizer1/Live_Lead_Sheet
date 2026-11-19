@@ -14,3 +14,8 @@ track "Keys"
 section "C minor"
   key C minor  meter 4/4  tempo 100 beats/min
   line "Keys"  | i:w | III:w | iv:w | V:w | VI:w | VII:w | vii°:w | i:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "C minor"
+song_composition_close

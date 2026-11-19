@@ -16,3 +16,8 @@ track "Keys"
 section "octaves"
   key C major  meter 4/4  tempo 100 beats/min
   line "Keys"  | C4:w | +8va C4:w | C4:w | -8va C4:w | loco C4:w | I:w | +8va I:w | +8va C4:w | +8va C4:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "octaves"
+song_composition_close

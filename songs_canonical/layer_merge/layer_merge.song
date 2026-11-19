@@ -33,3 +33,11 @@ section "identical"
 section "different pitches"
   line "Keys" voice_layer 1  | C4:h r:h |
   line "Keys" voice_layer 2  | r:q E4:h r:q |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "overlapping"
+  "touching"
+  "identical"
+  "different pitches"
+song_composition_close

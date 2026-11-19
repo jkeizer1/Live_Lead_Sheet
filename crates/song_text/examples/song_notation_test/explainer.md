@@ -1,6 +1,6 @@
 # song_notation_test
 
-Revision 5 — 14 Nov 2026 (the nine bad files are files in songs_canonical/song_notation_test/)
+Revision 6 — 19 Nov 2026 (the eight bad files are files in songs_canonical/song_notation_test/)
 
 ## What it proves
 
@@ -19,10 +19,10 @@ was meant:
 - `songs/Demo.studio` loads, and the studio covers the song: every track
   has its port and channel, every accent mark the song uses has a
   velocity, and every cue destination the song sends to is listed.
-- Nine kinds of mistake each produce the one message EFS-6.3 asks for (the
+- Eight kinds of mistake each produce the one message EFS-6.3 asks for (the
   file, the line, what is wrong and what to type instead): a line for a
   track the song lacks, a chord on the mono bass, a first note with no
-  length, a line in the old order (length first), chords with no key, no
+  length, a line in the old order (length first), no
   clock and transport track, a chord the notation does not know, a studio
   block with no port, and a duration without its unit. A file with a mistake loads nothing.
 - A song track with no entry in the studio, and an accent mark the studio
@@ -62,4 +62,5 @@ seventh, and where it sits on the staff) are worked out in `song_play_test`.
 - Revision 2, 5 Nov 2026: the beat pulse is a mono voice; Demo files changed.
 - Revision 3, 7 Nov 2026: places named in beats (and pulses in compound meters); tempo written in beats/min.
 - Revision 4, 8 Nov 2026: song lines write what an element plays first, then its length (Song Notation Revision 15); voice layers printed; the mistake "a first note that says nothing" became "a first note with no length", and "a line in the old order" was added.
+- Revision 6, 19 Nov 2026: the "chords with no key" case is gone: every song now starts in a key (the song_composition names it), so a section always has one. The songs now end with a song_composition.
 - Revision 5, 14 Nov 2026: the nine bad songs and studios are files in `songs_canonical/song_notation_test/`, each with a comment saying what is wrong, instead of text inside the program; the lines in the expected messages moved down by the two comment lines.

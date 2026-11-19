@@ -4,4 +4,4 @@ studio "S"
 port "P"
 track "A"
   port "P"  channel 1
-  velocity normal 90  strong 120
+  velocity mezzo_forte 90  strong 120

@@ -9,4 +9,4 @@ track "Clock"
 
 track "Bass"
   port "Bass"  channel 1
-  velocity normal 90  accent 115
+  velocity mezzo_forte 90  accent 115

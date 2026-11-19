@@ -27,7 +27,16 @@ track "Bass"
   clef bass
 
 # A 4/4 bar, then a 5/4 bar, twice through, and the whole section twice.
-section "Four and five"  repeat 2
+song_composition
+  key C major  meter 3/4  tempo 100 beats/min
+  "Four and five"  repeat 2
+  "Cadence"
+  "Waltz"  repeat 2
+  "Six and nine"  repeat 2
+  "Home"
+song_composition_close
+
+section "Four and five"
   key C major  tempo 100 beats/min
   line "Meter"  | mp [4_4 5_4] |
   line "Beat"  | C4:q> / / / | C4:q> / / / / | C4:q> / / / | C4:q> / / / / |
@@ -42,7 +51,7 @@ section "Cadence"
   line "Bass"  | A1:q / / | F1:q / / | G1:q / / / |
 
 # A plain meter, no pattern: every bar is 3/4.
-section "Waltz"  repeat 2
+section "Waltz"
   meter 3/4
   line "Beat"  | C4:q> / / | C4:q> / / |
   line "Keys"  | I:h. | V:h. |
@@ -50,7 +59,7 @@ section "Waltz"  repeat 2
 
 # 6/8 then 9/8: both have a dotted quarter note as the beat, so 100 beats/min
 # is now 100 dotted quarter notes a minute.
-section "Six and nine"  repeat 2
+section "Six and nine"
   line "Meter"  | mp [6_8 9_8] |
   line "Beat"  | C4:q.> / | C4:q.> / / |
   line "Keys"  | I:h. | IV:h. IV:q. |

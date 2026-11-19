@@ -1,0 +1,21 @@
+# Canonical test song: crates/song_text/tests/dynamics_plan.rs reads this file.
+# A ramp with no length in a bar the other elements already fill: the loader must refuse it and say the ramp has no time.
+song "Dynamics ramp has no time"
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+section "no time"
+  key C major  meter 4/4  tempo 100 beats/min
+  line "Keys"  | C4:w |
+  line "Keys"  dynamics  | p:h f:h < |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "no time"
+song_composition_close

@@ -1,0 +1,18 @@
+# Canonical test song (deliberately wrong): crates/song_text/src/song_file.rs, test `a_composition_must_be_closed`.
+# song_composition with no song_composition_close. The loader must refuse it and say to end it with song_composition_close.
+song "Unclosed"
+
+track "Clock"
+  type clock_and_transport
+
+track "Bass"
+  type mono_voice
+  clef bass
+  lead
+
+section "Riff"
+  line "Bass" | C2:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "Riff"

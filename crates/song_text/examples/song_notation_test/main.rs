@@ -49,7 +49,7 @@ struct MistakeCase {
 
 // Each bad file is in songs_canonical/song_notation_test/. It starts with two
 // comment lines, so a line number in a message is the number the file shows.
-const MISTAKE_CASES: [MistakeCase; 9] = [
+const MISTAKE_CASES: [MistakeCase; 8] = [
     MistakeCase {
         what: "a line for a track the song does not have",
         kind: Kind::Song,
@@ -82,15 +82,6 @@ const MISTAKE_CASES: [MistakeCase; 9] = [
         text: include_str!("../../../../songs_canonical/song_notation_test/length_first.song"),
         expected_message: "mistake.song line 12: line \"Keys\": \"q:I\": a song line writes what it \
                            plays first, then its length, e.g. C4:q, I:q or r:q, not q:C4",
-    },
-    MistakeCase {
-        what: "chords in a section with no key",
-        kind: Kind::Song,
-        text: include_str!(
-            "../../../../songs_canonical/song_notation_test/chords_without_key.song"
-        ),
-        expected_message: "mistake.song line 10: section \"A\" has chords but no key. Add key to the \
-                           section, e.g. key C major",
     },
     MistakeCase {
         what: "a song with no clock and transport track",

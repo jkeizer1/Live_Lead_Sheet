@@ -27,7 +27,12 @@ track "Beat"
   type mono_voice
   clef treble
 
-section "One whole note, two source notes"  repeat 2
+song_composition
+  key C major  meter 4/4  tempo 120 beats/min
+  "One whole note, two source notes"  repeat 2
+song_composition_close
+
+section "One whole note, two source notes"
   key C major  meter 4/4  tempo 120 beats/min
   line "Bass"  sample_source  | C1 G1 |
   line "Bass"                 | :w |

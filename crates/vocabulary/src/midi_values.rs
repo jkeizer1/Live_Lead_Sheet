@@ -87,6 +87,37 @@ impl Velocity {
         self.velocity
     }
 
+    /// The softest velocity a dynamics level reaches (`pp` on the way down),
+    /// and the loudest (`ff` on the way up): the range 1 to 127 less a safety
+    /// gap of about 5% (5% × 127 velocity steps = 6.35, so 6 steps) at each
+    /// end. The gap keeps a level clear of 1, where a device may not sound,
+    /// and of 127, where it may clip.
+    pub const SOFTEST_LEVEL: Velocity = Velocity { velocity: 6 };
+    /// 127 − 6 velocity steps.
+    pub const LOUDEST_LEVEL: Velocity = Velocity { velocity: 121 };
+
+    /// The velocity `sixteenths` sixteenths of the way from this one to
+    /// `end`, up or down, rounded to the nearest whole velocity (a tie
+    /// rounds up). More than 16 sixteenths is taken as 16, `end` itself.
+    ///
+    /// Units: `(16 sixteenths/step × velocity + sixteenths × distance)
+    /// sixteenths ÷ 16 sixteenths/step` → velocity steps, with `distance`
+    /// the signed steps from this velocity to `end`.
+    #[must_use]
+    pub fn sixteenths_of_the_way_toward(self, end: Velocity, sixteenths: u8) -> Velocity {
+        let from: i32 = i32::from(self.velocity);
+        let distance: i32 = i32::from(end.velocity) - from;
+        let sixteenths: i32 = i32::from(sixteenths).min(16);
+        let moved_sixteenth_velocities: i32 = 16 * from + sixteenths * distance;
+        // + 8 sixteenth-velocities is half a velocity: rounds half up.
+        let rounded: i32 = (moved_sixteenth_velocities + 8).div_euclid(16);
+        // Between this velocity and `end` by construction, so 1 to 127 fits a u8.
+        let rounded_velocity: u8 = u8::try_from(rounded).unwrap_or(self.velocity);
+        Velocity {
+            velocity: rounded_velocity,
+        }
+    }
+
     /// The velocity `eighths` eighths of the way from this one to `limit`,
     /// rounded to the nearest whole velocity (a tie rounds up). Song
     /// Notation, section 6: `>` and `<` are 3 eighths of the way, `>>` and

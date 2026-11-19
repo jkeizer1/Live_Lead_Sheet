@@ -15,12 +15,18 @@ track "NTBass"
   clef bass
   lead
 
-section "tune" repeat 2
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "tune"  repeat 2
+  "1"  repeat 120
+song_composition_close
+
+section "tune"
   key C major
   meter 4/4  tempo 100 beats/min
   line "Bass"     | A2:w |
 
-section "1" repeat 120
+section "1"
 
   line "Bass"     | D2:e_ A2:e_ F2:e_ D2:e  A2:e_ G2:e_ F2:e  r:e  | C3:h_  D2:h  |  
                   | D2:e  A2:e  F2:e  D2:e  A2:e  r:e   F2:e  r:e  | C2:h   D1:h  |  

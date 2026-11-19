@@ -21,7 +21,12 @@ track "Bass"
 
 
 # C – G – Am – F
-section "Verse"  repeat 1
+song_composition
+  key C major  meter 4/4  tempo 140 beats/min
+  "Verse"
+song_composition_close
+
+section "Verse"
   key C major  meter 4/4  tempo 140 beats/min
   line "Keys"  | I:h /                  | V  /                |  vi /          | B3:w       |
   line "Beat"  | C4:q< / / / | C4:q<< / / / | C4:q / / / | C4:q> / / / |

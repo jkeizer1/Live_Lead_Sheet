@@ -14,3 +14,8 @@ section "A"
   key C major  meter 4/4  tempo 120 beats/min
   line "Bass" sample_source | D2 A2 F2 D2 |
   line "Bass"               | /:q :q :q :q |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+song_composition_close

@@ -10,6 +10,6 @@ track "Clock"
 track "NTBass"
   port "NTBass"  channel 1
   octave_offset 1 octaves
-  velocity normal 80  accent 115
+  velocity mezzo_forte 80  accent 115
   retrigger_gap 100 ms
 

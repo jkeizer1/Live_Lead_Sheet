@@ -13,3 +13,8 @@ track "Keys"
 section "inversions"
   key C major  meter 4/4  tempo 100 beats/min
   line "Keys"  | I[3rdInversion]:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "inversions"
+song_composition_close

@@ -10,13 +10,20 @@ track "Bass"
   clef bass
   lead
 
-section "A" repeat 2
+section "A"
   key C major  meter 4/4  tempo 100 beats/min
   line "Bass" | C2:w |
 
-section "B" repeat 0
+section "B"
   tempo 140 beats/min
   line "Bass" | D2:w |
 
 section "C"
   line "Bass" | G2:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"  repeat 2
+  "B"  repeat 0
+  "C"
+song_composition_close

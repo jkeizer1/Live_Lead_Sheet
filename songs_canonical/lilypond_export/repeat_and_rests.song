@@ -13,6 +13,11 @@ track "Bass"
 track "Cues"
   type cue_control
   cue "Go" destination "X" start
-section "A"  repeat 2
+section "A"
   key C major  meter 3/8  tempo 60 beats/min
   line "Manual"  | I:q. | / |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"  repeat 2
+song_composition_close

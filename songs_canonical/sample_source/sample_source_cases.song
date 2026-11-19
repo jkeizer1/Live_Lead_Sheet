@@ -42,3 +42,12 @@ section "tied half notes"
   key C major  meter 4/4  tempo 120 beats/min
   line "Keys" sample_source | IV IV V |
   line "Keys" | :h~ :h |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "shared bar"
+  "one chord per element"
+  "change inside a note"
+  "rest closes the gate"
+  "tied half notes"
+song_composition_close

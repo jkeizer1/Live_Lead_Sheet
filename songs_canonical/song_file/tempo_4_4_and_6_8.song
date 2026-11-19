@@ -13,3 +13,9 @@ section "A"
 section "B"
   meter 6/8  tempo 60 beats/min
   line "Keys" | I:h. |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+  "B"
+song_composition_close

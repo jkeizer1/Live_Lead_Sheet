@@ -22,11 +22,19 @@ track "Beat"
   type mono_voice
   clef treble
 
+song_composition
+  key C major  meter 4/4  tempo 100.9 beats/min
+  "Count-in"
+  "Chords and bass from sources"
+  "relief"
+  "Bass from sources B"  repeat 8
+song_composition_close
+
 section "Count-in"  count-in
   meter 4/4  tempo 100.9 beats/min
   line "Beat"  | C4:q> / / / |
 
-section "Chords and bass from sources"  repeat 1
+section "Chords and bass from sources"
   key C major  meter 4/4  
 #  line "Keys"  sample_source  | I ii ii        | IV IV V        |
 #  line "Keys"                 | :h r:q r:q     | :h :h          |
@@ -36,10 +44,10 @@ section "Chords and bass from sources"  repeat 1
    line "Beat"                 | C4:q>> / /> /  |
 
 
-section "relief" repeat 1
+section "relief"
    line "Beat"                 | C4:q>> / /> /  |
 
-section "Bass from sources B"  repeat 8
+section "Bass from sources B"
    line "Bass"  sample_source  | C2 D2 E2 F2 E2 D2 C2 D2 E2 F2 G2                      | F2 E2 G2 B2 C3 |
    line "Bass"                 | :q :sx>> :sx<< :sx<< :sx<< :h                         | :q :q :h       |
    line "Beat"                 | C4:q>> / /> /       | C4:q>> / /> /   |

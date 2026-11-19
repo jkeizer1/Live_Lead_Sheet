@@ -16,7 +16,13 @@ track "Pedal"
   type mono_voice
   clef bass
 
-section "Stollen"  repeat 2
+song_composition
+  key C minor  meter 4/4  tempo 40 beats/min
+  "Stollen"  repeat 2
+  "Abgesang"
+song_composition_close
+
+section "Stollen"
   key C minor  meter 4/4  tempo 40 beats/min
   line "Manual"  voice_layer 1
     | G4:q G4 F4 Eb4 |

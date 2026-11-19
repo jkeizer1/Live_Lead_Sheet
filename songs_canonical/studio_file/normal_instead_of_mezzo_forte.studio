@@ -1,0 +1,7 @@
+# Canonical test studio (deliberately wrong): crates/song_text/src/studio_file.rs, test `normal_is_now_written_mezzo_forte`.
+# The old word normal for mezzo_forte. The loader must refuse it: says to write mezzo_forte.
+studio "S"
+port "P"
+track "A"
+  port "P"  channel 1
+  velocity normal 90  accent 105

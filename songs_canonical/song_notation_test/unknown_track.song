@@ -6,3 +6,8 @@ track "Clock"
 section "A"
  meter 4/4  tempo 120 beats/min
  line "Drums" | C4:q D4 E4 F4 |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+song_composition_close

@@ -28,7 +28,7 @@ struct OpenBlock {
     line_number: usize,
     port_name: Option<String>,
     channel: Option<MidiChannel>,
-    normal: Option<Velocity>,
+    mezzo_forte: Option<Velocity>,
     accent: Option<Velocity>,
     marcato: Option<Velocity>,
     octave_offset_octaves: Option<i8>,
@@ -146,7 +146,7 @@ impl StudioReader<'_> {
             line_number,
             port_name: None,
             channel: None,
-            normal: None,
+            mezzo_forte: None,
             accent: None,
             marcato: None,
             octave_offset_octaves: None,
@@ -218,7 +218,7 @@ impl StudioReader<'_> {
 }
 
 fn destination_takes_only_port_and_channel(block: &OpenBlock) -> Result<(), String> {
-    if block.normal.is_some()
+    if block.mezzo_forte.is_some()
         || block.accent.is_some()
         || block.marcato.is_some()
         || block.octave_offset_octaves.is_some()
@@ -234,10 +234,10 @@ fn destination_takes_only_port_and_channel(block: &OpenBlock) -> Result<(), Stri
 }
 
 fn build_track_output(block: &OpenBlock, port_name: String) -> TrackOutput {
-    // Omitted: a normal note is sent at 64, the MIDI 1.0 specification's
+    // Omitted: mezzo-forte is sent at 64, the MIDI 1.0 specification's
     // mezzo-forte (Jim, 11 Nov 2026; Song Notation, section 6).
     let velocity: VelocityLevels = VelocityLevels::new(
-        block.normal.unwrap_or(Velocity::MEZZO_FORTE),
+        block.mezzo_forte.unwrap_or(Velocity::MEZZO_FORTE),
         block.accent,
         block.marcato,
     );
@@ -254,7 +254,7 @@ fn build_track_output(block: &OpenBlock, port_name: String) -> TrackOutput {
     }
 }
 
-/// Reads `port "X"  channel 1`, `velocity normal 90  accent 105`,
+/// Reads `port "X"  channel 1`, `velocity mezzo_forte 90  accent 105`,
 /// `octave_offset -1 octaves`, `retrigger_gap 2 ms`, `settle_delay 2 ms`,
 /// in any order, on one line or several.
 fn read_settings(block: &mut OpenBlock, text: &str) -> Result<(), String> {
@@ -326,26 +326,31 @@ fn read_channel<'a>(block: &mut OpenBlock, after: &'a [Word]) -> Result<&'a [Wor
     Ok(rest)
 }
 
-/// `velocity normal 90  accent 105  marcato 120`: levels follow one another
+/// `velocity mezzo_forte 90  accent 105  marcato 120`: levels follow one another
 /// until a word that is not a level.
 fn read_velocity<'a>(block: &mut OpenBlock, after: &'a [Word]) -> Result<&'a [Word], String> {
     let mut remaining: &[Word] = after;
     let mut read_any: bool = false;
     while let [level, number, rest @ ..] = remaining {
         let slot: &mut Option<Velocity> = match level.text.as_str() {
-            "normal" => &mut block.normal,
+            "mezzo_forte" => &mut block.mezzo_forte,
             "accent" => &mut block.accent,
             "marcato" => &mut block.marcato,
             "strong" => {
                 return Err(String::from(
-                    "\"strong\" is now written marcato, e.g. velocity normal 90  marcato 120",
+                    "\"strong\" is now written marcato, e.g. velocity mezzo_forte 90  marcato 120",
+                ));
+            }
+            "normal" => {
+                return Err(String::from(
+                    "\"normal\" is now written mezzo_forte, e.g. velocity mezzo_forte 90",
                 ));
             }
             _ => break,
         };
         let value: u8 = number.text.parse::<u8>().map_err(|_| {
             format!(
-                "\"{}\" is not a velocity. Use 1 to 127, e.g. velocity normal 90",
+                "\"{}\" is not a velocity. Use 1 to 127, e.g. velocity mezzo_forte 90",
                 number.text
             )
         })?;
@@ -356,7 +361,7 @@ fn read_velocity<'a>(block: &mut OpenBlock, after: &'a [Word]) -> Result<&'a [Wo
     }
     if !read_any {
         return Err(String::from(
-            "velocity needs a level and a number, e.g. velocity normal 90  accent 105",
+            "velocity needs a level and a number, e.g. velocity mezzo_forte 90  accent 105",
         ));
     }
     Ok(remaining)
@@ -456,16 +461,24 @@ mod tests {
     }
 
     #[test]
-    fn a_track_without_a_normal_velocity_plays_at_64() {
+    fn a_track_without_a_mezzo_forte_velocity_plays_at_64() {
         let studio: StudioConfiguration = parse_studio(
             "s.studio",
-            include_str!("../../../songs_canonical/studio_file/no_normal_velocity.studio"),
+            include_str!("../../../songs_canonical/studio_file/no_mezzo_forte_velocity.studio"),
         )
         .unwrap();
         for track_name in ["A", "B"] {
             let normal: Velocity = studio.output_of(track_name).unwrap().velocity.normal();
             assert_eq!(normal.value(), 64, "track {track_name}");
         }
+    }
+
+    #[test]
+    fn normal_is_now_written_mezzo_forte() {
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/studio_file/normal_instead_of_mezzo_forte.studio"
+        ));
+        assert!(errors[0].contains("written mezzo_forte"), "{}", errors[0]);
     }
 
     #[test]

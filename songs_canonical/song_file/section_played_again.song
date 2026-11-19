@@ -1,5 +1,5 @@
-# Canonical test song: crates/song_text/src/song_file.rs, test `a_section_written_again_by_name_plays_the_earlier_one`.
-# A and B are written once; then "A" is played 3 more times, "B" with repeat 0 is left out, and D carries A's tempo.
+# Canonical test song: crates/song_text/src/song_file.rs, test `a_section_named_twice_in_the_composition_plays_twice`.
+# A and B are defined once; the composition plays A, B, A three times, B with repeat 0 (left out), then D. A has no tempo of its own, so it carries on B's 140 beats/min, as D does.
 song "Sections played again"
 
 track "Clock"
@@ -11,16 +11,20 @@ track "Bass"
   lead
 
 section "A"
-  key C major  meter 4/4  tempo 100 beats/min
   line "Bass" | C2:w |
 
 section "B"
   tempo 140 beats/min
   line "Bass" | D2:w |
 
-section "A" repeat 3
-
-section "B" repeat 0
-
 section "D"
   line "Bass" | G2:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+  "B"
+  "A"  repeat 3
+  "B"  repeat 0
+  "D"
+song_composition_close

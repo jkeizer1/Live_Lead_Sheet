@@ -12,3 +12,8 @@ track "Bass"
   clef bass
 section "A"
   key C major  meter 4/4  tempo 30 e/min
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+song_composition_close

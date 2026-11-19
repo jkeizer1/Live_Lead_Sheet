@@ -15,3 +15,8 @@ section "A"
   line "Keys" sample_source | I | I |
   line "Keys" | :euclid(3,8) | :euclid(2,5) |
   line "Bass" | C2:euclid(3,8) | C2:euclid(2,5)> |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "A"
+song_composition_close

@@ -1,6 +1,6 @@
 # Live Lead Sheet — Song Notation
 
-Revision 24 — 16 Nov 2026 (`meter_control` as one repeating pattern per section; tempo marks on the lead line, `tempo_control` removed; tempo ramps; a carried tempo keeps the beats per minute)
+Revision 25 — 19 Nov 2026 (the song_composition block plays the sections; sections are unique definitions; an entry may change key and tempo; `meter_control` as one repeating pattern per section; tempo marks on the lead line, `tempo_control` removed; tempo ramps; a carried tempo keeps the beats per minute)
 
 **Status: draft for trial.** *Decided* marks what Jim has decided;
 everything else is a proposal to try with a working player. Every open
@@ -219,7 +219,10 @@ elements can be notes, chords or `r`, and the same works in `fitQ`, `fitE`,
 Such a function stands as an element of its own, with nothing before it:
 `| trp(F2:q A2:q C2:q) D2:h |`. A function that fills the bar, such as
 `fitBar(C2:q D2:e E2:e F2:h)`, is the only thing in its bar, as `euclid` is.
-Marks written inside the parentheses on a single note are allowed here.
+Marks written after the `)` apply to every note the group gives:
+`fitQ(D4 E4 F4 G4)>>` is four marcato notes. A mark written inside the
+parentheses on a single note is allowed here too, and the mark after the `)`
+replaces it.
 
 A function may also mix the two ways. What is written before the colon plays
 on every element that gives only a length, and an element with its own note
@@ -444,12 +447,17 @@ section "Count-in"  count-in
   meter 4/4  tempo 120 beats/min
   line "Beat"  | C4:q> / / / |
 
-section "Verse"  repeat 2
-  key C major  meter 4/4  tempo 120 beats/min
+section "Verse"
   line "Beat"  | C4:q> / / / | /> / / / |
   line "Keys"  | I:q / / / | r ii7:h V7:q |
   line "Bass"  | C2:q / / / | r D2:h G2:q |
   line "Cues"  | "Start SQ-1":w | r |   --- fires on each pass: passes are not designed (EFS-4.4)
+
+song_composition
+  key C major  meter 4/4  tempo 120 beats/min
+  "Count-in"
+  "Verse"  repeat 2
+song_composition_close
 ```
 
 
@@ -561,8 +569,7 @@ track "Manual"
   clef grand
   lead
 
-section "Stollen"  repeat 2
-  key C minor  meter 4/4  tempo 40 beats/min
+section "Stollen"
   line "Manual"  voice_layer 1  | G4:q G4 F4 Eb4 | …
   line "Manual"  voice_layer 2  | Eb4:sx D4 Eb4:e~ Eb4:sx F4 Eb4 D4 C4:e D4~ D4 C4 | …
   line "Manual"  voice_layer 3  | C4:sx B3 C4:e~ C4:sx B3 C4 G3 A3:e G3~ G3:sx G3 Ab3 Eb3 | …
@@ -589,9 +596,12 @@ note has priority.
 
 ### Sections
 
-`section "Name"` with `count-in` for the first section if wanted, `repeat
-n`, and `key`, `meter` and `tempo` (or carrying on from the previous
-section). A key change happens at a section boundary. 
+A section is a definition: `section "Name"` and its lines, with `count-in`
+if it is the count-in, and `key`, `meter` or `tempo` if it needs its own.
+Section names are unique. A section plays only when the song's
+`song_composition` names it (below); a section the composition does not
+name is read and checked but never plays. A key change happens at a
+section boundary.
 
 A section's meter may follow a repeating pattern (`meter_control`), and its tempo may change at a bar (tempo marks on the lead line);see the below.
 
@@ -605,30 +615,45 @@ key changes, as standard notation requires.
   (D-10). *Polymeter* (a line that is a shorter cycle repeated to fill
   the section) is deferred; if it is added, such a line must be marked as a
   cycle, so a line left short by mistake stays an error.
-- **Repeats** are written out in play order by the loader (EFS-1.6). A
-  section with no `repeat` plays once. The number is the total number of
-  times the section plays: `repeat 2` plays it twice, `repeat 3` three
-  times. `repeat 0` leaves the section out. It is read and checked, then
-  played as if it were commented out, so it passes nothing on: the next
-  section carries its key, meter and tempo from the last section that
-  plays, and the initial tempo is that of the first section that plays. A
-  song whose sections are all `repeat 0` is refused. *Decided (Jim,
-  15 Nov 2026).*
-- **Playing a section again by name.** A `section "Name"` with no lines
-  and only `repeat n` plays the earlier section of that name n times, with
-  that section's key, meter and tempo. It must come below the section it
-  names, and it takes no `count-in`, `key`, `meter` or `tempo`. Section
-  names are therefore unique. Each such line is its own entry in the order
-  of play, and the section after it carries on from it. This is how a song
-  takes a form such as AABBAA, and `repeat 0` mutes one entry without
-  deleting it:
+- **The song_composition** is the song's one block that says what plays,
+  in what order, like `main` in a C program. Every song has exactly one.
+  It may stand anywhere in the file, before or after the sections it
+  names. Its first lines give the key, meter and tempo the song starts in;
+  all three are required. Each entry then names a section in quotes:
 
   ```
-  section "A"  repeat 2   (with its key, meter, tempo and lines)
-  section "B"  repeat 2   (with its lines)
-  section "A"  repeat 2
+  song_composition
+    key C major  meter 4/4  tempo 100 beats/min
+    "Count-in"
+    "A"  repeat 2
+    "B"  repeat 2
+    "A"  repeat 2
+    "Bridge"  key D major  tempo 120 beats/min
+    "B"  repeat 0
+  song_composition_close
   ```
 
+  - `repeat n` is the total number of times the entry plays: `repeat 2`
+    plays it twice. With no `repeat` it plays once. `repeat 0` leaves the
+    entry out. The section is still read and checked, but it plays nothing
+    and passes nothing on: the next entry carries its key, meter and tempo
+    from the last entry that plays. A composition whose entries all have
+    `repeat 0`, or that lists no entries, is refused.
+  - A section may be named by several entries, so a song takes a form such
+    as AABBAA.
+  - An entry may also write `key` and `tempo`, so one section is reused
+    in another key or at another tempo. An entry may not change the meter:
+    the meter belongs to the section, because the bars are written for it.
+    The notes the section writes are not transposed: an entry's key sets
+    the key signature and what a chord numeral means.
+  - What an entry plays in is taken, for each of key and tempo, from the
+    entry, else the section's own, else what carries on from the entry
+    before, else (for the first entry) the composition's starting value.
+  - `count-in` stays on the section, and is allowed only on the section of
+    the first entry that plays.
+  - A section written with `repeat n`, or a section with no lines to
+    play it again, is refused; the message says to name the section in the
+    composition instead.
 - **Repeat signs inside a section.** `|%` opens and `%|` closes a group
   of bars that is played again, as the repeat signs of standard notation
   do: `|% I:w | V %|` plays the two bars twice. A number after the
@@ -637,11 +662,11 @@ key changes, as standard notation requires.
   the bars play twice. There  is no sign for "the previous bar again":
   `/` already plays the previous  note or chord again. 
 - **Carrying on.** A section that omits `key`, `meter` or `tempo` carries
-  on the one before. 
-- The first section must give a `meter` or a `meter_control` line, and a `tempo`
- (nothing is assumed). A later section that gives neither carries the one before.
-- A section with chords needs a key, written or  carried; a count-in section needs none. `count-in` is for the first
-  section only, one or two bars.
+  on the one before it in the order of play; the first plays with the
+  composition's starting values.
+- A section with chords needs a key, written or carried; a count-in section
+  needs none. `count-in` is for the first section played only, one or two
+  bars.
 - **Tempo counts beats**, as the meter defines them (`Musical Time and
   Clock.md`, sections 2 and 13): `tempo 120 beats/min` or `tempo 2
   beats/s`. The number may be fractional (`tempo 112.5 beats/min`) and is
@@ -672,7 +697,7 @@ key changes, as standard notation requires.
   and the pulse are identical. 
 - **Order in the file.** All `track` blocks come before the first
   `section`; a `line` names a track already declared. Settings (`key`,
-  `meter`, `tempo`, `repeat`, `count-in`) may stand on the section line or
+  `meter`, `tempo`, `count-in`) may stand on the section line or
   on lines after it, in any order.
 - **A long line goes on over several text lines.** A text line that starts
   with `|` adds its bars to the `line` directly above it, as bars do in a
@@ -766,12 +791,18 @@ line "Keys"  dynamics  | p:w | <  | f  | mf |
 This reads: quiet, grow through the second bar, loud at the third,
 normal from the fourth.
 
+Inside one bar, the levels on either side of a crescendo or diminuendo
+need no lengths: `| pp < ff |` is `pp` on the first beat, a crescendo
+through the bar, and `ff` on the last beat. The notes of the bar run the
+whole way from `pp` to `ff`, and `ff` holds after it. Lengths still work: `| pp:q <:h ff:q |` is a quarter at `pp`, a crescendo
+through a half note, and `ff` on the last beat.
+
 | Mark | Meaning |
 |---|---|
 | `pp` | pianissimo |
 | `p` | piano |
 | `mp` | mezzo-piano, between `p` and `mf` |
-| `mf` | mezzo-forte, the normal level: velocity 64, or the track's `velocity normal` if the studio gives one |
+| `mf` | mezzo-forte, the normal level: velocity 64, or the track's `velocity mezzo_forte` if the studio gives one |
 | `f` | forte |
 | `ff` | fortissimo |
 | `<` | crescendo, growing through its element's length |
@@ -780,13 +811,26 @@ normal from the fourth.
 - **Written like the cue line.** Each mark is an element with a length,
   and `r` is a stretch with no change. Lengths carry forward as on any
   line. A crescendo over the second half of a bar is `| r:h <:h |`.
+- **A `<` or `>` with no length fills what is left of the bar.** The
+  other elements keep their lengths; if two ramps have no length they share
+  what is left equally. If the other elements already fill the bar, the
+  ramp has no time and the song is refused.
+- **A level with no length beside a `<` or `>` is a point.** It marks
+  where the ramp starts (the level before it) or ends (the level after it).
+  The level that ends the bar takes the last beat, so the notes of the bar
+  cover the whole range and the last one sounds at that level. Any other
+  point takes one tick, the shortest length a score can have. The ramp gives
+  up the time a point takes. A level beside a ramp that writes its own
+  length, or any level elsewhere, takes the length written, or the one
+  before it as on any line.
 - **A level holds until the next mark,** as in print. There is no "back
   to normal" sign: the normal level is written, `mf`.
 - **A song with no dynamics line plays at `mf` throughout.**
-- **The levels are relative to `mf`.** `pp` and `p` lie below the
-  track's normal velocity and `f` and `ff` above it, so all four shift
-  when the studio gives the track another `velocity normal`. *Decided
-  (Jim, 11 Nov 2026).*
+- **The levels are relative to `mf`, and `pp` to `ff` span the range.**
+  `pp` and `p` lie below the track's normal velocity and `f` and `ff`
+  above it. `pp` and `ff` always reach the ends of the range (6 and 121),
+  and `p`, `mp` and `f` shift when the studio gives the track another
+  `velocity mezzo_forte` (section 6).
 - **Each sounding element takes its loudness from the dynamics line** at
   the moment it starts, as a rhythm takes its chord from a sample
   source. Inside a crescendo or diminuendo the level moves in a straight
@@ -941,16 +985,16 @@ track "Clock"
 
 track "Beat"
   port "Beat pulse"  channel 15
-  velocity normal 64  accent 127
+  velocity mezzo_forte 64  accent 127
 
 track "Keys"
   port "Harmony"  channel 1
-  velocity normal 90  accent 105  marcato 120
+  velocity mezzo_forte 90  accent 105  marcato 120
 
 track "Bass"
   port "Bass"  channel 2
   octave_offset -1 octaves
-  velocity normal 100  accent 115
+  velocity mezzo_forte 100  accent 115
   retrigger_gap 2 ms
 
 destination "SQ-1"
@@ -969,41 +1013,63 @@ destination "SQ-1"
   Every track of the song that sends MIDI must have one, or the song does
   not load, with a message naming the track and the file. A cue control
   track has no block of its own: its cues go to destinations. A voice
-  track's block may give `velocity normal` and a velocity for each mark
+  track's block may give `velocity mezzo_forte` and a velocity for each mark
   its lines use (see `velocity` below). A block for a
   track the song lacks is ignored, so one configuration serves many songs.
 - **`octave_offset`** shifts every note sent, in octaves, to where this
   device places the pitch (the manufacturers disagree where C0 is, and an
   oscillator may sit in a different register). Omitted, it is 0 octaves, a
   harmless default: the note is sent as written.
-- **`velocity`** gives the MIDI velocity (1 to 127) for a normal note and
-  for the marks the song uses. `normal` is 64 when not written, the word for `>>` is
-  `marcato`, and `strong` is refused with a message saying to write
-  `marcato`. The relative levels are built too (see below): a studio
+- **`velocity`** gives the MIDI velocity (1 to 127) for a note at the
+  mezzo-forte level and for the marks the song uses. `mezzo_forte` is 64
+  when not written, the word for `>>` is `marcato`, and `strong` is refused
+  with a message saying to write `marcato`; `normal`, the old word for
+  `mezzo_forte`, is refused the same way. The relative levels are built too (see below): a studio
   block no longer has to give an `accent` or `marcato` velocity.
-  - `normal` is the track's normal level, which Jim called
-    `volume_normal`. When it is not written it is 64, the value the MIDI
-    1.0 specification gives for a mezzo-forte note.
+  - `mezzo_forte` is the track's reference level, the velocity of `mf`.
+    When it is not written it is 64, the value the MIDI 1.0 specification
+    gives for a mezzo-forte note.
   - The marks `<<`, `<`, `>` and `>>` are relative to the normal level,
     unless the block gives an absolute velocity for a mark (`accent` for
     `>`, `marcato` for `>>`). `<` and `<<` have no word here and are
     always relative.
-  - The levels `pp`, `p`, `mp`, `f` and `ff` of a dynamics line are relative to
-    the normal level too, and shift with it.
-  - **How loud each level and mark is.** A MIDI velocity runs from 1 to 127.
-    A louder level or mark moves the velocity a share of the way from the
-    starting velocity up to 127; a softer one moves it the same kind of share
-    down to 1. Because it is a share of the room that is left, nothing reaches
-    the limit, so `f` and `ff` stay apart even on a track whose normal
-    velocity is high. The result is rounded to the nearest whole velocity.
+  - The levels `p`, `mp` and `f` of a dynamics line are relative to the
+    normal level too, and shift with it; `pp` and `ff` are the fixed ends of
+    the range.
+  - **How loud each level is.** `pp` to `ff` use the whole range of MIDI
+    velocities, 1 to 127, less a safety gap of about 5% at each end: `pp`
+    reaches 6 and `ff` reaches 121, whatever the normal velocity. The gap keeps
+    a level off 1, where a device may not sound, and off 127, where it may
+    clip. `mf` is the normal velocity itself. The other levels move from it
+    a share of the way toward 6 or 121, rounded to the nearest whole velocity.
+    A normal velocity already below 6 or above 121 keeps the levels on that
+    side at the normal velocity.
 
     | Level on a dynamics line | Share of the way from the normal velocity |
     |---|---|
-    | `ff` | 3/4 up to 127 |
-    | `f` | 3/8 up to 127 |
-    | `mp` | 3/16 down to 1 |
-    | `p` | 3/8 down to 1 |
-    | `pp` | 3/4 down to 1 |
+    | `ff` | all the way up to 121 |
+    | `f` | half way up to 121 |
+    | `mp` | a quarter of the way down to 6 |
+    | `p` | half way down to 6 |
+    | `pp` | all the way down to 6 |
+
+    The levels for three normal velocities:
+
+    | Normal velocity | `pp` | `p` | `mp` | `mf` | `f` | `ff` |
+    |---|---|---|---|---|---|---|
+    | 64 | 6 | 35 | 50 | 64 | 93 | 121 |
+    | 90 | 6 | 48 | 69 | 90 | 106 | 121 |
+    | 100 | 6 | 53 | 77 | 100 | 111 | 121 |
+
+    Worked for a normal velocity of 100: the room above is 121 − 100 = 21,
+    so `f` is 100 + 1/2 × 21 = 110.5, which rounds to 111, and `ff` is 121; the
+    room below is 100 − 6 = 94, so `p` is 100 − 1/2 × 94 = 53, `mp` is
+    100 − 1/4 × 94 = 76.5, which rounds to 77, and `pp` is 6. All of these are
+    MIDI velocities.
+  - **How loud each mark on a note is.** A mark on a single note moves the
+    velocity in force a share of the way toward 127 (louder) or 1 (softer),
+    rounded to the nearest whole velocity. The share is of the room that is
+    left, so a mark never reaches the limit.
 
     | Mark on a single note | Share of the way from the level in force at that note |
     |---|---|
@@ -1012,20 +1078,8 @@ destination "SQ-1"
     | `<` | 3/8 down to 1 |
     | `<<` | 3/4 down to 1 |
 
-    `mf` is the normal velocity itself, and `mp` is half of `p`'s step. A
-    mark on a note starts from whatever level the dynamics line has set at
-    that point. The levels for three normal velocities:
-
-    | Normal velocity | `pp` | `p` | `mp` | `mf` | `f` | `ff` |
-    |---|---|---|---|---|---|---|
-    | 64 | 17 | 40 | 52 | 64 | 88 | 111 |
-    | 90 | 23 | 57 | 73 | 90 | 104 | 118 |
-    | 100 | 26 | 63 | 81 | 100 | 110 | 120 |
-
-    Worked for a normal velocity of 100: the room above is 127 − 100 =
-    27, so `f` is 100 + 3/8 × 27 = 110 and `ff` is 100 + 3/4 × 27 = 120;
-    the room below is 100 − 1 = 99, so `p` is 100 − 3/8 × 99 = 63,
-    `mp` is 100 − 3/16 × 99 = 81 and `pp` is 100 − 3/4 × 99 = 26. All of these are MIDI velocities.
+    A mark on a note starts from whatever level the dynamics line has set at
+    that point.
   - **No loudness curve is applied.** The song and the player send
     velocities, and the studio configuration says nothing about how a
     device turns a velocity into loudness. That is the receiving
@@ -1225,7 +1279,7 @@ voice layer (`voice_layer 2 sample_source` with the layer 2 rhythm line).
   decimals, held exactly as whole milli-beats; a tempo that does not make
   a whole number of milli-quarters per minute is refused
   (`crates/vocabulary/src/tempo.rs`, `crates/song_text/src/song_file.rs`).
-- `marcato` in place of `strong`, and `velocity normal` 64 when not
+- `marcato` in place of `strong`, and `velocity mezzo_forte` 64 when not
   written (11 Nov 2026; `crates/song_text/src/studio_file.rs`,
   `crates/player/src/studio_configuration.rs`).
 
