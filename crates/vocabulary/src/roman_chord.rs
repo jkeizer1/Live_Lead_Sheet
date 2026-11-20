@@ -62,6 +62,36 @@ pub enum ChordKind {
     DiminishedSeventh,
     HalfDiminishedSeventh,
     DominantSeventhFlatNinth,
+    /// Root, second, fifth (`Isus2`). No third, so it has no major or minor
+    /// form: only an upper case numeral writes it.
+    SuspendedSecond,
+    /// Root, fourth, fifth (`Isus4`); upper case only, like the second.
+    SuspendedFourth,
+    /// Major triad with the sixth (`I6`).
+    MajorSixth,
+    /// Minor triad with the sixth (`i6`).
+    MinorSixth,
+    /// Dominant seventh with the ninth (`I9`).
+    DominantNinth,
+    /// Major seventh with the ninth (`IM9`).
+    MajorNinth,
+    /// Minor seventh with the ninth (`i9`).
+    MinorNinth,
+    /// Major triad with the ninth and no seventh (`Iadd9`).
+    AddedNinth,
+    /// Dominant seventh with the fourth in place of the third (`I7sus4`).
+    DominantSeventhSuspendedFourth,
+    /// Dominant seventh with the sharp ninth (`I7#9`).
+    DominantSeventhSharpNinth,
+    /// Augmented triad with the minor seventh (`I+7`).
+    AugmentedSeventh,
+    /// Minor triad with the major seventh (`iM7`).
+    MinorMajorSeventh,
+    /// Root and fifth only, the power chord (`I5`); upper case only.
+    PowerChord,
+    /// Root, third, minor seventh, ninth and thirteenth, with the fifth left
+    /// out as players do (`I13`).
+    DominantThirteenth,
 }
 
 impl ChordKind {
@@ -75,21 +105,41 @@ impl ChordKind {
                 | ChordKind::MinorSeventh
                 | ChordKind::DiminishedSeventh
                 | ChordKind::HalfDiminishedSeventh
+                | ChordKind::MinorSixth
+                | ChordKind::MinorNinth
+                | ChordKind::MinorMajorSeventh
         )
     }
 
     /// How many notes the chord has in the plain voicing: a triad 3, a
-    /// seventh chord 4, a seventh with a flat ninth 5.
+    /// seventh chord 4, a ninth chord 5; the power chord 2.
     #[must_use]
     pub const fn note_count(self) -> u8 {
         match self {
-            ChordKind::Major | ChordKind::Minor | ChordKind::Diminished | ChordKind::Augmented => 3,
+            ChordKind::PowerChord => 2,
+            ChordKind::Major
+            | ChordKind::Minor
+            | ChordKind::Diminished
+            | ChordKind::Augmented
+            | ChordKind::SuspendedSecond
+            | ChordKind::SuspendedFourth => 3,
             ChordKind::DominantSeventh
             | ChordKind::MajorSeventh
             | ChordKind::MinorSeventh
             | ChordKind::DiminishedSeventh
-            | ChordKind::HalfDiminishedSeventh => 4,
-            ChordKind::DominantSeventhFlatNinth => 5,
+            | ChordKind::HalfDiminishedSeventh
+            | ChordKind::MajorSixth
+            | ChordKind::MinorSixth
+            | ChordKind::AddedNinth
+            | ChordKind::DominantSeventhSuspendedFourth
+            | ChordKind::AugmentedSeventh
+            | ChordKind::MinorMajorSeventh => 4,
+            ChordKind::DominantSeventhFlatNinth
+            | ChordKind::DominantNinth
+            | ChordKind::MajorNinth
+            | ChordKind::MinorNinth
+            | ChordKind::DominantSeventhSharpNinth
+            | ChordKind::DominantThirteenth => 5,
         }
     }
 
@@ -101,10 +151,21 @@ impl ChordKind {
             ChordKind::Diminished => "°",
             ChordKind::Augmented => "+",
             ChordKind::DominantSeventh | ChordKind::MinorSeventh => "7",
-            ChordKind::MajorSeventh => "M7",
+            ChordKind::MajorSeventh | ChordKind::MinorMajorSeventh => "M7",
             ChordKind::DiminishedSeventh => "°7",
             ChordKind::HalfDiminishedSeventh => "ø7",
             ChordKind::DominantSeventhFlatNinth => "7b9",
+            ChordKind::SuspendedSecond => "sus2",
+            ChordKind::SuspendedFourth => "sus4",
+            ChordKind::MajorSixth | ChordKind::MinorSixth => "6",
+            ChordKind::DominantNinth | ChordKind::MinorNinth => "9",
+            ChordKind::MajorNinth => "M9",
+            ChordKind::AddedNinth => "add9",
+            ChordKind::DominantSeventhSuspendedFourth => "7sus4",
+            ChordKind::DominantSeventhSharpNinth => "7#9",
+            ChordKind::AugmentedSeventh => "+7",
+            ChordKind::PowerChord => "5",
+            ChordKind::DominantThirteenth => "13",
         }
     }
 }

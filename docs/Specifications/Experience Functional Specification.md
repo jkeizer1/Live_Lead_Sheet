@@ -73,6 +73,9 @@ authoring view, follows the standard convention:
   C7 (dominant) and CM7 (major seventh) can never be confused;
 - a plain major triad is the letter alone: C;
 - diminished °, half-diminished ø, augmented +: B°, Bø7, C+;
+- suspended **sus2**, **sus4**, and the sixth, ninth, added ninth and
+  thirteenth: Csus4, C6, Cm6, C9, CM9, Cm9, Cadd9, C7sus4, C7♯9, C+7, CmM7,
+  C5, C13 (the chords Song Notation, section 2, lists);
 - an inversion or other bass note after a slash: C/E.
 
 Roman numerals follow the same rule: upper case for major (I, IV, V7),

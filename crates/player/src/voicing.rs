@@ -155,6 +155,20 @@ fn intervals(kind: ChordKind) -> &'static [i16] {
         ChordKind::DiminishedSeventh => &[0, 3, 6, 9],
         ChordKind::HalfDiminishedSeventh => &[0, 3, 6, 10],
         ChordKind::DominantSeventhFlatNinth => &[0, 4, 7, 10, 13],
+        ChordKind::SuspendedSecond => &[0, 2, 7],
+        ChordKind::SuspendedFourth => &[0, 5, 7],
+        ChordKind::MajorSixth => &[0, 4, 7, 9],
+        ChordKind::MinorSixth => &[0, 3, 7, 9],
+        ChordKind::DominantNinth => &[0, 4, 7, 10, 14],
+        ChordKind::MajorNinth => &[0, 4, 7, 11, 14],
+        ChordKind::MinorNinth => &[0, 3, 7, 10, 14],
+        ChordKind::AddedNinth => &[0, 4, 7, 14],
+        ChordKind::DominantSeventhSuspendedFourth => &[0, 5, 7, 10],
+        ChordKind::DominantSeventhSharpNinth => &[0, 4, 7, 10, 15],
+        ChordKind::AugmentedSeventh => &[0, 4, 8, 10],
+        ChordKind::MinorMajorSeventh => &[0, 3, 7, 11],
+        ChordKind::PowerChord => &[0, 7],
+        ChordKind::DominantThirteenth => &[0, 4, 10, 14, 21],
     }
 }
 

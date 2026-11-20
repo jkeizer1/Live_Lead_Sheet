@@ -73,8 +73,8 @@ pub fn inverted_chord_pitches(
 }
 
 /// Letters above the root for each note of the plain voicing, in its
-/// order: third 2, fifth 4, seventh 6; the flat ninth is 1 letter above,
-/// an octave up.
+/// order: third 2, fifth 4, seventh 6, sixth 5; the second (or ninth, an
+/// octave up) is 1 letter above, the fourth 3, the thirteenth 5 letters above.
 fn letter_steps(kind: ChordKind) -> &'static [usize] {
     match kind {
         ChordKind::Major | ChordKind::Minor | ChordKind::Diminished | ChordKind::Augmented => {
@@ -84,8 +84,21 @@ fn letter_steps(kind: ChordKind) -> &'static [usize] {
         | ChordKind::MajorSeventh
         | ChordKind::MinorSeventh
         | ChordKind::DiminishedSeventh
-        | ChordKind::HalfDiminishedSeventh => &[0, 2, 4, 6],
-        ChordKind::DominantSeventhFlatNinth => &[0, 2, 4, 6, 1],
+        | ChordKind::HalfDiminishedSeventh
+        | ChordKind::AugmentedSeventh
+        | ChordKind::MinorMajorSeventh => &[0, 2, 4, 6],
+        ChordKind::DominantSeventhFlatNinth
+        | ChordKind::DominantNinth
+        | ChordKind::MajorNinth
+        | ChordKind::MinorNinth
+        | ChordKind::DominantSeventhSharpNinth => &[0, 2, 4, 6, 1],
+        ChordKind::SuspendedSecond => &[0, 1, 4],
+        ChordKind::SuspendedFourth => &[0, 3, 4],
+        ChordKind::MajorSixth | ChordKind::MinorSixth => &[0, 2, 4, 5],
+        ChordKind::AddedNinth => &[0, 2, 4, 1],
+        ChordKind::DominantSeventhSuspendedFourth => &[0, 3, 4, 6],
+        ChordKind::PowerChord => &[0, 4],
+        ChordKind::DominantThirteenth => &[0, 2, 6, 1, 5],
     }
 }
 
@@ -208,6 +221,54 @@ mod tests {
 
     fn names(pitches: &[Pitch]) -> Vec<String> {
         pitches.iter().map(ToString::to_string).collect()
+    }
+
+    /// The tonic chord of C major of `kind`, spelled from C4.
+    fn on_c(kind: ChordKind) -> Vec<String> {
+        let chord: RomanChord = RomanChord::new(Accidental::Natural, ScaleDegree::First, kind);
+        names(&chord_pitches(chord, key(NoteLetter::C, Accidental::Natural), None, 4).unwrap())
+    }
+
+    #[test]
+    fn the_added_chord_types_are_spelled_with_the_right_letters() {
+        assert_eq!(on_c(ChordKind::SuspendedSecond), vec!["C4", "D4", "G4"]);
+        assert_eq!(on_c(ChordKind::SuspendedFourth), vec!["C4", "F4", "G4"]);
+        assert_eq!(on_c(ChordKind::MajorSixth), vec!["C4", "E4", "G4", "A4"]);
+        assert_eq!(on_c(ChordKind::MinorSixth), vec!["C4", "Eb4", "G4", "A4"]);
+        assert_eq!(
+            on_c(ChordKind::DominantNinth),
+            vec!["C4", "E4", "G4", "Bb4", "D5"]
+        );
+        assert_eq!(
+            on_c(ChordKind::MajorNinth),
+            vec!["C4", "E4", "G4", "B4", "D5"]
+        );
+        assert_eq!(
+            on_c(ChordKind::MinorNinth),
+            vec!["C4", "Eb4", "G4", "Bb4", "D5"]
+        );
+        assert_eq!(on_c(ChordKind::AddedNinth), vec!["C4", "E4", "G4", "D5"]);
+        assert_eq!(
+            on_c(ChordKind::DominantSeventhSuspendedFourth),
+            vec!["C4", "F4", "G4", "Bb4"]
+        );
+        assert_eq!(
+            on_c(ChordKind::DominantSeventhSharpNinth),
+            vec!["C4", "E4", "G4", "Bb4", "D#5"]
+        );
+        assert_eq!(
+            on_c(ChordKind::AugmentedSeventh),
+            vec!["C4", "E4", "G#4", "Bb4"]
+        );
+        assert_eq!(
+            on_c(ChordKind::MinorMajorSeventh),
+            vec!["C4", "Eb4", "G4", "B4"]
+        );
+        assert_eq!(on_c(ChordKind::PowerChord), vec!["C4", "G4"]);
+        assert_eq!(
+            on_c(ChordKind::DominantThirteenth),
+            vec!["C4", "E4", "Bb4", "D5", "A5"]
+        );
     }
 
     #[test]

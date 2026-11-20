@@ -112,13 +112,14 @@ pub fn parse_chord(text: &str) -> Result<RomanChord, String> {
     let kind: ChordKind = chord_kind_of(is_lower, suffix).ok_or_else(|| {
         if is_lower {
             format!(
-                "\"{text}\" is not a chord. After a lower case numeral write nothing, 7, \
-                 ° or dim, °7 or dim7, ø7 or m7b5"
+                "\"{text}\" is not a chord. After a lower case numeral write nothing, 6, 7, 9, \
+                 M7 or maj7, ° or dim, °7 or dim7, ø7 or m7b5"
             )
         } else {
             format!(
-                "\"{text}\" is not a chord. After an upper case numeral write nothing, 7, \
-                 M7 or maj7, + or 7b9"
+                "\"{text}\" is not a chord. After an upper case numeral write nothing, 5, 6, 7, \
+                 9, 13, M7 or maj7, M9 or maj9, add9, sus2, sus4, 7sus4, 7b9, 7#9, + or +7 \
+                 (7#5)"
             )
         }
     })?;
@@ -148,6 +149,9 @@ fn chord_kind_of(is_lower: bool, suffix: &str) -> Option<ChordKind> {
             "°" | "dim" => Some(ChordKind::Diminished),
             "°7" | "dim7" => Some(ChordKind::DiminishedSeventh),
             "ø7" | "ø" | "m7b5" => Some(ChordKind::HalfDiminishedSeventh),
+            "6" => Some(ChordKind::MinorSixth),
+            "9" => Some(ChordKind::MinorNinth),
+            "M7" | "maj7" => Some(ChordKind::MinorMajorSeventh),
             _ => None,
         }
     } else {
@@ -157,6 +161,17 @@ fn chord_kind_of(is_lower: bool, suffix: &str) -> Option<ChordKind> {
             "M7" | "maj7" => Some(ChordKind::MajorSeventh),
             "+" => Some(ChordKind::Augmented),
             "7b9" => Some(ChordKind::DominantSeventhFlatNinth),
+            "sus2" => Some(ChordKind::SuspendedSecond),
+            "sus4" => Some(ChordKind::SuspendedFourth),
+            "6" => Some(ChordKind::MajorSixth),
+            "9" => Some(ChordKind::DominantNinth),
+            "M9" | "maj9" => Some(ChordKind::MajorNinth),
+            "add9" => Some(ChordKind::AddedNinth),
+            "7sus4" => Some(ChordKind::DominantSeventhSuspendedFourth),
+            "7#9" => Some(ChordKind::DominantSeventhSharpNinth),
+            "+7" | "7#5" | "aug7" => Some(ChordKind::AugmentedSeventh),
+            "5" => Some(ChordKind::PowerChord),
+            "13" => Some(ChordKind::DominantThirteenth),
             _ => None,
         }
     }
@@ -270,6 +285,25 @@ mod tests {
             ChordKind::HalfDiminishedSeventh
         );
         assert_eq!(parse_chord("I").unwrap().kind(), ChordKind::Major);
+        let kind_of = |text: &str| parse_chord(text).unwrap().kind();
+        assert_eq!(kind_of("Isus2"), ChordKind::SuspendedSecond);
+        assert_eq!(kind_of("Vsus4"), ChordKind::SuspendedFourth);
+        assert_eq!(kind_of("IV6"), ChordKind::MajorSixth);
+        assert_eq!(kind_of("vi6"), ChordKind::MinorSixth);
+        assert_eq!(kind_of("V9"), ChordKind::DominantNinth);
+        assert_eq!(kind_of("IM9"), ChordKind::MajorNinth);
+        assert_eq!(kind_of("Imaj9"), ChordKind::MajorNinth);
+        assert_eq!(kind_of("ii9"), ChordKind::MinorNinth);
+        assert_eq!(kind_of("Iadd9"), ChordKind::AddedNinth);
+        assert_eq!(kind_of("V7sus4"), ChordKind::DominantSeventhSuspendedFourth);
+        assert_eq!(kind_of("V7#9"), ChordKind::DominantSeventhSharpNinth);
+        assert_eq!(kind_of("V+7"), ChordKind::AugmentedSeventh);
+        assert_eq!(kind_of("V7#5"), ChordKind::AugmentedSeventh);
+        assert_eq!(kind_of("iM7"), ChordKind::MinorMajorSeventh);
+        assert_eq!(kind_of("I5"), ChordKind::PowerChord);
+        assert_eq!(kind_of("V13"), ChordKind::DominantThirteenth);
+        // A suspended chord has no third, so it has no lower case form.
+        assert!(parse_chord("vsus4").is_err());
         assert!(parse_chord("IV9b").unwrap_err().contains("not a chord"));
         assert!(parse_chord("ii+").unwrap_err().contains("lower case"));
     }

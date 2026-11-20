@@ -1,6 +1,6 @@
 # Live Lead Sheet — Song Notation
 
-Revision 26 — 20 Nov 2026 (studio `delay_trigger`; the song_composition block plays the sections; sections are unique definitions; an entry may change key and tempo; `meter_control` as one repeating pattern per section; tempo marks on the lead line, `tempo_control` removed; tempo ramps; a carried tempo keeps the beats per minute)
+Revision 27 — 20 Nov 2026 (chord table; sus2, sus4, 5, 6, 9, 13 and more chord types; studio `delay_trigger`; the song_composition block plays the sections; sections are unique definitions; an entry may change key and tempo; `meter_control` as one repeating pattern per section; tempo marks on the lead line, `tempo_control` removed; tempo ramps; a carried tempo keeps the beats per minute)
 
 **Status: draft for trial.** *Decided* marks what Jim has decided;
 everything else is a proposal to try with a working player. Every open
@@ -115,6 +115,42 @@ can start from the chords' roots. Its result is written into the song.
 - **Chord names** use `#` and `b` for sharps and flats. The symbols `°` and
   `ø` are accepted, and so are ASCII spellings: `dim` and `dim7` for `°`
   (`viidim`), `m7b5` for `ø` (`iim7b5`). 
+- **The chords** are Roman numerals, upper case for major-type and lower
+  case for minor-type, followed by what the table gives. Written in C major
+  on the first step (the chord on step I; any step takes the same suffix):
+
+  | Written | Name | Notes above C |
+  |---|---|---|
+  | `I` | major | C E G |
+  | `i` | minor | C E♭ G |
+  | `I+` | augmented | C E G♯ |
+  | `i°` or `idim` | diminished | C E♭ G♭ |
+  | `I5` | power chord | C G |
+  | `Isus2` | suspended second | C D G |
+  | `Isus4` | suspended fourth | C F G |
+  | `I6` | major sixth | C E G A |
+  | `i6` | minor sixth | C E♭ G A |
+  | `I7` | dominant seventh | C E G B♭ |
+  | `IM7` or `Imaj7` | major seventh | C E G B |
+  | `i7` | minor seventh | C E♭ G B♭ |
+  | `iM7` or `imaj7` | minor-major seventh | C E♭ G B |
+  | `i°7` or `idim7` | diminished seventh | C E♭ G♭ A |
+  | `iø7` or `im7b5` | half-diminished seventh | C E♭ G♭ B♭ |
+  | `I+7`, `I7#5` or `Iaug7` | augmented seventh | C E G♯ B♭ |
+  | `I7sus4` | dominant seventh, suspended fourth | C F G B♭ |
+  | `Iadd9` | added ninth (no seventh) | C E G D |
+  | `I9` | dominant ninth | C E G B♭ D |
+  | `IM9` or `Imaj9` | major ninth | C E G B D |
+  | `i9` | minor ninth | C E♭ G B♭ D |
+  | `I7b9` | dominant seventh, flat ninth | C E G B♭ D♭ |
+  | `I7#9` | dominant seventh, sharp ninth | C E G B♭ D♯ |
+  | `I13` | dominant thirteenth, fifth left out | C E B♭ D A |
+
+  A suspended chord and the power chord have no third, so they are written
+  with an upper case numeral only. A ninth or thirteenth is voiced with the
+  ninth (or thirteenth) above the other notes. An inversion (section 4)
+  may be asked for up to one less than the chord's number of notes: the
+  power chord has a first inversion only.
 - **Mistakes** are reported as in EFS-6.3: the file, the line, what is
   wrong and what to type instead. A file with a mistake does not load,
   not even partly, but **the program still starts**. It shows the errors, 

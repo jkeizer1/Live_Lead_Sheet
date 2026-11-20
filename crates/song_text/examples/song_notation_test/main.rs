@@ -95,7 +95,8 @@ const MISTAKE_CASES: [MistakeCase; 8] = [
         kind: Kind::Song,
         text: include_str!("../../../../songs_canonical/song_notation_test/unknown_chord.song"),
         expected_message: "mistake.song line 12: line \"Keys\": bar 1 beat 1: \"IV9b\" is not a chord. \
-                           After an upper case numeral write nothing, 7, M7 or maj7, + or 7b9",
+                           After an upper case numeral write nothing, 5, 6, 7, 9, 13, M7 or maj7, \
+                           M9 or maj9, add9, sus2, sus4, 7sus4, 7b9, 7#9, + or +7 (7#5)",
     },
     MistakeCase {
         what: "a studio block with no port",
