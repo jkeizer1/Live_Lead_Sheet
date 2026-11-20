@@ -115,6 +115,10 @@ pub struct ScheduledEvent {
     pub port: OutputPortName,
     pub action: OutputAction,
     pub source: EventSource,
+    /// How long after its instant the event is sent: the studio's
+    /// `delay_trigger` for the track that made it, zero for the clock and
+    /// the cues.
+    pub delay: Duration,
 }
 
 /// Every event from 0 ticks up to `stretch_length`, in sending order:
@@ -160,6 +164,7 @@ fn timing_clock(
             port: clock_port.clone(),
             action: OutputAction::ClockPulse,
             source: EventSource::TimingClock,
+            delay: Duration::ZERO,
         });
         position_ticks = position_ticks
             .checked_add(TICKS_PER_CLOCK_PULSE)
@@ -209,6 +214,7 @@ fn note_events(
                 velocity: timed.velocity,
             },
             source: source.clone(),
+            delay: track.delay_trigger(),
         });
         events.push(ScheduledEvent {
             position: ScorePosition::from_ticks(end_ticks),
@@ -232,6 +238,7 @@ fn note_events(
                 }
             },
             source: source.clone(),
+            delay: track.delay_trigger(),
         });
     }
     Ok(events)
@@ -262,6 +269,7 @@ fn cue_events(
         port: cue.port().clone(),
         action,
         source: source.clone(),
+        delay: Duration::ZERO,
     };
     let events: Vec<ScheduledEvent> = match cue.message() {
         ControlCueMessage::Transport(transport) => {
@@ -592,6 +600,43 @@ mod tests {
         // The note ending at 10080 ticks, the end of the stretch, touches
         // no note and stays a plain note-off.
         assert_eq!(touching, vec![expected]);
+    }
+
+    #[test]
+    fn a_tracks_delay_trigger_goes_on_each_of_its_events_and_not_on_the_clock() {
+        let track: NoteTrack = NoteTrack::new(
+            "Bass",
+            port("Bass"),
+            MidiChannel::new(2).unwrap(),
+            vec![TimedNote {
+                start_ticks: 0,
+                length_ticks: 5040,
+                note: NoteNumber::new(60).unwrap(),
+                velocity: Velocity::new(64).unwrap(),
+                legato_to_next: false,
+            }],
+        )
+        .unwrap()
+        .with_delay_trigger(Duration::from_ms(20));
+        let events: Vec<ScheduledEvent> = schedule(
+            &port("Clock"),
+            &[track],
+            &[],
+            ScoreLength::from_ticks(10_080),
+        )
+        .unwrap();
+        for event in &events {
+            let expected: Duration = match event.source {
+                EventSource::Notes { .. } => Duration::from_ms(20),
+                _ => Duration::ZERO,
+            };
+            assert_eq!(event.delay, expected, "{event:?}");
+        }
+        assert!(
+            events
+                .iter()
+                .any(|event: &ScheduledEvent| matches!(event.source, EventSource::Notes { .. }))
+        );
     }
 
     #[test]

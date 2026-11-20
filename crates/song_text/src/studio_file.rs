@@ -33,6 +33,7 @@ struct OpenBlock {
     marcato: Option<Velocity>,
     octave_offset_octaves: Option<i8>,
     retrigger_gap: Option<Duration>,
+    delay_trigger: Option<Duration>,
     settle_delay: Option<Duration>,
     errors_at_start: usize,
 }
@@ -151,6 +152,7 @@ impl StudioReader<'_> {
             marcato: None,
             octave_offset_octaves: None,
             retrigger_gap: None,
+            delay_trigger: None,
             settle_delay: None,
             errors_at_start: self.errors.len(),
         });
@@ -223,6 +225,7 @@ fn destination_takes_only_port_and_channel(block: &OpenBlock) -> Result<(), Stri
         || block.marcato.is_some()
         || block.octave_offset_octaves.is_some()
         || block.retrigger_gap.is_some()
+        || block.delay_trigger.is_some()
         || block.settle_delay.is_some()
     {
         return Err(format!(
@@ -250,12 +253,13 @@ fn build_track_output(block: &OpenBlock, port_name: String) -> TrackOutput {
         // timing; both are harmless (Song Notation, section 6).
         octave_offset_octaves: block.octave_offset_octaves.unwrap_or(0),
         retrigger_gap: block.retrigger_gap.unwrap_or(Duration::ZERO),
+        delay_trigger: block.delay_trigger.unwrap_or(Duration::ZERO),
         settle_delay: block.settle_delay.unwrap_or(Duration::ZERO),
     }
 }
 
 /// Reads `port "X"  channel 1`, `velocity mezzo_forte 90  accent 105`,
-/// `octave_offset -1 octaves`, `retrigger_gap 2 ms`, `settle_delay 2 ms`,
+/// `octave_offset -1 octaves`, `retrigger_gap 2 ms`, `delay_trigger 20 ms`, `settle_delay 2 ms`,
 /// in any order, on one line or several.
 fn read_settings(block: &mut OpenBlock, text: &str) -> Result<(), String> {
     let all: Vec<Word> = words(text)?;
@@ -264,7 +268,7 @@ fn read_settings(block: &mut OpenBlock, text: &str) -> Result<(), String> {
         if first.quoted {
             return Err(format!(
                 "\"{}\" in quotes is not a setting. Expected port, channel, velocity, \
-                 octave_offset, retrigger_gap or settle_delay",
+                 octave_offset, retrigger_gap, delay_trigger or settle_delay",
                 first.text
             ));
         }
@@ -278,6 +282,11 @@ fn read_settings(block: &mut OpenBlock, text: &str) -> Result<(), String> {
                 set_once(&mut block.retrigger_gap, gap, "retrigger_gap")?;
                 rest
             }
+            "delay_trigger" => {
+                let (delay, rest) = read_milliseconds("delay_trigger", after)?;
+                set_once(&mut block.delay_trigger, delay, "delay_trigger")?;
+                rest
+            }
             "settle_delay" => {
                 let (delay, rest) = read_milliseconds("settle_delay", after)?;
                 set_once(&mut block.settle_delay, delay, "settle_delay")?;
@@ -286,7 +295,7 @@ fn read_settings(block: &mut OpenBlock, text: &str) -> Result<(), String> {
             other => {
                 return Err(format!(
                     "\"{other}\" is not understood in a block. Expected port, channel, \
-                     velocity, octave_offset, retrigger_gap or settle_delay"
+                     velocity, octave_offset, retrigger_gap, delay_trigger or settle_delay"
                 ));
             }
         };
@@ -458,6 +467,20 @@ mod tests {
         assert!(errors[0].contains("channel 17"));
         assert!(errors[1].contains("retrigger_gap 2 ms"));
         assert!(errors[2].contains("velocity 0"));
+    }
+
+    #[test]
+    fn a_delay_trigger_is_read_and_omitted_means_none() {
+        let studio: StudioConfiguration = parse_studio(
+            "s.studio",
+            include_str!("../../../songs_canonical/studio_file/delay_trigger.studio"),
+        )
+        .unwrap();
+        assert_eq!(
+            studio.output_of("A").unwrap().delay_trigger,
+            Duration::from_ms(20)
+        );
+        assert_eq!(studio.output_of("B").unwrap().delay_trigger, Duration::ZERO);
     }
 
     #[test]

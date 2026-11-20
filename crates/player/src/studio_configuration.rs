@@ -99,6 +99,10 @@ pub struct TrackOutput {
     /// A note off this long before the next note on, so a gate drops;
     /// 0 ms when omitted, which changes nothing.
     pub retrigger_gap: Duration,
+    /// Every event of the track is sent this long after its instant, so a
+    /// device on a faster path can be matched to one on a slower path; 0 ms
+    /// when omitted, which changes nothing.
+    pub delay_trigger: Duration,
     /// Time for a quantizer's voltage to settle after a note is sent; 0 ms
     /// when omitted.
     pub settle_delay: Duration,
@@ -401,6 +405,7 @@ mod tests {
             velocity: VelocityLevels::new(velocity(90), Some(velocity(105)), None),
             octave_offset_octaves: 0,
             retrigger_gap: Duration::ZERO,
+            delay_trigger: Duration::ZERO,
             settle_delay: Duration::ZERO,
         }
     }

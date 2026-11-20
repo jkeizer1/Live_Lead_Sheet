@@ -1,6 +1,6 @@
 # Live Lead Sheet — Song Notation
 
-Revision 25 — 19 Nov 2026 (the song_composition block plays the sections; sections are unique definitions; an entry may change key and tempo; `meter_control` as one repeating pattern per section; tempo marks on the lead line, `tempo_control` removed; tempo ramps; a carried tempo keeps the beats per minute)
+Revision 26 — 20 Nov 2026 (studio `delay_trigger`; the song_composition block plays the sections; sections are unique definitions; an entry may change key and tempo; `meter_control` as one repeating pattern per section; tempo marks on the lead line, `tempo_control` removed; tempo ramps; a carried tempo keeps the beats per minute)
 
 **Status: draft for trial.** *Decided* marks what Jim has decided;
 everything else is a proposal to try with a working player. Every open
@@ -1010,6 +1010,7 @@ track "Bass"
   octave_offset -1 octaves
   velocity mezzo_forte 100  accent 115
   retrigger_gap 2 ms
+  delay_trigger 20 ms
 
 destination "SQ-1"
   port "To SQ-1"  channel 1
@@ -1104,6 +1105,15 @@ destination "SQ-1"
   where the MIDI is sent, not in ticks: a device's response time does not
   change with tempo (A-7). Omitted, it is 0 ms, a harmless default: no
   change to the timing. More such device settings are expected as they are found.
+  `delay_trigger n ms` sends every event of a voice track (notes on and
+  off) n ms later than its instant, so the track lines up with a device
+  on a slower path. For example, a synthesiser played straight into a
+  mixer and a drum played through a computer whose audio return adds
+  20 ms: give the synthesiser's track `delay_trigger 20 ms` and the two
+  sounds arrive together. Like `retrigger_gap` it is clock time in ms, not
+  ticks. It moves only the sending: the score positions, the counter, the
+  display and the Timing Clock are unchanged. It does not apply to the clock
+  and transport track or to cue tracks; the player says so when one has it.
 - **Destinations** are the names cues use. A destination for Start, Stop
   and Continue needs only a port.
 - Staccato sounds for half the written duration, fixed in V1; it can move

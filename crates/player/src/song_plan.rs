@@ -338,6 +338,15 @@ fn not_yet_applied(song: &Song, studio: &StudioConfiguration) -> Vec<String> {
         let Some(output) = studio.output_of(track.name()) else {
             continue;
         };
+        // Only the notes of a voice track are delayed; the clock and the cue
+        // tracks send as written, which is said here and not left silent.
+        if output.delay_trigger.ns() > 0 && !matches!(track.kind(), TrackKind::Voice { .. }) {
+            notes.push(format!(
+                "track \"{}\": delay_trigger {} ms is applied only to a voice track",
+                track.name(),
+                output.delay_trigger.ns() / 1_000_000
+            ));
+        }
         if output.settle_delay.ns() > 0 {
             notes.push(format!(
                 "track \"{}\": settle_delay {} ms is not applied yet",
@@ -418,7 +427,11 @@ fn voice_track(
         channel,
         notes,
     )
-    .map(|note_track: NoteTrack| note_track.with_retrigger_gap(output.retrigger_gap))
+    .map(|note_track: NoteTrack| {
+        note_track
+            .with_retrigger_gap(output.retrigger_gap)
+            .with_delay_trigger(output.delay_trigger)
+    })
     .map_err(PlanError::NoteTrack)
 }
 

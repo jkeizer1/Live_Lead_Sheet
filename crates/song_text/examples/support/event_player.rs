@@ -161,7 +161,11 @@ fn send_all(
                 anchors.push(Anchor::new(change.position, instant, change.tempo));
                 next_change += 1;
             }
-            let at: Instant = instant_in(&anchors, event.position)?;
+            // The studio's delay_trigger moves the send, not the score
+            // position, so anchors and tempo changes are unaffected.
+            let at: Instant = instant_in(&anchors, event.position)?
+                .checked_add(event.delay)
+                .map_err(|e| e.to_string())?;
             if at > horizon {
                 break;
             }
@@ -214,7 +218,9 @@ fn send(
             note_on_position,
             retrigger_gap,
         } => {
-            let note_on_at: Instant = instant_in(anchors, note_on_position)?;
+            let note_on_at: Instant = instant_in(anchors, note_on_position)?
+                .checked_add(event.delay)
+                .map_err(|e| e.to_string())?;
             output.queue_note_off_before_note_on(
                 port,
                 note_on_at,

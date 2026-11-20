@@ -51,6 +51,8 @@ pub struct NoteTrack {
     notes: Vec<TimedNote>,
     /// The studio's `retrigger_gap` for this track's output.
     retrigger_gap: Duration,
+    /// The studio's `delay_trigger` for this track's output.
+    delay_trigger: Duration,
 }
 
 impl NoteTrack {
@@ -82,6 +84,7 @@ impl NoteTrack {
             notes: join_legato_notes(notes),
             // Zero is harmless: the ALSA output's own lead floor still applies.
             retrigger_gap: Duration::ZERO,
+            delay_trigger: Duration::ZERO,
         })
     }
 
@@ -99,6 +102,21 @@ impl NoteTrack {
     #[must_use]
     pub fn retrigger_gap(&self) -> Duration {
         self.retrigger_gap
+    }
+
+    /// The track with the studio's `delay_trigger` for its output: every
+    /// event of the track is sent this long after its instant.
+    #[must_use]
+    pub fn with_delay_trigger(self, delay_trigger: Duration) -> NoteTrack {
+        NoteTrack {
+            delay_trigger,
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn delay_trigger(&self) -> Duration {
+        self.delay_trigger
     }
 
     /// A mono voice playing one fixed `note` on the notes of `rhythm`,

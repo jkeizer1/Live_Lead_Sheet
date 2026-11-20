@@ -1,0 +1,9 @@
+# Canonical test studio (valid): crates/song_text/src/studio_file.rs, test `a_delay_trigger_is_read_and_omitted_means_none`.
+# Track A writes delay_trigger 20 ms (the PC path's latency); track B writes none, so its delay is 0 ms.
+studio "S"
+port "P"
+track "A"
+  port "P"  channel 1
+  delay_trigger 20 ms
+track "B"
+  port "P"  channel 2
