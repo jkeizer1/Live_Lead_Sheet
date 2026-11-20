@@ -141,7 +141,7 @@ fn read_file(file_name: &str, what: &str) -> Option<String> {
         Ok(text) => Some(text),
         Err(error) => {
             eprintln!(
-                "ERROR: cannot read the {what} {file_name}: {error}. Run from the project \
+                "\n\nError: cannot read the {what} {file_name}: {error}. Run from the project \
                  folder, or give the file as the argument."
             );
             None
@@ -149,21 +149,31 @@ fn read_file(file_name: &str, what: &str) -> Option<String> {
     }
 }
 
+/// The file's own name without its folders, for messages the musician reads
+/// at a glance. A path with no file name is shown whole: harmless, it is
+/// only a message.
+fn short_name(path: &str) -> &str {
+    std::path::Path::new(path)
+        .file_name()
+        .and_then(std::ffi::OsStr::to_str)
+        .unwrap_or(path)
+}
+
 fn print_errors(errors: &[ParseError]) {
     for (index, error) in errors.iter().enumerate() {
-        eprintln!("  Issue {}: {error}", index + 1);
+        eprintln!("\n  Issue {}: {}", index + 1, error.line_and_message());
     }
 }
 
 fn load_and_print_song(song_file: &str) -> Option<Song> {
     let text: String = read_file(song_file, "song")?;
-    match parse_song(song_file, &text) {
+    match parse_song(short_name(song_file), &text) {
         Ok(song) => {
             print_song(&song);
             Some(song)
         }
         Err(errors) => {
-            eprintln!("ERROR: {song_file} is not valid; nothing was applied.");
+            eprintln!("\n\nError: {} is not valid.", short_name(song_file));
             print_errors(&errors);
             None
         }
@@ -172,7 +182,7 @@ fn load_and_print_song(song_file: &str) -> Option<Song> {
 
 fn load_studio(studio_file: &str) -> Option<StudioConfiguration> {
     let text: String = read_file(studio_file, "studio")?;
-    match parse_studio(studio_file, &text) {
+    match parse_studio(short_name(studio_file), &text) {
         Ok(studio) => {
             println!(
                 "\nStudio \"{}\": {} ports, {} track entries, {} destinations.",
@@ -184,7 +194,7 @@ fn load_studio(studio_file: &str) -> Option<StudioConfiguration> {
             Some(studio)
         }
         Err(errors) => {
-            eprintln!("ERROR: {studio_file} is not valid; nothing was applied.");
+            eprintln!("\n\nError: {} is not valid.", short_name(studio_file));
             print_errors(&errors);
             None
         }
@@ -201,11 +211,12 @@ fn check_coverage(song: &Song, studio: &StudioConfiguration, studio_file: &str) 
         return true;
     }
     eprintln!(
-        "ERROR: {studio_file} does not cover \"{}\"; nothing was applied.",
+        "\n\nError: {} does not cover \"{}\".",
+        short_name(studio_file),
         song.name()
     );
     for (index, need) in unmet.iter().enumerate() {
-        eprintln!("  Issue {}: {studio_file}: {need}", index + 1);
+        eprintln!("\n  Issue {}: {need}", index + 1);
     }
     false
 }

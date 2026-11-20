@@ -123,7 +123,7 @@ fn print_library(library_file: &str) -> Option<Vec<RhythmLibraryEntry>> {
         Ok(text) => text,
         Err(error) => {
             eprintln!(
-                "ERROR: cannot read the rhythm library {library_file}: {error}. \
+                "\n\nError: cannot read the rhythm library {library_file}: {error}. \
                  Run from the project folder, or give the file as the argument."
             );
             return None;
@@ -132,9 +132,9 @@ fn print_library(library_file: &str) -> Option<Vec<RhythmLibraryEntry>> {
     let entries: Vec<RhythmLibraryEntry> = match parse_rhythm_library(library_file, &text) {
         Ok(entries) => entries,
         Err(errors) => {
-            println!("{library_file} is not valid; nothing was loaded.");
+            println!("{library_file} is not valid.");
             for (index, error) in errors.iter().enumerate() {
-                println!("  Issue {}: {error}", index + 1);
+                println!("\n  Issue {}: {}", index + 1, error.line_and_message());
             }
             return None;
         }

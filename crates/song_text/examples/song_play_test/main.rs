@@ -52,14 +52,14 @@ fn run(song_file: &str, studio_file: &str) -> Result<(), String> {
     let song: Song = load(song_file, "song", parse_song)?;
     let studio: StudioConfiguration = load(studio_file, "studio", parse_studio)?;
     let plan: SongPlan = plan_song(&song, &studio)
-        .map_err(|e| format!("ERROR: cannot play {song_file} with {studio_file}: {e}"))?;
+        .map_err(|e| format!("\n\nError: cannot play {song_file} with {studio_file}: {e}"))?;
     let events: Vec<ScheduledEvent> = schedule(
         &plan.clock_port,
         &plan.note_tracks,
         &plan.control_tracks,
         plan.stretch_length,
     )
-    .map_err(|e| format!("ERROR: cannot schedule {song_file}: {e}"))?;
+    .map_err(|e| format!("\n\nError: cannot schedule {song_file}: {e}"))?;
 
     let port_names: Vec<&str> = studio.port_names().iter().map(String::as_str).collect();
     let output = event_player::open_output(&port_names)?;
@@ -102,6 +102,16 @@ fn run(song_file: &str, studio_file: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// The file's own name without its folders, for messages the musician reads
+/// at a glance. A path with no file name is shown whole: harmless, it is
+/// only a message.
+fn short_name(path: &str) -> &str {
+    std::path::Path::new(path)
+        .file_name()
+        .and_then(std::ffi::OsStr::to_str)
+        .unwrap_or(path)
+}
+
 /// Reads and parses one file, or returns every mistake, ready to print.
 fn load<T>(
     file_name: &str,
@@ -110,14 +120,20 @@ fn load<T>(
 ) -> Result<T, String> {
     let text: String = std::fs::read_to_string(file_name).map_err(|e| {
         format!(
-            "ERROR: cannot read the {what} {file_name}: {e}. Run from the project folder, or \
+            "\n\nError: cannot read the {what} {file_name}: {e}. Run from the project folder, or \
              give the file as the argument."
         )
     })?;
-    parse(file_name, &text).map_err(|errors| {
-        let mut message: String = format!("ERROR: {file_name} is not valid; nothing was played.");
+    let short_file_name: &str = short_name(file_name);
+    parse(short_file_name, &text).map_err(|errors| {
+        let mut message: String = format!("\n\nError: {short_file_name} is not valid.");
         for (index, error) in errors.iter().enumerate() {
-            let _ = write!(message, "\n  Issue {}: {error}", index + 1);
+            let _ = write!(
+                message,
+                "\n\n  Issue {}: {}",
+                index + 1,
+                error.line_and_message()
+            );
         }
         message
     })

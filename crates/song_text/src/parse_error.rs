@@ -35,6 +35,13 @@ impl ParseError {
     pub fn message(&self) -> &str {
         &self.message
     }
+
+    /// `line 47: what is wrong`, for a report that already names the file
+    /// once above its list of mistakes.
+    #[must_use]
+    pub fn line_and_message(&self) -> String {
+        format!("line {}: {}", self.line_number, self.message)
+    }
 }
 
 impl fmt::Display for ParseError {
