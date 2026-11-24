@@ -5,8 +5,9 @@ use crate::error::RenderError;
 use crate::line_instance::{BYTES_PER_INSTANCE, LineInstance};
 
 /// Most lines one frame may hold. A strip of 8 bars needs a few hundred;
-/// this leaves room for stems and beams.
-const MAX_LINES: usize = 8192;
+/// the editor's screen (panels, blocks, every track's staff) a few
+/// thousand. 32768 lines × 36 bytes is about 1.2 MB of GPU memory.
+const MAX_LINES: usize = 32_768;
 
 /// Size of the viewport uniform: two f32 for the size, two f32 padding.
 const VIEWPORT_UNIFORM_BYTES: u64 = 16;

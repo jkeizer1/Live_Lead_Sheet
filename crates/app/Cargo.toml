@@ -7,6 +7,10 @@ publish.workspace = true
 [dependencies]
 vocabulary = { path = "../vocabulary" }
 player = { path = "../player" }
+# Song authoring: the session the window drives.
+composer = { path = "../composer" }
+# Reads the studio configuration the song is played through.
+song_text = { path = "../song_text" }
 render = { path = "../render" }
 alsa_output = { path = "../alsa_output" }
 winit = { workspace = true }

@@ -6,6 +6,7 @@ members = [
     "crates/note_spelling",
     "crates/lilypond_export",
     "crates/player",
+    "crates/composer",
     "crates/render",
     "crates/alsa_output",
     "crates/app",

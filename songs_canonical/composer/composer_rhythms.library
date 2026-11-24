@@ -1,0 +1,27 @@
+# Read by crates/composer (apply tests, library browsing tests).
+# Four 4/4 rhythms and one 3/4 rhythm, enough to check apply's rules and the browser's meter filter.
+
+rhythm "Whole-note pulse"
+  group "Pulses"
+  meter 4/4
+  | w> |
+
+rhythm "Quarter-note pulses"
+  group "Pulses"
+  meter 4/4
+  | q> q q q |
+
+rhythm "Rest, half, quarter"
+  group "Examples"
+  meter 4/4
+  | qr h q |
+
+rhythm "Charleston"
+  group "Swing"
+  meter 4/4
+  | q.> e hr |
+
+rhythm "Waltz"
+  group "Pulses"
+  meter 3/4
+  | q> q q |

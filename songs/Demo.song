@@ -13,7 +13,7 @@ track "Beat"
 track "Keys"
   type poly_voice
   clef grand
-  lead
+  lead 
 
 track "Bass"
   type mono_voice
@@ -26,10 +26,10 @@ track "Bass"
 song_composition
   key C major  meter 4/4  tempo 140 beats/min
   "Count-in"
-  "Verse C G Am F"
-  "Verse G Am"  repeat 2
-  "Verse C G Am F"
-  "Verse B7 Dm"  repeat 2
+  "Verse ONE"
+  "Verse TWO"  repeat 2
+  "Verse THREE"
+  "Verse CLOSE"  repeat 2
 song_composition_close
 
 section "Count-in"  count-in
@@ -37,27 +37,34 @@ section "Count-in"  count-in
   line "Beat"  | C4:q> / / / |
 
 # C – G – Am – F
-section "Verse C G Am F"
+section "Verse ONE"
   key C major  meter 4/4  tempo 140 beats/min
-#                C                         G                  Am                 F
-  line "Keys"  | I:h /                  | V  /                |  vi /          | IV:w                       |
-  line "Bass"  | C2:h r:q G2            | G2 B2 D2 G2         | A2 C2 E2:h     | F3:q> A2 C3> E2:e B3       |
+  line "Keys"  sample_source    | I IV V ii IV V vii | V V IV IV I I | I IV V ii IV V vii | V V IV IV I I |
+  line "Keys"                   | :h :q :q | :q :q :e :e :e :e | :q :e :e :q :e :e | trp(C2:e C3:e C4:e) :sx :sx :sx r:sx :q r:q|
+  line "Bass"  | trp(A2:q> A2:q A2:q) trp(A2:q A2:q B2:q) | G2:q / C2 / | E2 / /:h | C2:q> / /> /:e / |
   line "Beat"  | C4:q> / /> /           | / / / /             | C4 / / /       | / / / / |
 
 # G – Am
-section "Verse G Am"
+section "Verse TWO"
   key C major  meter 4/4  tempo 140 beats/min
 
 #                G                        Am
-  line "Keys"  | V:h> /                 | vi>>  /               | 
+  line "Keys"  sample_source  | V V V V V V V V | vi vi |
+  line "Keys"                  | :q.> :e r:h | :h>> :h |
   line "Bass"  | G2:h  B2               | A2  /               |
   line "Beat"  | C4:q> / /> /           | / / / /             |
-#################
-# B7 – Dm
-section "Verse B7 Dm"
+
+section "Verse THREE"
   key C major  meter 4/4  tempo 140 beats/min
 #                Baug                    Dm                 
   line "Keys"  | vii°:h /               | ii  /               | 
-  line "Bass"  | B2:h  E2               | D2  F2              |
+  line "Bass"  | B2:q.> /:e r:h | D2 D3 |
+  line "Beat"  | C4:q> / /> /           | / / / /             |
+
+section "Verse CLOSE"
+  key C major  meter 4/4  tempo 140 beats/min
+#                Baug                    Dm                 
+  line "Keys"  | vii°:h /               | ii  /               | 
+  line "Bass"  | B2:q.> /:e r:h | D2 D3 |
   line "Beat"  | C4:q> / /> /           | / / / /             |
 

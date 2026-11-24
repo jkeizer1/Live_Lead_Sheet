@@ -1,0 +1,17 @@
+[package]
+name = "composer"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+vocabulary = { path = "../vocabulary" }
+# The song text is the document: every edit is checked by reading it back.
+song_text = { path = "../song_text" }
+# A chord's notes are the player's plain voicing, so what is shown is what
+# is sent.
+player = { path = "../player" }
+note_spelling = { path = "../note_spelling" }
+
+[lints]
+workspace = true

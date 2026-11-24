@@ -7,7 +7,6 @@ port "Clock"
 port "Harmony"
 port "Bass"
 port "Beat pulse"
-port "To SQ-1"
 
 track "Clock"
   port "Clock"
@@ -20,9 +19,10 @@ track "Beat"
 track "Keys"
   port "Harmony"  channel 1
   velocity mezzo_forte 70  accent 105  marcato 120
+
 track "Bass"
   port "Bass"  channel 2
-  octave_offset -2 octaves
+  octave_offset 0 octaves
   velocity mezzo_forte 100  accent 115
   retrigger_gap 2 ms
 

@@ -115,7 +115,7 @@ can start from the chords' roots. Its result is written into the song.
 - **Chord names** use `#` and `b` for sharps and flats. The symbols `°` and
   `ø` are accepted, and so are ASCII spellings: `dim` and `dim7` for `°`
   (`viidim`), `m7b5` for `ø` (`iim7b5`). 
-- **The chords** are Roman numerals, upper case for major-type and lower
+- **Chord Types** are Roman numerals, upper case for major-type and lower
   case for minor-type, followed by what the table gives. Written in C major
   on the first step (the chord on step I; any step takes the same suffix):
 

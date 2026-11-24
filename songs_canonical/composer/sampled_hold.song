@@ -1,0 +1,26 @@
+# Read by crates/composer (session.rs, test a_line_converts_between_coupled_and_sampled_keeping_its_notes).
+# A sampled bass whose source moves from C2 to G2 halfway through a whole note: track and hold, which a coupled line cannot compose, so converting it to coupled is refused.
+song "Sampled hold"
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  clef treble
+  lead
+
+track "Bass"
+  type mono_voice
+  clef bass
+
+song_composition
+  key C major  meter 4/4  tempo 120 beats/min
+  "Verse"
+song_composition_close
+
+section "Verse"
+  meter 4/4
+  line "Keys"  | I:w |
+  line "Bass"  sample_source  | C2 G2 |
+  line "Bass"                 | :w |

@@ -1,0 +1,21 @@
+# Read by crates/composer (library browsing and session tests).
+# Three progressions in two idioms, one of them minor, enough to check grouping and preview.
+chord_numeral_standard key_dependent
+
+progression "ii-V-I"
+  group "Jazz" "Cadence"
+  mode major
+  meter 4/4
+  | ii7 | V7 | IM7 | IM7 |
+
+progression "I-V-vi-IV"
+  group "Pop and rock" "Loop"
+  mode major
+  meter 4/4
+  | I | V | vi | IV |
+
+progression "Minor ii-V-i"
+  group "Jazz" "Cadence"
+  mode minor
+  meter 4/4
+  | iiø7 | V7 | i7 | i7 |

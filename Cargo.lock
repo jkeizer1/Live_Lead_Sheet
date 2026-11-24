@@ -79,8 +79,10 @@ name = "app"
 version = "0.0.0"
 dependencies = [
  "alsa_output",
+ "composer",
  "player",
  "render",
+ "song_text",
  "vocabulary",
  "wgpu",
  "winit",
@@ -249,6 +251,16 @@ checksum = "4356eba6976435498d05a311ee9fc486da3bc81c200d3f0d7dd9703b41913f92"
 dependencies = [
  "bytes",
  "memchr",
+]
+
+[[package]]
+name = "composer"
+version = "0.0.0"
+dependencies = [
+ "note_spelling",
+ "player",
+ "song_text",
+ "vocabulary",
 ]
 
 [[package]]
@@ -1269,6 +1281,9 @@ dependencies = [
 name = "render"
 version = "0.0.0"
 dependencies = [
+ "composer",
+ "note_spelling",
+ "vocabulary",
  "wgpu",
 ]
 

@@ -11,3 +11,59 @@ progression "Minor blues"
   mode minor
   meter 4/4
   | i7 | i7 | i7 | i7 | iv7 | iv7 | i7 | i7 | VI7 | V7 | i7 | V7 |
+
+# The rest of the EFS-7.1 starter set.
+
+# The basic twelve-bar blues (C: C7 F7 C7 G7), the Concept Brief's example.
+progression "12-bar blues"
+  group "Blues" "Full form"
+  mode major
+  meter 4/4
+  | I7 | I7 | I7 | I7 | IV7 | IV7 | I7 | I7 | V7 | IV7 | I7 | V7 |
+
+# The quick change: IV7 in bar 2.
+progression "12-bar blues, quick change"
+  group "Blues" "Full form"
+  mode major
+  meter 4/4
+  | I7 | IV7 | I7 | I7 | IV7 | IV7 | I7 | I7 | V7 | IV7 | I7 | V7 |
+
+# The jazz blues: a ii-V into IV in bar 4, the diminished chord on the
+# raised fourth in bar 6, VI7 leading to the ii-V turnaround
+# (C: C7 F7 C7 Gm7 C7 F7 F#°7 C7 A7 Dm7 G7 C7 A7 Dm7 G7).
+progression "Jazz blues"
+  group "Blues" "Full form"
+  mode major
+  meter 4/4
+  | I7 | IV7 | I7 | v7 I7 | IV7 | #iv°7 | I7 | VI7 | ii7 | V7 | I7 VI7 | ii7 V7 |
+
+progression "8-bar blues"
+  group "Blues" "Full form"
+  mode major
+  meter 4/4
+  | I7 | V7 | IV7 | IV7 | I7 | V7 | I7 | V7 |
+
+progression "ii-V-I"
+  group "Jazz" "Cadence"
+  mode major
+  meter 4/4
+  | ii7 | V7 | IM7 | IM7 |
+
+# In C minor: Dø7 G7 Cm7.
+progression "Minor ii-V-i"
+  group "Jazz" "Cadence"
+  mode minor
+  meter 4/4
+  | iiø7 | V7 | i7 | i7 |
+
+progression "I-vi-ii-V"
+  group "Jazz" "Turnaround"
+  mode major
+  meter 4/4
+  | IM7 | vi7 | ii7 | V7 |
+
+progression "I-V-vi-IV"
+  group "Pop and rock" "Loop"
+  mode major
+  meter 4/4
+  | I | V | vi | IV |

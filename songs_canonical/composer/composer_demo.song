@@ -1,0 +1,53 @@
+# Read by crates/composer (song_source, edits, timeline, session tests) and by the editor's layout preview.
+# A small song with a count-in, a coupled verse, a chorus reused in D major, and an uncoupled bridge.
+song "Composer demo"
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  clef treble
+  lead
+
+track "Bass"
+  type mono_voice
+  clef bass
+
+track "Beat"
+  type mono_voice
+  clef treble
+
+song_composition
+  key C major  meter 4/4  tempo 120 beats/min
+  "Count-in"
+  "Verse"  repeat 2
+  "Chorus"  key D major
+  "Bridge"
+  "Verse"
+song_composition_close
+
+section "Count-in"  count-in
+  meter 4/4  tempo 120 beats/min
+  line "Beat"  | C4:q> / / / |
+
+# I – vi – ii – V
+section "Verse"
+  meter 4/4
+  line "Keys"  | I:h / | vi:q / / / |
+               | ii7:h / | V7:q / / / |
+  line "Bass"  | C2:h G2 | A2:q E2 A2 E2 | D2:h A2 | G2:q D2 G2 B2 |
+  line "Beat"  | C4:q> / / / | /> / / / | /> / / / | /> / / / |
+
+section "Chorus"
+  meter 4/4
+  line "Keys"  | IV:q. I:e~ I:h | V:q. vi:e~ vi:h |
+  line "Bass"  | F2:q. C2:e~ C2:h | G2:q. A2:e~ A2:h |
+  line "Beat"  | C4:q> / / / | /> / / / |
+
+section "Bridge"
+  meter 4/4
+  line "Keys"  sample_source  | vi | IV V |
+  line "Keys"                 | :q. :e~ :h | :q :q :q :q |
+  line "Bass"  | A2:w | F2:h G2 |
+  line "Beat"  | C4:q> / / / | /> / / / |

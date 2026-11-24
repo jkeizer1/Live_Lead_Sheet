@@ -46,6 +46,10 @@ code only in adapters), but do not build them.
 - **Never use `sudo` or install system packages.** If a package is
   needed, stop and give Jim the exact `apt` command, so he can take a
   Timeshift snapshot first and run it himself.
+- **Claude will use the term "compose" instead of written to be clear
+  about when the action being discussed is music editting (writing) and will
+  use "rendered" or "rendered on screen" or "rendered to <medium>" instead
+  of displayed. If display is used it means the video monitor.
 - **Never add a crate without asking.** The allow-list is in
   Architecture.md ("Technology — V1"). Propose a crate with its purpose,
   its `cargo tree` count, and the alternative of writing the piece

@@ -4,21 +4,73 @@ A live lead sheet for improvising: it plays a song (chords, rhythm, bass)
 to MIDI instruments and shows key, meter, chord names and voicings on a
 staff, with the bars ahead in view. See `docs/Concept/Concept Brief.md`.
 
-Revision 9 — 2026-11-14
+Revision 11 — 2026-11-23
 
 ## The program
 
 ```
-cargo run --release -p app
+cargo run --release -p app -- [SONG_FILE [STUDIO_FILE]]
 ```
 
-Opens the window (the spike: 8 bars at 120 quarter notes per minute,
-looping).
+Opens the song in the editor (the first draft; see `docs/Architecture/Editor
+Draft.md`; every key at a glance in `docs/Architecture/Editor Cheat
+Sheet.md`; what it cannot do yet in `docs/Architecture/missing_features_GUI.md`), with the libraries in `library/`. With no arguments it opens
+`songs/Demo.song` and plays through `songs/Demo.studio`; a song given without
+a studio opens with playing off. The terminal lists the MIDI output ports to
+connect (MIDI router or `aconnect`); they stay open while the program runs.
+The song file is only written by Ctrl+S; a change made to it in another
+editor is loaded within a second when there are no unsaved edits here.
+
+Five modes, in the order of the song's hierarchy, each render their own view,
+open their own library tab and say where an edit goes; the header always
+shows "Editing: …", what an edit changes now:
+
+| Key | Mode | Works on | View |
+|---|---|---|---|
+| F1 | Arrange Sections | the composition: order, repeats, each entry's key and tempo, new sections | the composition as a list |
+| F2 | Compose Sections | one section: its key and tempo, its lines' forms | the section's lines as lanes |
+| F3 | Edit Lines | the music on a line, note by note | the staff |
+| F4 | Song Harmony | the lead line's chords | every entry's bars with chord symbols and numerals |
+| F5 | Track Harmony | one track's own harmony: a sampled line's source, or a chord track's chords | the staff, the selected bars shaded |
+
+Each track's line is composed **coupled** (each note or chord with its own
+length) or **sampled** (a sample source holding the pitches or chords, and a
+rhythm line of `:q` elements that takes from it). The staff renders each in
+its own form and labels it: a coupled line as one staff, a sampled line as
+its source row (with the source's origin and play mode), its rhythm line,
+and a staff of the derived notes. An applied rhythm plays a coupled line's own
+notes or chords, or goes to a sampled line's rhythm line; an applied
+progression goes onto a coupled line or into a sampled line's source. Only a
+track with no line yet takes the lead's harmony. C (or a click on the track's
+form label) changes the form, asking first.
 
 | Control | Does |
 |---|---|
-| Click the staff control | Hide or show the pitch staff (EFS-1.5) |
-| Esc | Quit |
+| F1 to F5 | The mode (above) |
+| Ctrl+`-` / Ctrl+`=` (or Ctrl+wheel) | Staff: narrower bars, more across / wider bars, fewer across. While editing, the selected entry starts at the left edge (a longer one turns whole pages from there); while playing the staff moves by half (the half shift) |
+| Arrows | Move the selection: entry (F1, F4), bar (F2, F4, F5), line or track (F2, F3, F5), note (F3) |
+| Shift+Left/Right | Widen or narrow the bar range |
+| Shift+Up/Down | Move the selection a semitone (F1: the entry's key; F2: the section's key) |
+| Ctrl+Up/Down | Move it a scale step: a note to the next scale note, a chord to the next degree's chord (F1, F2: a key by a fifth) |
+| Ctrl+Shift+Up/Down | Move the selected note to the next tone of the lead's chord at that beat, up or down (F3) |
+| Alt+Up/Down | Move notes an octave |
+| K / Shift+K, F / Shift+F | Section key up/down a semitone, or by a fifth, composed notes moving with it (F1: the entry's own key) |
+| T / Shift+T | Tempo up/down 5 beats/min (F1: the entry's own tempo) |
+| [ / ] | One repeat fewer / more for the entry |
+| M, D, Delete, Alt+Left/Right | Mute (repeat 0) or restore, duplicate, remove, move the entry |
+| A | Accent, marcato, none on the selected note (F3) |
+| R | The selected rest becomes a note of the same length (the root of the lead's chord there, on a bass; the chord, on a chord track), or a note becomes a rest (F3) |
+| B | The selected mono track plays the roots of the lead's chords |
+| C, C again | Change the selected track's line in the section between coupled and sampled; the first press asks. Every note sounds as before; a sampled line whose source changes while a note sounds (track and hold) stays sampled |
+| N | A new section after the entry, from the progression under the library cursor |
+| Tab | Between the main view and the library browser |
+| Up/Down in the library (or the wheel over it) | Browse; each row is shown applied to the selected bars as a preview |
+| Enter / Esc | Apply the preview / drop it (Esc also clears a bar range) |
+| Space | Play from the selected entry, or stop; plays the preview when one is shown |
+| Shift+Space, L | Play from the start; loop the selected entry |
+| Ctrl+Z, Ctrl+Y | Undo, redo |
+| Ctrl+S, Ctrl+Q | Save; quit (asks again when there are unsaved edits) |
+| Click | Select an entry, bar, track, note, mode, tab or library row; double-click a library row applies it; click a track's form label to change it (twice) |
 
 ## Tests
 
@@ -27,7 +79,7 @@ Every song and studio that a test uses (the unit tests, the integration tests an
 the test that reads it (`song_file/`, `studio_file/`, `sample_source/`,
 `legato_mark/`, `note_spelling/`, `lilypond_export/`, `song_notation_test/`,
 `count_in_and_verse/`, `chord_inversion/`, `layer_merge/`, `dynamics/`,
-`octave_annotation/`, `tempo_change/`, `meter_control/`, `tempo_marks/`, `minor_key/`, `progression_library/`, `function_form/`). Each file starts with two comment lines: which test reads
+`octave_annotation/`, `tempo_change/`, `meter_control/`, `tempo_marks/`, `minor_key/`, `progression_library/`, `function_form/`, `composer/`). Each file starts with two comment lines: which test reads
 it, what case it is, and for a bad file, what the loader must say. A test checks
 exactly what its file says, so edit a copy in `songs/` to experiment, not the
 canonical file.
@@ -47,7 +99,8 @@ has its own folder under `examples/`, with `main.rs` and an
 
 | Command | What it does | Output |
 |---|---|---|
-| `cargo run --release -p render --example layout_preview -- [WIDTH HEIGHT] [hidden] [bar=N]` | Draws one frame on the CPU, without a window or GPU, to check the layout | `scratch/layout_preview.pgm` |
+| `cargo run --release -p render --example layout_preview -- [WIDTH HEIGHT] [hidden] [bar=N]` | Draws one frame of the spike on the CPU, without a window or GPU, to check the layout | `scratch/layout_preview.pgm` |
+| `cargo run --release -p render --example screen_preview -- [WIDTH HEIGHT] [song=PATH] [STEP ...]` | Draws one frame of the editor on the CPU, in colour, without a window or GPU: `songs_canonical/composer/composer_demo.song` (or the song given) after steps such as `mode=3`, `convert`, `entry=3`, `bars=2`, `library`, `down=2`, `enter`, `right=3`, `tone=1`, `barwidth=-2`, `playing=TICKS` (listed in its doc comment) | `scratch/screen_preview.ppm` |
 | `cargo run --release -p alsa_output --example control_track_test -- [options]` | Test: plays a count-in on the beat pulse, then a reset trigger and an SQ-1 Start on the music's first bar, with Timing Clock on its own port (D-10); optional SQ-1 restarts. Asks you to connect its ports, then waits for Enter. See its `explainer.md` | Terminal |
 | `cargo run --release -p song_text --example rhythm_notation_test -- [LIBRARY_FILE] [--play "Name" [--bpm N] [--bars N] [--channel C] [--note N] [--transport]]` | Test: loads `library/Rhythms.library` (or the file given), prints every rhythm in beats and note values, and checks that six kinds of mistake are reported as EFS-6.3 asks. With `--play`, plays that rhythm on the beat-pulse port (Timing Clock on its own port) and asks you to connect the ports first; `--transport` adds Start and Stop, which the FH-2's clock output needs. See its `explainer.md` | Terminal |
 | `cargo run -p song_text --example song_notation_test -- [SONG_FILE [STUDIO_FILE]]` | Test: loads `songs/Demo.song` and `songs/Demo.studio` (or the files given), prints the song track by track and bar by bar in beats and note values, checks that the studio gives every track and cue destination the song needs, and checks that eight kinds of mistake are reported as EFS-6.3 asks. See its `explainer.md` | Terminal |

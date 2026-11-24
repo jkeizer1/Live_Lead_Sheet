@@ -6,6 +6,12 @@ publish.workspace = true
 
 [dependencies]
 wgpu = { workspace = true }
+# The editor's screen is laid out from the session it is handed: the song's
+# timeline (the stand-in for the published stream), the selection and the
+# library rows. These crates hold no window, file or thread.
+composer = { path = "../composer" }
+vocabulary = { path = "../vocabulary" }
+note_spelling = { path = "../note_spelling" }
 
 [lints]
 workspace = true

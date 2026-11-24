@@ -6,8 +6,9 @@ use crate::glyph_atlas::GlyphAtlas;
 use crate::glyph_instance::{BYTES_PER_INSTANCE, GlyphInstance};
 
 /// Most glyphs one frame may hold. Eight bars of notes and chord symbols
-/// need a few hundred.
-const MAX_GLYPHS: usize = 8192;
+/// need a few hundred; the editor's text (library, labels, help) a few
+/// thousand more. 32768 glyphs × 52 bytes is about 1.7 MB of GPU memory.
+const MAX_GLYPHS: usize = 32_768;
 
 /// Size of the viewport uniform: two f32 for the size, two f32 padding.
 const VIEWPORT_UNIFORM_BYTES: u64 = 16;
