@@ -89,6 +89,24 @@ pub fn without_comment(line: &str) -> &str {
     line
 }
 
+/// The comment (and blank) lines at the very top of a studio file, exactly
+/// as written, newlines included; empty when the file starts with anything
+/// else. The studio writer keeps this block, and the repair view adds its
+/// notes to it.
+#[must_use]
+pub fn leading_comments(text: &str) -> &str {
+    let mut end: usize = 0;
+    for line in text.split_inclusive('\n') {
+        let trimmed: &str = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            end += line.len();
+        } else {
+            break;
+        }
+    }
+    &text[..end]
+}
+
 /// Starts a comment after content on a line.
 pub const END_OF_LINE_COMMENT: &str = "---";
 

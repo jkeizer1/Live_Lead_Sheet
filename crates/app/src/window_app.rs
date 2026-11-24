@@ -1,50 +1,56 @@
 //! The one native window and its event loop (winit). This is platform code:
 //! it creates the window and the wgpu surface and hands the surface to the
-//! renderer, turns keys and clicks into the session's commands, saves and
-//! watches the song file, and asks the sending thread to play.
+//! renderer, turns keys and clicks into the session's commands and the
+//! shell's requests (the menu, the folder browser, questions), opens and
+//! closes songs, and asks the sending thread to play.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use composer::session::{Command, MessageKind, Session};
-use composer::timeline::EntryView;
-use player::schedule::{ScheduledEvent, schedule};
-use player::song_plan::{SongPlan, plan_song};
-use player::studio_configuration::StudioConfiguration;
-use render::canvas::{Frame, HitTarget};
+use composer::repair::RepairTarget;
+use composer::session::{Command, MessageKind};
+use composer::shell::{Confirmation, MenuCommand, Pending, Shell, ShellKey, ShellRequest};
+use render::canvas::{Frame, HitTarget, MessageSource};
 use render::glyph_atlas::GlyphAtlas;
 use render::renderer::Renderer;
-use render::screen::{PlayView, draw_screen};
+use render::screen::{Content, PlayView, draw_screen};
 use winit::application::ApplicationHandler;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::keyboard::{ModifiersState, PhysicalKey};
+use winit::keyboard::{KeyCode, ModifiersState, PhysicalKey};
 use winit::window::{Window, WindowId};
 
-use crate::key_map::{Action, action_for};
-use crate::playback::{PlayRequest, Player};
-use crate::song_files::{SongFile, short_name};
+use crate::key_map::{Action, action_for, action_without_song};
+use crate::repair_work::RepairWork;
+use crate::song_files::{
+    LoadedSong, RepairSource, copy_song, default_song_folder, list_folder, load_song, make_folder,
+    make_song_in_folder, report_failure, save_song_as, short_name,
+};
+use crate::workspace::Workspace;
 
 /// The window opens at the target screen's size: 2560 × 1440 pixels.
 const WINDOW_WIDTH_PIXELS: u32 = 2560;
 const WINDOW_HEIGHT_PIXELS: u32 = 1440;
 
-/// How often the song file is looked at for changes made elsewhere.
-const FILE_CHECK_INTERVAL: Duration = Duration::from_secs(1);
-/// A second close within this time quits without saving.
-const QUIT_CONFIRM_WINDOW: Duration = Duration::from_secs(5);
-/// Two clicks on a library row within this time keep it.
+/// Rows a list scrolls for one step of the wheel.
+const WHEEL_ROWS_PER_STEP: isize = 3;
+
+/// How long "Message copied" stays in the menu bar.
+const COPIED_NOTICE: Duration = Duration::from_secs(2);
+
+/// Two clicks on a row within this time open it.
 const DOUBLE_CLICK: Duration = Duration::from_millis(400);
 
 /// What the program was started with.
 pub struct Startup {
-    pub session: Session,
-    pub song_file: SongFile,
-    /// The studio, when one was given and read.
-    pub studio: Option<StudioConfiguration>,
-    pub studio_path: Option<PathBuf>,
+    /// The song to open, when one was given and it read.
+    pub song: Option<LoadedSong>,
+    /// The song or studio given had mistakes: the files to repair.
+    pub repair: Option<RepairSource>,
+    /// What to say first, when the song given did not open.
+    pub message: Option<(MessageKind, String)>,
 }
 
 /// Opens the window and runs until it is closed.
@@ -81,21 +87,22 @@ struct OpenWindow {
     renderer: Renderer,
     window: Arc<Window>,
     atlas: GlyphAtlas,
-    session: Session,
-    song_file: SongFile,
-    studio: Option<StudioConfiguration>,
-    player: Option<Player>,
-    /// About the MIDI output, for the header.
-    output_status: String,
+    /// The open song, if any.
+    workspace: Option<Workspace>,
+    /// The song or studio being repaired; while there is one, nothing is
+    /// played and nothing composed.
+    repair: Option<RepairWork>,
+    /// The menu bar, dialogs, and the message shown with no song open.
+    shell: Shell,
+    /// The folder the browser last listed, so it opens there again.
+    browser_directory: Option<PathBuf>,
     /// The last frame's click regions.
     last_frame_hits: Option<Frame>,
     cursor: Option<PhysicalPosition<f64>>,
     modifiers: ModifiersState,
-    last_file_check: Instant,
-    quit_asked_at: Option<Instant>,
     last_click: Option<(Instant, HitTarget)>,
-    /// The number of the last message written to the terminal.
-    last_logged_message_number: u64,
+    /// When "Message copied" stops showing.
+    copied_until: Option<Instant>,
 }
 
 struct WindowApp {
@@ -111,9 +118,14 @@ impl WindowApp {
     }
 
     fn open(event_loop: &ActiveEventLoop, startup: Startup) -> Result<OpenWindow, String> {
-        let title: String = format!("Live Lead Sheet - {}", short_name(&startup.song_file.path));
         let attributes = Window::default_attributes()
-            .with_title(title)
+            .with_title(window_title(
+                startup
+                    .song
+                    .as_ref()
+                    .map(|song| &song.song_file.path)
+                    .or(startup.repair.as_ref().map(|source| &source.song_path)),
+            ))
             .with_inner_size(PhysicalSize::new(WINDOW_WIDTH_PIXELS, WINDOW_HEIGHT_PIXELS));
         let window: Arc<Window> = Arc::new(
             event_loop
@@ -129,50 +141,64 @@ impl WindowApp {
         let renderer: Renderer = Renderer::new(&instance, surface, size.width, size.height, &atlas)
             .map_err(|e| e.to_string())?;
         println!("Drawing with {}", renderer.adapter_summary());
-        let (player, output_status): (Option<Player>, String) = match (
-            &startup.studio,
-            &startup.studio_path,
-        ) {
-            (Some(studio), Some(path)) => match Player::start(studio.port_names().to_vec()) {
-                Ok(player) => {
-                    println!(
-                        "MIDI output ports for {} (connect them with the MIDI router or aconnect):",
-                        short_name(path)
-                    );
-                    for port in player.ports() {
-                        println!("  {port}");
-                    }
-                    let status: String =
-                        format!("{} ports open ({})", player.ports().len(), short_name(path));
-                    (Some(player), status)
-                }
-                Err(problem) => {
-                    eprintln!("{problem}");
-                    (
-                        None,
-                        String::from("MIDI output did not open: see the terminal"),
-                    )
-                }
-            },
-            _ => (None, String::from("No studio file given: playing is off")),
-        };
+        let workspace: Option<Workspace> = startup.song.map(Workspace::open);
+        let repair: Option<RepairWork> = startup.repair.map(RepairWork::new);
+        let mut shell: Shell = Shell::new();
+        shell.set_can_save(workspace.is_some() || repair.is_some());
+        shell.set_song_open(workspace.is_some());
+        if let Some((kind, text)) = startup.message {
+            shell.say(kind, text);
+        }
         Ok(OpenWindow {
             renderer,
             window,
             atlas,
-            session: startup.session,
-            song_file: startup.song_file,
-            studio: startup.studio,
-            player,
-            output_status,
+            workspace,
+            repair,
+            shell,
+            browser_directory: None,
             last_frame_hits: None,
             cursor: None,
             modifiers: ModifiersState::empty(),
-            last_file_check: Instant::now(),
-            quit_asked_at: None,
             last_click: None,
-            last_logged_message_number: 0,
+            copied_until: None,
         })
+    }
+}
+
+fn window_title(song_path: Option<&PathBuf>) -> String {
+    match song_path {
+        Some(path) => format!("Live Lead Sheet - {}", short_name(path)),
+        None => String::from("Live Lead Sheet"),
+    }
+}
+
+/// The key as the shell reads it, while a menu or dialog is open.
+fn shell_key(code: KeyCode, control: bool) -> Option<ShellKey> {
+    match code {
+        // Ctrl+Up and Ctrl+Down move a track in the song settings.
+        KeyCode::ArrowUp if control => Some(ShellKey::MoveUp),
+        KeyCode::ArrowDown if control => Some(ShellKey::MoveDown),
+        KeyCode::ArrowUp => Some(ShellKey::Up),
+        KeyCode::ArrowDown => Some(ShellKey::Down),
+        KeyCode::Enter | KeyCode::NumpadEnter => Some(ShellKey::Enter),
+        KeyCode::Escape => Some(ShellKey::Escape),
+        KeyCode::Backspace => Some(ShellKey::Backspace),
+        KeyCode::PageUp => Some(ShellKey::PageUp),
+        KeyCode::PageDown => Some(ShellKey::PageDown),
+        KeyCode::Home => Some(ShellKey::Home),
+        KeyCode::End => Some(ShellKey::End),
+        KeyCode::F10 => Some(ShellKey::OpenMenu),
+        KeyCode::ArrowLeft => Some(ShellKey::Left),
+        KeyCode::ArrowRight => Some(ShellKey::Right),
+        KeyCode::Delete => Some(ShellKey::Delete),
+        KeyCode::KeyT => Some(ShellKey::Type),
+        KeyCode::KeyC => Some(ShellKey::Clef),
+        KeyCode::KeyL => Some(ShellKey::Lead),
+        KeyCode::KeyN => Some(ShellKey::New),
+        KeyCode::KeyV => Some(ShellKey::Layer),
+        KeyCode::Tab => Some(ShellKey::Tab),
+        _ => None,
     }
 }
 
@@ -197,7 +223,7 @@ impl ApplicationHandler for WindowApp {
         };
         match event {
             WindowEvent::CloseRequested => {
-                if open_window.may_quit() {
+                if open_window.ask_to_quit() {
                     event_loop.exit();
                 }
             }
@@ -207,13 +233,12 @@ impl ApplicationHandler for WindowApp {
                     KeyEvent {
                         physical_key: PhysicalKey::Code(code),
                         state: ElementState::Pressed,
+                        text,
                         ..
                     },
                 ..
             } => {
-                if let Some(action) = action_for(code, open_window.modifiers, &open_window.session)
-                    && open_window.act(action)
-                {
+                if open_window.key(code, text.as_deref()) {
                     event_loop.exit();
                 }
             }
@@ -223,12 +248,25 @@ impl ApplicationHandler for WindowApp {
                 state: ElementState::Pressed,
                 button: MouseButton::Left,
                 ..
-            } => open_window.click(),
+            } => {
+                if open_window.click() {
+                    event_loop.exit();
+                }
+            }
             WindowEvent::MouseWheel { delta, .. } => open_window.wheel(delta),
             WindowEvent::Resized(size) => open_window.renderer.resize(size.width, size.height),
             WindowEvent::RedrawRequested => {
-                open_window.housekeeping();
-                open_window.log_new_problem();
+                if let Some(workspace) = open_window.workspace.as_mut() {
+                    workspace.housekeeping();
+                    workspace.log_new_problem();
+                }
+                if open_window
+                    .copied_until
+                    .is_some_and(|until| Instant::now() >= until)
+                {
+                    open_window.copied_until = None;
+                    open_window.shell.set_copied(false);
+                }
                 match open_window.draw() {
                     Ok(()) => open_window.window.request_redraw(),
                     Err(error) => self.fail(event_loop, error),
@@ -240,156 +278,549 @@ impl ApplicationHandler for WindowApp {
 }
 
 impl OpenWindow {
+    /// A key press, with the text it typed; true when the program should end.
+    fn key(&mut self, code: KeyCode, text: Option<&str>) -> bool {
+        if self.shell.is_typing() {
+            // A dialog's text field: the editing keys go to it, and every
+            // other key types what it makes.
+            return match code {
+                KeyCode::Enter
+                | KeyCode::NumpadEnter
+                | KeyCode::Escape
+                | KeyCode::Backspace
+                | KeyCode::Delete
+                | KeyCode::ArrowLeft
+                | KeyCode::ArrowRight
+                | KeyCode::Home
+                | KeyCode::End => {
+                    let request: Option<ShellRequest> =
+                        shell_key(code, self.modifiers.control_key())
+                            .and_then(|key| self.shell.handle_key(key));
+                    self.carry_out(request)
+                }
+                _ => {
+                    if !self.modifiers.control_key()
+                        && let Some(typed) = text
+                    {
+                        self.shell.type_text(typed);
+                    }
+                    false
+                }
+            };
+        }
+        if self.shell.wants_keys() {
+            // A menu or dialog is open: it takes every key.
+            return match shell_key(code, self.modifiers.control_key()) {
+                Some(key) => {
+                    let request: Option<ShellRequest> = self.shell.handle_key(key);
+                    self.carry_out(request)
+                }
+                None => false,
+            };
+        }
+        if self.repair.is_some() {
+            return self.repair_key(code, text);
+        }
+        let action: Option<Action> = match &self.workspace {
+            Some(workspace) => action_for(code, self.modifiers, &workspace.session),
+            None => action_without_song(code, self.modifiers),
+        };
+        match action {
+            Some(action) => self.act(action),
+            None => false,
+        }
+    }
+
     /// Carries out an action; true when the program should end.
     fn act(&mut self, action: Action) -> bool {
         match action {
             Action::Session(command) => {
-                self.session.handle(command);
+                if let Some(workspace) = self.workspace.as_mut() {
+                    workspace.handle(command);
+                }
                 false
             }
             Action::PlayOrStop => {
-                self.play_or_stop(false, false);
+                self.with_workspace(|workspace| workspace.play_or_stop(false, false));
                 false
             }
             Action::PlayFromStart => {
-                self.play_or_stop(true, false);
+                self.with_workspace(|workspace| workspace.play_or_stop(true, false));
                 false
             }
             Action::LoopEntry => {
-                self.play_or_stop(false, true);
+                self.with_workspace(|workspace| workspace.play_or_stop(false, true));
                 false
             }
             Action::Save => {
                 self.save();
                 false
             }
-            Action::Quit => self.may_quit(),
+            Action::Quit => self.ask_to_quit(),
+            Action::OpenSong => {
+                self.ask_to_open();
+                false
+            }
+            Action::NewSong => {
+                self.ask_to_start_new();
+                false
+            }
+            Action::SaveAs => {
+                self.start_save_as_browsing();
+                false
+            }
+            Action::OpenMenu => {
+                self.shell.handle_key(ShellKey::OpenMenu);
+                false
+            }
+            Action::OpenSongSettings => {
+                self.open_song_settings();
+                false
+            }
         }
     }
 
-    /// Whether to quit now: at once when everything is saved, else on the
-    /// second ask within a few seconds, so no edit is lost by one keypress.
-    fn may_quit(&mut self) -> bool {
-        if !self.session.document().has_unsaved_edits() {
-            return true;
+    /// Opens the song settings dialog on the open song.
+    fn open_song_settings(&mut self) {
+        if let Some(workspace) = self.workspace.as_ref() {
+            self.shell.open_settings(workspace.settings_snapshot());
         }
-        if self
-            .quit_asked_at
-            .is_some_and(|asked| asked.elapsed() < QUIT_CONFIRM_WINDOW)
-        {
-            return true;
+    }
+
+    fn with_workspace(&mut self, action: impl FnOnce(&mut Workspace)) {
+        if let Some(workspace) = self.workspace.as_mut() {
+            action(workspace);
         }
-        self.quit_asked_at = Some(Instant::now());
-        self.session.say(
-            MessageKind::Problem,
-            String::from("Unsaved edits. Ctrl+S saves them; close again within 5 seconds to quit without saving."),
-        );
+    }
+
+    /// What the shell asked for; true when the program should end.
+    fn carry_out(&mut self, request: Option<ShellRequest>) -> bool {
+        let Some(request) = request else {
+            return false;
+        };
+        match request {
+            ShellRequest::Menu(MenuCommand::OpenSong) => self.ask_to_open(),
+            ShellRequest::Menu(MenuCommand::NewSong) => self.ask_to_start_new(),
+            ShellRequest::MakeFolder {
+                parent,
+                name,
+                copy_from,
+            } => self.make_folder_or_copy(&parent, &name, copy_from.as_deref()),
+            ShellRequest::NewSongIn(folder) => self.new_song_in(&folder),
+            ShellRequest::SaveAsIn(folder) => self.save_as_in(&folder),
+            ShellRequest::Menu(MenuCommand::SaveSongAs) => self.start_save_as_browsing(),
+            ShellRequest::Menu(MenuCommand::SaveSong) => self.save(),
+            ShellRequest::Menu(MenuCommand::Quit) => return self.ask_to_quit(),
+            ShellRequest::Menu(MenuCommand::SongSettings) => self.open_song_settings(),
+            ShellRequest::Settings(command) => {
+                if let Some(workspace) = self.workspace.as_mut() {
+                    workspace.apply_settings(command);
+                    self.shell.refresh_settings(workspace.settings_snapshot());
+                    if let Some(message) = workspace.session.message() {
+                        self.shell.settings_say(message.kind, message.text.clone());
+                    }
+                }
+            }
+            ShellRequest::ListFolder(directory) => self.list_into_browser(&directory),
+            ShellRequest::OpenSong(path) => self.open_song(&path),
+            ShellRequest::Confirmed(Pending::Quit) => return true,
+            ShellRequest::Confirmed(Pending::OpenSong) => self.start_browsing(),
+            ShellRequest::Confirmed(Pending::NewSong) => self.start_new_song_browsing(),
+            ShellRequest::Confirmed(Pending::TossAll) => {
+                if let Some(work) = self.repair.as_mut() {
+                    work.repair.toss_all();
+                }
+            }
+        }
         false
     }
 
-    fn save(&mut self) {
-        let text: String = self.session.document().text().to_string();
-        match self.song_file.save(&text) {
-            Ok(()) => {
-                self.session.mark_saved();
-                self.session.say(
-                    MessageKind::Done,
-                    format!("Saved {}.", short_name(&self.song_file.path)),
-                );
-            }
-            Err(problem) => self.session.say(MessageKind::Problem, problem),
-        }
+    /// Whether to quit now: at once when everything is saved, else after
+    /// the musician says so, so no edit is lost by one keypress.
+    fn ask_to_quit(&mut self) -> bool {
+        let Some(name) = self.unsaved_name() else {
+            return true;
+        };
+        self.shell.ask(Confirmation {
+            question: format!("Unsaved edits in {name}. Quit without saving?"),
+            yes_label: String::from("Quit"),
+            no_label: String::from("Stay"),
+            pending: Pending::Quit,
+        });
+        false
     }
 
-    fn play_or_stop(&mut self, from_start: bool, looping: bool) {
-        let Some(player) = &self.player else {
-            self.session.say(
-                MessageKind::Problem,
-                String::from("Playing is off: start the program with a studio file, e.g. cargo run --release -p app -- songs/Demo.song songs/Demo.studio"),
-            );
-            return;
-        };
-        if player.playing() {
-            if let Err(problem) = player.stop() {
-                self.session.say(MessageKind::Problem, problem);
-            }
-            return;
-        }
-        let Some(studio) = &self.studio else {
-            return;
-        };
-        let timeline = self.session.timeline();
-        let Some(entry) = timeline.entries.get(self.session.selection.entry) else {
-            return;
-        };
-        if entry.muted && !from_start {
-            self.session.say(
-                MessageKind::Problem,
-                String::from(
-                    "This entry is muted (repeat 0); press M to restore it, or pick another.",
-                ),
-            );
-            return;
-        }
-        let (start_ticks, end_ticks): (u64, Option<u64>) = if from_start {
-            (0, None)
-        } else if looping {
-            (
-                entry.start_ticks,
-                Some(entry.start_ticks + entry.length_ticks()),
-            )
-        } else {
-            (entry.start_ticks, None)
-        };
-        let what: String =
-            describe_play(entry, from_start, looping, self.session.preview().is_some());
-        let song = self.session.playing_song();
-        let request: Result<PlayRequest, String> = plan_song(song, studio)
-            .map_err(|error| format!("Cannot play: {error}"))
-            .and_then(|plan: SongPlan| {
-                let events: Vec<ScheduledEvent> = schedule(
-                    &plan.clock_port,
-                    &plan.note_tracks,
-                    &plan.control_tracks,
-                    plan.stretch_length,
-                )
-                .map_err(|error| format!("Cannot play: {error}"))?;
-                Ok(PlayRequest {
-                    events,
-                    tempo: plan.tempo,
-                    tempo_changes: plan.tempo_changes.clone(),
-                    start_ticks,
-                    end_ticks,
-                    looping,
-                    clock_port: plan.clock_port.clone(),
-                    note_outputs: plan
-                        .note_tracks
-                        .iter()
-                        .map(|track| (track.port().clone(), track.channel()))
-                        .collect(),
-                })
+    /// Choosing another song: asks first when the open one has unsaved
+    /// edits.
+    fn ask_to_open(&mut self) {
+        if let Some(name) = self.unsaved_name() {
+            self.shell.ask(Confirmation {
+                question: format!("Unsaved edits in {name}. Open another song without saving?"),
+                yes_label: String::from("Open"),
+                no_label: String::from("Stay"),
+                pending: Pending::OpenSong,
             });
-        match request.and_then(|request| player.play(request)) {
-            Ok(()) => self.session.say(MessageKind::Done, what),
-            Err(problem) => self.session.say(MessageKind::Problem, problem),
+        } else {
+            self.start_browsing();
         }
     }
 
-    fn click(&mut self) {
-        let (Some(cursor), Some(frame)) = (self.cursor, &self.last_frame_hits) else {
+    /// Starting a new song closes the open one: asks first when it has
+    /// unsaved edits.
+    fn ask_to_start_new(&mut self) {
+        if let Some(name) = self.unsaved_name() {
+            self.shell.ask(Confirmation {
+                question: format!("Unsaved edits in {name}. Start a new song without saving?"),
+                yes_label: String::from("New song"),
+                no_label: String::from("Stay"),
+                pending: Pending::NewSong,
+            });
+        } else {
+            self.start_new_song_browsing();
+        }
+    }
+
+    fn start_new_song_browsing(&mut self) {
+        let directory: PathBuf = self
+            .browser_directory
+            .clone()
+            .unwrap_or_else(default_song_folder);
+        self.shell.open_new_song_browser(directory.clone());
+        self.list_into_browser(&directory);
+    }
+
+    /// A folder named in the prompt over the browser: made, and the browser
+    /// goes into it; or, for a copy, the song folder is copied under the
+    /// name and the copy opens. When it cannot be done the prompt stays
+    /// open and says why.
+    fn make_folder_or_copy(&mut self, parent: &Path, name: &str, copy_from: Option<&Path>) {
+        match copy_from {
+            Some(source) => match copy_song(source, parent, name) {
+                Ok(song_path) => {
+                    self.shell.close_dialog();
+                    self.open_song(&song_path);
+                }
+                Err(problem) => self.shell.new_folder_say(problem),
+            },
+            None => match make_folder(parent, name) {
+                Ok(folder) => {
+                    self.shell.reopen_browser_in(folder.clone());
+                    self.list_into_browser(&folder);
+                }
+                Err(problem) => self.shell.new_folder_say(problem),
+            },
+        }
+    }
+
+    fn start_save_as_browsing(&mut self) {
+        if self.workspace.is_none() {
             return;
+        }
+        let directory: PathBuf = self
+            .browser_directory
+            .clone()
+            .unwrap_or_else(default_song_folder);
+        self.shell.open_save_as_browser(directory.clone());
+        self.list_into_browser(&directory);
+    }
+
+    /// Writes the open song and studio, with their unsaved edits, to the
+    /// chosen folder and opens the result. The old files stay as saved.
+    fn save_as_in(&mut self, folder: &Path) {
+        let Some(workspace) = self.workspace.as_ref() else {
+            return;
+        };
+        let result: Result<PathBuf, String> =
+            workspace
+                .texts_for_save_as()
+                .and_then(|(song_text, studio_text)| {
+                    save_song_as(
+                        folder,
+                        workspace.song_path(),
+                        &song_text,
+                        studio_text.as_deref(),
+                    )
+                });
+        match result {
+            Ok(song_path) => {
+                self.shell.close_dialog();
+                self.open_song(&song_path);
+            }
+            Err(problem) => self.shell.browser_problem(problem),
+        }
+    }
+
+    /// The folder chosen in the browser becomes the new song's folder; when
+    /// it cannot, the browser stays and says why.
+    fn new_song_in(&mut self, folder: &Path) {
+        match make_song_in_folder(folder) {
+            Ok(song_path) => {
+                self.shell.close_dialog();
+                self.open_song(&song_path);
+            }
+            Err(problem) => self.shell.browser_problem(problem),
+        }
+    }
+
+    /// The song with edits not yet saved: the open song, or the one being
+    /// repaired.
+    fn unsaved_name(&self) -> Option<String> {
+        if let Some(workspace) = self.workspace.as_ref().filter(|w| w.has_unsaved_edits()) {
+            return Some(short_name(workspace.song_path()));
+        }
+        self.repair
+            .as_ref()
+            .filter(|work| work.repair.changed())
+            .map(|work| short_name(&work.song_path))
+    }
+
+    /// Ctrl+S or File, Save: the open song, or the repaired files.
+    fn save(&mut self) {
+        if self.repair.is_some() {
+            self.save_repair();
+        } else {
+            self.with_workspace(Workspace::save);
+        }
+    }
+
+    fn start_browsing(&mut self) {
+        let directory: PathBuf = self
+            .browser_directory
+            .clone()
+            .unwrap_or_else(default_song_folder);
+        self.shell.open_browser(directory.clone());
+        self.list_into_browser(&directory);
+    }
+
+    fn list_into_browser(&mut self, directory: &Path) {
+        let listing: Result<Vec<_>, String> = list_folder(directory);
+        let Some(browser) = self.shell.browser_mut() else {
+            return;
+        };
+        match listing {
+            Ok(entries) => {
+                browser.set_listing(directory.to_path_buf(), entries);
+                self.browser_directory = Some(directory.to_path_buf());
+            }
+            Err(problem) => browser.set_problem(problem),
+        }
+    }
+
+    /// Opens a song chosen in the browser. The song now open is closed
+    /// first only when the new one reads or goes to repair; if it cannot
+    /// be read at all, the old stays.
+    fn open_song(&mut self, path: &Path) {
+        self.open_song_with(path, None);
+    }
+
+    fn open_song_with(&mut self, path: &Path, studio_path: Option<&Path>) {
+        match load_song(path, studio_path) {
+            Ok(loaded) => {
+                // The old workspace drops first, closing its MIDI ports and
+                // silencing its notes, so the new one can open the same names.
+                self.workspace = None;
+                self.repair = None;
+                let mut workspace: Workspace = Workspace::open(loaded);
+                workspace
+                    .session
+                    .say(MessageKind::Done, format!("Opened {}.", short_name(path)));
+                self.window
+                    .set_title(&window_title(Some(workspace.song_path())));
+                self.workspace = Some(workspace);
+                self.shell.set_can_save(true);
+                self.shell.set_song_open(true);
+            }
+            Err(failure) => {
+                let (kind, text): (MessageKind, String) = report_failure(path, &failure);
+                if let Some(source) = failure.repair {
+                    self.workspace = None;
+                    self.window
+                        .set_title(&window_title(Some(&source.song_path)));
+                    self.repair = Some(RepairWork::new(source));
+                    self.shell.set_can_save(true);
+                    self.shell.set_song_open(false);
+                    self.shell.say(kind, text);
+                    return;
+                }
+                match self.workspace.as_mut() {
+                    Some(workspace) => workspace.session.say(kind, text),
+                    None => self.shell.say(kind, text),
+                }
+            }
+        }
+    }
+
+    /// Writes the repaired files; when both now read cleanly, opens the
+    /// song.
+    fn save_repair(&mut self) {
+        let Some(work) = self.repair.as_mut() else {
+            return;
+        };
+        if let Err(problem) = work.save() {
+            self.shell.say(MessageKind::Problem, problem);
+            return;
+        }
+        if work.repair.is_clean() {
+            let song_path: PathBuf = work.song_path.clone();
+            let studio_path: Option<PathBuf> = work.studio_path.clone();
+            self.open_song_with(&song_path, studio_path.as_deref());
+        } else {
+            let remaining: usize = work.repair.problems().len();
+            self.shell.say(
+                MessageKind::Problem,
+                format!("Saved. {remaining} to repair before the song opens."),
+            );
+        }
+    }
+
+    /// A key on the repair screen; true when the program should end.
+    fn repair_key(&mut self, code: KeyCode, text: Option<&str>) -> bool {
+        let control: bool = self.modifiers.control_key();
+        let Some(work) = self.repair.as_mut() else {
+            return false;
+        };
+        let repair = &mut work.repair;
+        if let Some(edit) = repair.editing_mut() {
+            match code {
+                KeyCode::Enter | KeyCode::NumpadEnter => repair.accept_edit(),
+                KeyCode::Escape => repair.cancel_edit(),
+                KeyCode::ArrowLeft => edit.field.left(),
+                KeyCode::ArrowRight => edit.field.right(),
+                KeyCode::Home => edit.field.home(),
+                KeyCode::End => edit.field.end(),
+                KeyCode::Backspace => edit.field.backspace(),
+                KeyCode::Delete => edit.field.delete(),
+                _ if !control => {
+                    if let Some(typed) = text {
+                        edit.field.insert(typed);
+                    }
+                }
+                _ => {}
+            }
+            return false;
+        }
+        match code {
+            KeyCode::ArrowUp => repair.list_mut().up(),
+            KeyCode::ArrowDown => repair.list_mut().down(),
+            KeyCode::PageUp => repair.list_mut().page_up(),
+            KeyCode::PageDown => repair.list_mut().page_down(),
+            KeyCode::Home => repair.list_mut().first(),
+            KeyCode::End => repair.list_mut().last(),
+            KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::KeyE if !control => {
+                repair.begin_edit();
+            }
+            KeyCode::KeyI if !control => repair.begin_insert(),
+            KeyCode::KeyT if control => self.ask_to_toss_all(),
+            KeyCode::KeyT | KeyCode::Delete => repair.toss_selected(),
+            KeyCode::KeyZ if control => repair.undo(),
+            KeyCode::KeyS if control => self.save_repair(),
+            _ => {
+                return match action_without_song(code, self.modifiers) {
+                    Some(action) => self.act(action),
+                    None => false,
+                };
+            }
+        }
+        false
+    }
+
+    fn ask_to_toss_all(&mut self) {
+        let Some(work) = self.repair.as_ref().filter(|w| !w.repair.is_clean()) else {
+            return;
+        };
+        let count: usize = work.repair.problems().len();
+        self.shell.ask(Confirmation {
+            question: format!(
+                "Toss {count} line{}? Each is noted at the top of its file. Ctrl+Z brings them back.",
+                if count == 1 { "" } else { "s" }
+            ),
+            yes_label: String::from("Toss all"),
+            no_label: String::from("Keep"),
+            pending: Pending::TossAll,
+        });
+    }
+
+    /// Copies the whole message that was clicked to the clipboard.
+    fn copy_message(&mut self, source: MessageSource) {
+        let text: Option<String> = match source {
+            MessageSource::Dialog => self.shell.dialog_message().map(str::to_string),
+            MessageSource::Footer => match (&self.repair, &self.workspace) {
+                (None, Some(workspace)) => workspace
+                    .session
+                    .message()
+                    .map(|message| message.text.clone()),
+                _ => self.shell.message().map(|(_, text)| text.clone()),
+            },
+        };
+        let Some(text) = text else {
+            return;
+        };
+        match crate::clipboard::copy(&text) {
+            Ok(()) => {
+                self.shell.set_copied(true);
+                self.copied_until = Some(Instant::now() + COPIED_NOTICE);
+            }
+            Err(problem) => self.shell.say(MessageKind::Problem, problem),
+        }
+    }
+
+    /// A click on the repair screen.
+    fn repair_click(&mut self, target: RepairTarget, double: bool) {
+        let Some(work) = self.repair.as_mut() else {
+            return;
+        };
+        let repair = &mut work.repair;
+        match target {
+            RepairTarget::Row(index) => {
+                repair.list_mut().select(index);
+                if double && repair.editing().is_none() {
+                    repair.begin_edit();
+                }
+            }
+            RepairTarget::Page { up } => repair.list_mut().scroll_page(up),
+            RepairTarget::Edit => repair.begin_edit(),
+            RepairTarget::Insert => repair.begin_insert(),
+            RepairTarget::Toss => repair.toss_selected(),
+            RepairTarget::TossAll => self.ask_to_toss_all(),
+            RepairTarget::Undo => repair.undo(),
+            RepairTarget::Save => self.save_repair(),
+            RepairTarget::Accept => repair.accept_edit(),
+            RepairTarget::Cancel => repair.cancel_edit(),
+        }
+    }
+
+    /// A click; true when the program should end.
+    fn click(&mut self) -> bool {
+        let (Some(cursor), Some(frame)) = (self.cursor, &self.last_frame_hits) else {
+            return false;
         };
         // Window positions are far below 2^24, so f32 holds them to well
         // within a pixel.
         #[allow(clippy::cast_possible_truncation)]
         let Some(target) = frame.hit_at(cursor.x as f32, cursor.y as f32) else {
-            return;
+            return false;
         };
         let double: bool = self
             .last_click
             .is_some_and(|(when, previous)| previous == target && when.elapsed() < DOUBLE_CLICK);
         self.last_click = Some((Instant::now(), target));
+        if let HitTarget::Shell(shell_target) = target {
+            let request: Option<ShellRequest> = self.shell.click(shell_target, double);
+            return self.carry_out(request);
+        }
+        if let HitTarget::CopyMessage(source) = target {
+            self.copy_message(source);
+            return false;
+        }
+        if let HitTarget::Repair(repair_target) = target {
+            self.repair_click(repair_target, double);
+            return false;
+        }
+        let Some(workspace) = self.workspace.as_mut() else {
+            return false;
+        };
         let command: Command = match target {
+            HitTarget::Shell(_) | HitTarget::Repair(_) | HitTarget::CopyMessage(_) => return false,
             HitTarget::Mode(mode) => Command::SetMode(mode),
             HitTarget::LibraryTab(tab) => Command::SetTab(tab),
             HitTarget::Entry(entry) => Command::SelectEntry(entry),
@@ -409,20 +840,21 @@ impl OpenWindow {
                 pass_number,
             },
             HitTarget::LibraryRow(row) if double => {
-                self.session.handle(Command::SelectLibraryRow(row));
+                workspace.handle(Command::SelectLibraryRow(row));
                 Command::Commit
             }
             HitTarget::LibraryRow(row) => Command::SelectLibraryRow(row),
             HitTarget::LineForm(track) => {
                 // Selecting the track again would forget the question asked
                 // by the first click, so only a different track is selected.
-                if self.session.selection.track != track {
-                    self.session.handle(Command::SelectTrack(track));
+                if workspace.session.selection.track != track {
+                    workspace.handle(Command::SelectTrack(track));
                 }
                 Command::ConvertLineForm
             }
         };
-        self.session.handle(command);
+        workspace.handle(command);
+        false
     }
 
     /// The wheel: Ctrl zooms; over the library it browses.
@@ -438,12 +870,39 @@ impl OpenWindow {
             return;
         }
         let up: bool = lines > 0.0;
-        if self.modifiers.control_key() {
-            // Like Ctrl+= and Ctrl+-: wider bars, fewer across, or more.
-            self.session
-                .handle(Command::StaffBarWidth(if up { 1 } else { -1 }));
+        if self.shell.wants_keys() {
+            // Over a dialog the wheel scrolls its list, three rows a step;
+            // the song underneath does not move.
+            let over: Option<composer::shell::ShellTarget> =
+                match (self.cursor, &self.last_frame_hits) {
+                    #[allow(clippy::cast_possible_truncation)]
+                    (Some(cursor), Some(frame)) => {
+                        match frame.hit_at(cursor.x as f32, cursor.y as f32) {
+                            Some(HitTarget::Shell(target)) => Some(target),
+                            _ => None,
+                        }
+                    }
+                    _ => None,
+                };
+            self.shell.scroll(
+                if up {
+                    -WHEEL_ROWS_PER_STEP
+                } else {
+                    WHEEL_ROWS_PER_STEP
+                },
+                over,
+            );
             return;
         }
+        if let Some(work) = self.repair.as_mut() {
+            work.repair.list_mut().scroll_by(if up {
+                -WHEEL_ROWS_PER_STEP
+            } else {
+                WHEEL_ROWS_PER_STEP
+            });
+            return;
+        }
+        let control: bool = self.modifiers.control_key();
         let over_library: bool = match (self.cursor, &self.last_frame_hits) {
             #[allow(clippy::cast_possible_truncation)]
             (Some(cursor), Some(frame)) => matches!(
@@ -452,54 +911,19 @@ impl OpenWindow {
             ),
             _ => false,
         };
-        if over_library {
-            if self.session.pane != composer::session::Pane::Library {
-                self.session.handle(Command::SwitchPane);
-            }
-            self.session
-                .handle(if up { Command::Up } else { Command::Down });
-        }
-    }
-
-    /// Writes a new problem message to the terminal too, so it can be
-    /// copied whole; the message line may cut it short. Once per frame
-    /// catches every message, since each key or click is followed by one.
-    fn log_new_problem(&mut self) {
-        if let Some(message) = self.session.message()
-            && message.number > self.last_logged_message_number
-        {
-            self.last_logged_message_number = message.number;
-            if message.kind == MessageKind::Problem {
-                println!("Problem: {}", message.text);
-            }
-        }
-    }
-
-    /// Between frames: the sending thread's problems, and the song file.
-    fn housekeeping(&mut self) {
-        if let Some(player) = &self.player
-            && let Some(problem) = player.next_problem()
-        {
-            self.session
-                .say(MessageKind::Problem, format!("MIDI output: {problem}"));
-        }
-        if self.last_file_check.elapsed() < FILE_CHECK_INTERVAL {
+        let Some(workspace) = self.workspace.as_mut() else {
+            return;
+        };
+        if control {
+            // Like Ctrl+= and Ctrl+-: wider bars, fewer across, or more.
+            workspace.handle(Command::StaffBarWidth(if up { 1 } else { -1 }));
             return;
         }
-        self.last_file_check = Instant::now();
-        match self.song_file.changed_text() {
-            Ok(Some(text)) if text != self.session.document().text() => {
-                if self.session.document().has_unsaved_edits() {
-                    self.session.say(
-                        MessageKind::Problem,
-                        String::from("The song file changed outside, but there are unsaved edits here. Ctrl+S keeps these; Ctrl+Z back to the saved version, then the file's changes load."),
-                    );
-                } else {
-                    self.session.reload(text);
-                }
+        if over_library {
+            if workspace.session.pane != composer::session::Pane::Library {
+                workspace.handle(Command::SwitchPane);
             }
-            Ok(_) => {}
-            Err(problem) => self.session.say(MessageKind::Problem, problem),
+            workspace.handle(if up { Command::Up } else { Command::Down });
         }
     }
 
@@ -508,22 +932,23 @@ impl OpenWindow {
         // Window sizes are far below 2^24, so the conversion to f32 is exact.
         #[allow(clippy::cast_precision_loss)]
         let (width_pixels, height_pixels): (f32, f32) = (size.width as f32, size.height as f32);
-        let play: PlayView = match &self.player {
-            Some(player) => PlayView {
-                playing: player.playing(),
-                looping: player.looping(),
-                position_ticks: player.position_ticks(),
-                status: self.output_status.clone(),
-            },
-            None => PlayView {
+        let play: PlayView = self.workspace.as_ref().map_or_else(
+            || PlayView {
                 playing: false,
                 looping: false,
                 position_ticks: None,
-                status: self.output_status.clone(),
+                status: String::new(),
             },
+            Workspace::play_view,
+        );
+        let content: Content<'_> = match (&self.repair, &self.workspace) {
+            (Some(work), _) => Content::Repair(&work.repair),
+            (None, Some(workspace)) => Content::Song(&workspace.session),
+            (None, None) => Content::Empty,
         };
         let frame: Frame = draw_screen(
-            &self.session,
+            &content,
+            &self.shell,
             &play,
             &self.atlas,
             width_pixels,
@@ -531,24 +956,9 @@ impl OpenWindow {
         )
         .map_err(|e| e.to_string())?;
         self.renderer
-            .draw_frame(&frame.lines, &frame.glyphs)
+            .draw_frame(&frame)
             .map_err(|e| e.to_string())?;
         self.last_frame_hits = Some(frame);
         Ok(())
-    }
-}
-
-/// What the message line says when playing starts.
-fn describe_play(entry: &EntryView, from_start: bool, looping: bool, preview: bool) -> String {
-    let what: &str = if preview { "the preview" } else { "the song" };
-    if from_start {
-        format!("Playing {what} from the start. Space stops.")
-    } else if looping {
-        format!("Looping \"{}\" in {what}. Space stops.", entry.section_name)
-    } else {
-        format!(
-            "Playing {what} from \"{}\". Space stops.",
-            entry.section_name
-        )
     }
 }

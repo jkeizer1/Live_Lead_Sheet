@@ -48,7 +48,7 @@ notations; its comments say what to listen for.
 
 ## Not applied yet (the program says so before playing)
 
-- `settle_delay` and the legato mark have no effect yet.
+- The legato mark has no effect yet.
 
 ## How to run
 

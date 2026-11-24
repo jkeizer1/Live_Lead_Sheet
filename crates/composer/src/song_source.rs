@@ -32,6 +32,22 @@ impl LineSource {
     }
 }
 
+/// A track's block: its `track "Name"` line and the lines under it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrackSource {
+    pub name: String,
+    /// Index of the `track "Name"` text line.
+    pub header_index: usize,
+    /// Index of the last text line of the block that is not blank or a
+    /// comment.
+    pub last_index: usize,
+    pub type_index: Option<usize>,
+    pub clef_index: Option<usize>,
+    pub lead_index: Option<usize>,
+    /// The `voice_layer` lines.
+    pub voice_layer_indices: Vec<usize>,
+}
+
 /// A section's block.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SectionSource {
@@ -76,6 +92,7 @@ pub struct SongSource {
     /// The `chord_numeral_standard` text line.
     pub numeral_standard_index: Option<usize>,
     pub composition: Option<CompositionSource>,
+    pub tracks: Vec<TrackSource>,
     pub sections: Vec<SectionSource>,
 }
 
@@ -86,8 +103,10 @@ impl SongSource {
             song_index: None,
             numeral_standard_index: None,
             composition: None,
+            tracks: Vec::new(),
             sections: Vec::new(),
         };
+        let mut track: Option<TrackSource> = None;
         let mut section: Option<SectionSource> = None;
         let mut composition: Option<CompositionSource> = None;
         let mut in_composition: bool = false;
@@ -108,6 +127,7 @@ impl SongSource {
                 continue;
             }
             if keyword_rest(line, "song_composition").is_some() {
+                close_track(&mut source, &mut track);
                 close_section(&mut source, &mut section);
                 in_composition = true;
                 composition = Some(CompositionSource {
@@ -120,9 +140,20 @@ impl SongSource {
                 source.song_index = Some(index);
             } else if keyword_rest(line, "chord_numeral_standard").is_some() {
                 source.numeral_standard_index = Some(index);
-            } else if keyword_rest(line, "track").is_some() {
+            } else if let Some(rest) = keyword_rest(line, "track") {
+                close_track(&mut source, &mut track);
                 close_section(&mut source, &mut section);
+                track = Some(TrackSource {
+                    name: quoted_prefix(rest).map_or("", |(name, _)| name).to_string(),
+                    header_index: index,
+                    last_index: index,
+                    type_index: None,
+                    clef_index: None,
+                    lead_index: None,
+                    voice_layer_indices: Vec::new(),
+                });
             } else if let Some(rest) = keyword_rest(line, "section") {
+                close_track(&mut source, &mut track);
                 close_section(&mut source, &mut section);
                 let (name, after): (&str, &str) = quoted_prefix(rest).unwrap_or(("", ""));
                 section = Some(SectionSource {
@@ -138,11 +169,21 @@ impl SongSource {
                 });
             } else if let Some(open) = section.as_mut() {
                 read_section_line(open, index, line);
+            } else if let Some(open) = track.as_mut() {
+                read_track_line(open, index, line);
             }
         }
+        close_track(&mut source, &mut track);
         close_section(&mut source, &mut section);
         source.composition = composition;
         source
+    }
+
+    #[must_use]
+    pub fn track(&self, name: &str) -> Option<&TrackSource> {
+        self.tracks
+            .iter()
+            .find(|track: &&TrackSource| track.name == name)
     }
 
     #[must_use]
@@ -150,6 +191,25 @@ impl SongSource {
         self.sections
             .iter()
             .find(|section: &&SectionSource| section.name == name)
+    }
+}
+
+fn close_track(source: &mut SongSource, track: &mut Option<TrackSource>) {
+    if let Some(done) = track.take() {
+        source.tracks.push(done);
+    }
+}
+
+fn read_track_line(track: &mut TrackSource, index: usize, line: &str) {
+    track.last_index = index;
+    if keyword_rest(line, "type").is_some() {
+        track.type_index = Some(index);
+    } else if keyword_rest(line, "clef").is_some() {
+        track.clef_index = Some(index);
+    } else if line == "lead" {
+        track.lead_index = Some(index);
+    } else if keyword_rest(line, "voice_layer").is_some() {
+        track.voice_layer_indices.push(index);
     }
 }
 

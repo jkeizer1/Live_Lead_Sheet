@@ -1,0 +1,9 @@
+# Canonical test studio (valid): crates/song_text/src/studio_writer.rs, test `the_top_comment_block_is_kept_and_later_comments_are_not`.
+# Case: comments at the top and between blocks; the writer keeps the top block and drops the rest. The file with _written in its name is the expected result.
+# Notes about the devices live in notes.md, not here.
+# Last tuned 24 Nov.
+studio "Rack"
+port "P"
+# this comment sits between blocks and is not kept
+track "Bass"
+  port "P"  channel 2  --- a trailing comment, also not kept

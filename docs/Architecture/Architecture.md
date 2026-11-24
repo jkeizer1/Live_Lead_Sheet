@@ -1,6 +1,6 @@
 # Live Lead Sheet — Architecture
 
-Revision 25 — 16 Nov 2026
+Revision 26 — 24 Nov 2026
 
 Builds on the Concept Brief (Revision 13), the Experience Functional
 Specification (Revision 20) and Song Notation (Revision 24). Sets the
@@ -200,6 +200,16 @@ used, maintained by an organisation or several people (CLAUDE.md; D-9).
 Measured: 106 crates in all (103 without build tools), almost all of them
 wgpu's and winit's. wgpu changes its major version every few months; it
 is pinned and upgraded only by choice.
+
+**One system tool, not a crate: `xclip`.** `winit` has no clipboard, and
+a clipboard crate would add its X11 dependencies. The program instead
+runs the standard X11 command line tool `xclip -selection clipboard` and
+hands it the text (the app crate's `clipboard` module, the only place that
+does). It is used for one thing: a click on a message copies the whole
+message, so an error can be pasted into a note or a chat. It is a run-time
+need, not a build need: without it everything works, and the click says
+"Cannot copy: xclip is not installed." Wayland would need `wl-copy`
+instead, when Wayland is added.
 
 **GPU: WebGPU through wgpu.** A modern API at roughly OpenGL's level —
 vertex and fragment shaders in WGSL — over Vulkan on Linux (and Metal or
@@ -555,8 +565,11 @@ X11, AMD Radeon RX 9070.
 
 ```bash
 sudo apt install build-essential pkg-config libasound2-dev \
-     mesa-vulkan-drivers libvulkan1 vulkan-tools
+     mesa-vulkan-drivers libvulkan1 vulkan-tools xclip
 ```
+
+`xclip` is needed only to copy a message from the window to the clipboard
+(see "Technology — V1").
 
 None of these is Mint-specific; all are standard Linux layers. The only
 Linux-specific part of *our* code is the ALSA MIDI output.

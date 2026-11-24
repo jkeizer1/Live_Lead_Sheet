@@ -9,20 +9,20 @@ use crate::song_source::{
 
 /// The text as text lines, edited, and joined again with the file's
 /// final newline kept.
-struct TextLines {
-    lines: Vec<String>,
+pub(crate) struct TextLines {
+    pub(crate) lines: Vec<String>,
     ends_with_newline: bool,
 }
 
 impl TextLines {
-    fn of(text: &str) -> TextLines {
+    pub(crate) fn of(text: &str) -> TextLines {
         TextLines {
             lines: text.lines().map(str::to_string).collect(),
             ends_with_newline: text.ends_with('\n'),
         }
     }
 
-    fn joined(&self) -> String {
+    pub(crate) fn joined(&self) -> String {
         let mut text: String = self.lines.join("\n");
         if self.ends_with_newline {
             text.push('\n');

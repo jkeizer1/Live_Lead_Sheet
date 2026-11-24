@@ -1,6 +1,8 @@
 # Demo studio: where the tracks of Demo.song go. Port names are the names
 # of the program's MIDI output ports; connecting them to devices is done
 # outside (the MIDI router, aconnect).
+# Tossed 24 Nov 2026 (line 16): jim was here
+# Tossed 24 Nov 2026 (line 22): velocity mezzo_forte 70  accent 105  marcato 120  and bugs bunny
 studio "Demo studio"
 
 port "Clock"
@@ -14,17 +16,11 @@ track "Clock"
 track "Beat"
   port "Beat pulse"  channel 15
   velocity mezzo_forte 80  accent 127
-  octave_offset 0 octaves
 
 track "Keys"
   port "Harmony"  channel 1
-  velocity mezzo_forte 70  accent 105  marcato 120
 
-track "Bass"
+track "Bass2"
   port "Bass"  channel 2
-  octave_offset 0 octaves
   velocity mezzo_forte 100  accent 115
   retrigger_gap 2 ms
-
-#destination "SQ-1"
-#  port "To SQ-1"  channel 1

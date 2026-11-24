@@ -48,6 +48,18 @@ impl VelocityLevels {
         self.normal
     }
 
+    /// The absolute velocity the studio gives `>`, when it gives one.
+    #[must_use]
+    pub const fn accent(self) -> Option<Velocity> {
+        self.accent
+    }
+
+    /// The absolute velocity the studio gives `>>`, when it gives one.
+    #[must_use]
+    pub const fn marcato(self) -> Option<Velocity> {
+        self.marcato
+    }
+
     /// The velocity for a level (Song Notation, section 6) with no dynamics
     /// line: measured from the normal velocity.
     #[must_use]
@@ -103,9 +115,6 @@ pub struct TrackOutput {
     /// device on a faster path can be matched to one on a slower path; 0 ms
     /// when omitted, which changes nothing.
     pub delay_trigger: Duration,
-    /// Time for a quantizer's voltage to settle after a note is sent; 0 ms
-    /// when omitted.
-    pub settle_delay: Duration,
 }
 
 /// Where a named cue destination goes.
@@ -406,7 +415,6 @@ mod tests {
             octave_offset_octaves: 0,
             retrigger_gap: Duration::ZERO,
             delay_trigger: Duration::ZERO,
-            settle_delay: Duration::ZERO,
         }
     }
 

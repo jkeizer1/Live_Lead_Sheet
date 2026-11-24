@@ -22,6 +22,28 @@ pub enum Action {
     LoopEntry,
     Save,
     Quit,
+    /// Choose a song to open (Ctrl+O).
+    OpenSong,
+    /// Open the first menu (F10).
+    OpenMenu,
+    /// Open the song settings dialog (F6).
+    OpenSongSettings,
+    /// Start a new song (Ctrl+N).
+    NewSong,
+    /// Save the open song under a new name (Ctrl+Shift+S).
+    SaveAs,
+}
+
+/// The keys that work while no song is open.
+#[must_use]
+pub fn action_without_song(code: KeyCode, modifiers: ModifiersState) -> Option<Action> {
+    match code {
+        KeyCode::KeyO if modifiers.control_key() => Some(Action::OpenSong),
+        KeyCode::KeyN if modifiers.control_key() => Some(Action::NewSong),
+        KeyCode::KeyQ if modifiers.control_key() => Some(Action::Quit),
+        KeyCode::F10 => Some(Action::OpenMenu),
+        _ => None,
+    }
 }
 
 /// The action for a key pressed with the given modifiers, if it has one.
@@ -36,8 +58,11 @@ pub fn action_for(code: KeyCode, modifiers: ModifiersState, session: &Session) -
             KeyCode::KeyZ if shift => command(Command::Redo),
             KeyCode::KeyZ => command(Command::Undo),
             KeyCode::KeyY => command(Command::Redo),
+            KeyCode::KeyS if shift => Some(Action::SaveAs),
             KeyCode::KeyS => Some(Action::Save),
             KeyCode::KeyQ => Some(Action::Quit),
+            KeyCode::KeyO => Some(Action::OpenSong),
+            KeyCode::KeyN => Some(Action::NewSong),
             // Like zooming a page: Ctrl+= nearer (wider bars, fewer across),
             // Ctrl+- further (more bars across).
             KeyCode::Equal | KeyCode::NumpadAdd => command(Command::StaffBarWidth(1)),
@@ -56,6 +81,8 @@ pub fn action_for(code: KeyCode, modifiers: ModifiersState, session: &Session) -
         KeyCode::F3 => command(Command::SetMode(Mode::EditLines)),
         KeyCode::F4 => command(Command::SetMode(Mode::SongHarmony)),
         KeyCode::F5 => command(Command::SetMode(Mode::TrackHarmony)),
+        KeyCode::F10 => Some(Action::OpenMenu),
+        KeyCode::F6 => Some(Action::OpenSongSettings),
         KeyCode::Tab => command(Command::SwitchPane),
         KeyCode::Enter | KeyCode::NumpadEnter => command(Command::Commit),
         KeyCode::Escape => command(Command::Cancel),

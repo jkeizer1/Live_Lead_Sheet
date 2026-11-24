@@ -1283,6 +1283,8 @@ version = "0.0.0"
 dependencies = [
  "composer",
  "note_spelling",
+ "player",
+ "song_text",
  "vocabulary",
  "wgpu",
 ]

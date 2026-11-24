@@ -1,0 +1,25 @@
+# Canonical test studio (valid): crates/song_text/src/studio_writer.rs, tests `a_file_in_the_writers_form_is_written_back_byte_for_byte` and `what_is_written_reads_back_as_the_same_studio`.
+# Every setting the writer writes, in the writer's own form, so writing it gives the same bytes: a clock track, voice tracks with every setting, a destination.
+studio "Jim's studio"
+
+port "Clock"
+port "Harmony"
+port "Bass"
+port "To SQ-1"
+
+track "Clock"
+  port "Clock"
+
+track "Keys"
+  port "Harmony"  channel 1
+  velocity mezzo_forte 90  accent 105  marcato 120
+
+track "Bass"
+  port "Bass"  channel 2
+  velocity mezzo_forte 100  accent 115
+  octave_offset -1 octaves
+  retrigger_gap 2 ms
+  delay_trigger 20 ms
+
+destination "SQ-1"
+  port "To SQ-1"  channel 1

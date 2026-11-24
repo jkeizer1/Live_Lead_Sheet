@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Live Lead Sheet
+Comment=Open a song in the live lead sheet
+Exec=@PROJECT@/target/release/app %f
+Path=@PROJECT@
+Icon=audio-x-generic
+Terminal=false
+Categories=AudioVideo;Audio;Midi;
+MimeType=text/x-live-lead-sheet-song;

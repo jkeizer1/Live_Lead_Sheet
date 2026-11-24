@@ -1,0 +1,19 @@
+# crates/composer/src/repair.rs, tests in that file: inserting_a_line_repairs_a_structural_problem.
+# A track with no type line: the reader refuses it at the track line, and the repair is to insert one.
+song "Repair test"
+
+track "Clock"
+  type clock_and_transport
+
+track "Beat"
+  clef treble
+  lead
+
+section "Verse"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Beat"  | C4:q> / / / |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "Verse"
+song_composition_close

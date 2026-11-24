@@ -1,0 +1,26 @@
+# crates/composer/src/studio_settings.rs, tests in that file (every studio edit starts from this studio).
+# A valid studio: three ports, a clock, a Keys output with every setting, a plain Bass output, and two destinations.
+studio "Studio base"
+
+port "Clock"
+port "Harmony"
+port "To SQ-1"
+
+track "Clock"
+  port "Clock"
+
+track "Keys"
+  port "Harmony"  channel 1
+  velocity mezzo_forte 70  accent 105  marcato 120
+  octave_offset 1 octaves
+  retrigger_gap 2 ms
+  delay_trigger 5 ms
+
+track "Bass"
+  port "Harmony"  channel 2
+
+destination "SQ-1"
+  port "To SQ-1"  channel 1
+
+destination "Reset"
+  port "Clock"

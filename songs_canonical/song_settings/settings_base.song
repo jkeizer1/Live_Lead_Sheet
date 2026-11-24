@@ -1,0 +1,44 @@
+# crates/composer/src/song_settings.rs, tests in that file (every settings edit starts from this song).
+# A valid song: clock, a mono Beat, a lead poly Keys, a mono Bass and a Cues track, two sections.
+song "Settings base"
+
+track "Clock"
+  type clock_and_transport
+
+track "Beat"
+  type mono_voice
+  clef treble
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+track "Bass"
+  type mono_voice
+  clef bass
+
+track "Cues"
+  type cue_control
+  cue "Start SQ-1"  destination "SQ-1"  start
+  cue "Go Keys"  destination track "Keys"  note 36 velocity 100
+
+section "Verse"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Beat"  | C4:q> / / / |
+  line "Keys"  | I:w |
+  line "Bass"  | C2:w |
+  line "Cues"  | "Start SQ-1":w |
+
+section "Chorus"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Beat"  | C4:q> / / / |
+  line "Keys"  | V:w |
+  line "Bass"  | G2:w |
+  line "Cues"  | r:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "Verse"
+  "Chorus"
+song_composition_close

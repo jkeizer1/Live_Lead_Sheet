@@ -1,12 +1,14 @@
 # Demo song for the Live Lead Sheet: a two-bar count-in, then a two-bar
 # verse that plays twice. It names no port, channel or device; Demo.studio
 # says where each track goes.
+# Tossed 24 Nov 2026 (line 16): jim was here
 song "Demo"
 
 track "Clock"
   type clock_and_transport
 
 track "Beat"
+
   type mono_voice
   clef treble
 

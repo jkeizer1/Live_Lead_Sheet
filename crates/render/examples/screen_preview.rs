@@ -23,20 +23,40 @@
 //! | `convert` | changes the selected line between coupled and sampled (twice: ask, then do) |
 //! | `barwidth=N` | the staff's bars N steps wider (negative: narrower, more across) |
 //! | `playing=TICKS` | draws the playhead at TICKS from the song's start |
+//! | `empty` | the screen with no song open |
+//! | `menu` | opens the File menu (as F10 does) |
+//! | `browser` | opens the folder browser on a made-up listing |
+//! | `browser_many` | opens the folder browser on a listing of 40 folders, to see the scroll bar |
+//! | `settings`, `settings_type`, `settings_clef`, `settings_layer`, `settings_rename`, `settings_new`, `settings_delete` | the song settings dialog on the third row (a track), plain, with the type choice open, the clef choice open, a layer name being typed, its name being typed, a new track's name being typed, or the delete question |
+//! | `settings_studio`, `settings_studio_none`, `settings_studio_typing`, `settings_studio_remove` | the same dialog with the studio pane chosen, with no studio file, with a port's name being typed, or the remove question for a port |
+//! | `new_song_browser`, `new_song_name`, `new_song_problem` | choosing the folder for a new song, typing its name, and the prompt with a refusal |
+//! | `repair` | the repair screen for a song and studio with three mistakes (canonical `repair/junk_lines`) |
+//! | `repair_edit` | the same, typing over the first problem line |
+//! | `repair_toss` | the same after tossing the first problem line |
+//! | `browser_down=N` | moves the browser's selection down N rows |
+//! | `browser_wheel=N` | scrolls the browser's view down N rows, as the wheel does |
+//! | `confirm` | asks the quit question |
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+use composer::folder_browser::{BrowserEntry, BrowserEntryKind};
 use composer::library::{Libraries, LibraryTab};
+use composer::repair::{Repair, RepairFile, RepairFileKind};
 use composer::session::{Command, Mode, Session};
+use composer::shell::{Confirmation, Pending, Shell, ShellKey};
 use composer::song_document::SongDocument;
 use render::canvas::Frame;
 use render::glyph_atlas::GlyphAtlas;
 use render::glyph_instance::GlyphInstance;
 use render::line_instance::LineInstance;
-use render::screen::{PlayView, draw_screen};
+use render::screen::{Content, PlayView, draw_screen};
 
 const SONG: &str = include_str!("../../../songs_canonical/composer/composer_demo.song");
+const SETTINGS_STUDIO: &str =
+    include_str!("../../../songs_canonical/song_settings/studio_base.studio");
+const JUNK_SONG: &str = include_str!("../../../songs_canonical/repair/junk_lines.song");
+const JUNK_STUDIO: &str = include_str!("../../../songs_canonical/repair/junk_lines.studio");
 const PROGRESSIONS: &str = include_str!("../../../library/Progressions.library");
 const RHYTHMS: &str = include_str!("../../../library/Rhythms.library");
 
@@ -105,8 +125,241 @@ fn run() -> Result<(), String> {
         position_ticks: None,
         status: String::from("preview: no MIDI output"),
     };
+    let mut shell: Shell = Shell::new();
+    shell.set_can_save(true);
+    let mut song_shown: bool = true;
+    let mut repair: Option<Repair> = None;
     for argument in &arguments {
         let command: Option<Command> = match argument.as_str() {
+            "empty" => {
+                song_shown = false;
+                shell.set_can_save(false);
+                shell.say(
+                    composer::session::MessageKind::Problem,
+                    String::from("Demo.song has 2 mistakes. They are listed in the repair view."),
+                );
+                None
+            }
+            "repair" | "repair_edit" | "repair_toss" => {
+                let mut view: Repair = Repair::new(
+                    vec![
+                        RepairFile {
+                            kind: RepairFileKind::Song,
+                            file_name: String::from("junk_lines.song"),
+                            text: JUNK_SONG.to_string(),
+                        },
+                        RepairFile {
+                            kind: RepairFileKind::Studio,
+                            file_name: String::from("junk_lines.studio"),
+                            text: JUNK_STUDIO.to_string(),
+                        },
+                    ],
+                    "24 Nov 2026",
+                );
+                match argument.as_str() {
+                    "repair_edit" => view.begin_edit(),
+                    "repair_toss" => view.toss_selected(),
+                    _ => {}
+                }
+                repair = Some(view);
+                shell.say(
+                    composer::session::MessageKind::Problem,
+                    String::from("3 mistakes to repair in junk_lines.song. Playing and editing are off until they are fixed."),
+                );
+                None
+            }
+            "menu" => {
+                shell.handle_key(ShellKey::OpenMenu);
+                None
+            }
+            "new_song_browser" | "new_song_name" | "new_song_problem" => {
+                let parent: PathBuf = PathBuf::from("/home/jim/Documents/Live_Lead_Sheet/songs");
+                shell.open_new_song_browser(parent.clone());
+                if let Some(browser) = shell.browser_mut() {
+                    let listing: Vec<BrowserEntry> = [
+                        ("Demo", BrowserEntryKind::SongFolder),
+                        ("LilyPond", BrowserEntryKind::Folder),
+                    ]
+                    .iter()
+                    .map(|(name, kind)| BrowserEntry {
+                        name: (*name).to_string(),
+                        kind: *kind,
+                    })
+                    .collect();
+                    browser.set_listing(parent, listing);
+                }
+                if argument != "new_song_browser" {
+                    shell.handle_key(ShellKey::Down);
+                    shell.handle_key(ShellKey::Clef);
+                }
+                if argument == "new_song_problem" {
+                    shell.new_folder_say(String::from(
+                        "A folder or file named Blue Bossa is already there. Type another name.",
+                    ));
+                }
+                None
+            }
+            "browser" => {
+                shell.open_browser(PathBuf::from("/home/jim/Documents/Live_Lead_Sheet/songs"));
+                if let Some(browser) = shell.browser_mut() {
+                    let listing: Vec<BrowserEntry> = [
+                        ("Demo", BrowserEntryKind::SongFolder),
+                        ("Meter_control", BrowserEntryKind::SongFolder),
+                        ("Tempo_marks", BrowserEntryKind::SongFolder),
+                        ("LilyPond", BrowserEntryKind::Folder),
+                        ("jimsong1.song", BrowserEntryKind::SongFile),
+                        ("Legato_test.song", BrowserEntryKind::SongFile),
+                    ]
+                    .iter()
+                    .map(|(name, kind)| BrowserEntry {
+                        name: (*name).to_string(),
+                        kind: *kind,
+                    })
+                    .collect();
+                    browser.set_listing(
+                        PathBuf::from("/home/jim/Documents/Live_Lead_Sheet/songs"),
+                        listing,
+                    );
+                }
+                None
+            }
+            "browser_many" => {
+                let folder: PathBuf = PathBuf::from("/home/jim/Documents/Live_Lead_Sheet/songs");
+                shell.open_browser(folder.clone());
+                if let Some(browser) = shell.browser_mut() {
+                    let listing: Vec<BrowserEntry> = (1..=40)
+                        .map(|number: u32| BrowserEntry {
+                            name: format!("Song_folder_{number:02}"),
+                            kind: if number.is_multiple_of(3) {
+                                BrowserEntryKind::SongFolder
+                            } else {
+                                BrowserEntryKind::Folder
+                            },
+                        })
+                        .collect();
+                    browser.set_listing(folder, listing);
+                }
+                None
+            }
+            other if other.starts_with("browser_wheel=") => {
+                shell.scroll(
+                    isize::try_from(number(other, "browser_wheel=")?).map_err(|e| e.to_string())?,
+                    None,
+                );
+                None
+            }
+            other if other.starts_with("browser_down=") => {
+                for _ in 0..number(other, "browser_down=")? {
+                    shell.handle_key(ShellKey::Down);
+                }
+                None
+            }
+            "settings"
+            | "settings_type"
+            | "settings_clef"
+            | "settings_layer"
+            | "settings_rename"
+            | "settings_new"
+            | "settings_delete"
+            | "settings_studio"
+            | "settings_studio_typing"
+            | "settings_studio_remove"
+            | "settings_studio_none" => {
+                let names: Vec<String> = session
+                    .document()
+                    .song()
+                    .tracks()
+                    .iter()
+                    .map(|track| track.name().to_string())
+                    .collect();
+                let options = composer::song_settings::all_type_options(&session);
+                let clefs = session
+                    .document()
+                    .song()
+                    .tracks()
+                    .iter()
+                    .map(|track| match track.kind() {
+                        vocabulary::song::TrackKind::Voice { clef, .. } => Some(*clef),
+                        _ => None,
+                    })
+                    .collect();
+                let studio = if argument == "settings_studio_none" {
+                    None
+                } else {
+                    Some(
+                        song_text::studio_file::parse_studio("studio_base.studio", SETTINGS_STUDIO)
+                            .map_err(|errors| format!("studio_base.studio: {errors:?}"))?,
+                    )
+                };
+                shell.open_settings(composer::settings_view::SettingsSnapshot {
+                    title: session.document().song().name().to_string(),
+                    track_names: names,
+                    track_types: session
+                        .document()
+                        .song()
+                        .tracks()
+                        .iter()
+                        .map(composer::song_settings::TrackType::of)
+                        .collect(),
+                    track_clefs: clefs,
+                    type_options: options,
+                    needs: composer::studio_settings::StudioNeeds::default(),
+                    studio,
+                });
+                // The first track row, for the steps that act on a track.
+                for _ in 0..3 {
+                    shell.handle_key(ShellKey::Down);
+                }
+                match argument.as_str() {
+                    "settings_type" => {
+                        shell.handle_key(ShellKey::Type);
+                    }
+                    "settings_clef" => {
+                        shell.handle_key(ShellKey::Clef);
+                    }
+                    "settings_layer" => {
+                        shell.handle_key(ShellKey::Layer);
+                        shell.type_text("2 Inner");
+                    }
+                    "settings_rename" => {
+                        shell.handle_key(ShellKey::Enter);
+                    }
+                    "settings_new" => {
+                        shell.handle_key(ShellKey::New);
+                        shell.type_text("Pad");
+                    }
+                    "settings_delete" => {
+                        shell.handle_key(ShellKey::Delete);
+                    }
+                    "settings_studio" | "settings_studio_none" => {
+                        shell.handle_key(ShellKey::Tab);
+                        shell.handle_key(ShellKey::Down);
+                    }
+                    "settings_studio_typing" | "settings_studio_remove" => {
+                        shell.handle_key(ShellKey::Tab);
+                        // The first port row.
+                        for _ in 0..2 {
+                            shell.handle_key(ShellKey::Down);
+                        }
+                        shell.handle_key(if argument == "settings_studio_remove" {
+                            ShellKey::Delete
+                        } else {
+                            ShellKey::Enter
+                        });
+                    }
+                    _ => {}
+                }
+                None
+            }
+            "confirm" => {
+                shell.ask(Confirmation {
+                    question: String::from("Unsaved edits in Demo.song. Quit without saving?"),
+                    yes_label: String::from("Quit"),
+                    no_label: String::from("Stay"),
+                    pending: Pending::Quit,
+                });
+                None
+            }
             other if other.starts_with("mode=") => {
                 let key: usize = number(other, "mode=")?;
                 let mode: Mode = *Mode::ALL
@@ -174,7 +427,12 @@ fn run() -> Result<(), String> {
     // Preview sizes are far below 2^24, so the conversion to f32 is exact.
     #[allow(clippy::cast_precision_loss)]
     let frame: Frame = draw_screen(
-        &session,
+        &match (&repair, song_shown) {
+            (Some(view), _) => Content::Repair(view),
+            (None, true) => Content::Song(&session),
+            (None, false) => Content::Empty,
+        },
+        &shell,
         &play,
         &atlas,
         width_pixels as f32,
@@ -182,11 +440,17 @@ fn run() -> Result<(), String> {
     )
     .map_err(|e| e.to_string())?;
     let mut image: Image = Image::new(width_pixels, height_pixels)?;
-    for line in &frame.lines {
-        image.draw_line(line);
-    }
-    for glyph in &frame.glyphs {
-        image.draw_glyph(glyph, &atlas);
+    // The GPU's order: a layer's lines, then its glyphs; the overlay last.
+    for (lines, glyphs) in [
+        (&frame.lines, &frame.glyphs),
+        (&frame.overlay_lines, &frame.overlay_glyphs),
+    ] {
+        for line in lines {
+            image.draw_line(line);
+        }
+        for glyph in glyphs {
+            image.draw_glyph(glyph, &atlas);
+        }
     }
     let path: PathBuf =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scratch/screen_preview.ppm");

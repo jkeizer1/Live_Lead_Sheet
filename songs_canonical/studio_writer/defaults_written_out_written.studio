@@ -1,0 +1,12 @@
+# Canonical test studio (valid): crates/song_text/src/studio_writer.rs, test `settings_at_their_defaults_are_left_out`.
+# Case: defaults written out loud (mezzo_forte 64, 0 octaves, 0 ms); the writer leaves them out. The file with _written in its name is the expected result.
+studio "S"
+
+port "P"
+
+track "Keys"
+  port "P"  channel 3
+
+track "Beat"
+  port "P"  channel 15
+  velocity mezzo_forte 80  accent 127

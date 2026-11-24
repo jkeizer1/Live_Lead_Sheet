@@ -347,13 +347,6 @@ fn not_yet_applied(song: &Song, studio: &StudioConfiguration) -> Vec<String> {
                 output.delay_trigger.ns() / 1_000_000
             ));
         }
-        if output.settle_delay.ns() > 0 {
-            notes.push(format!(
-                "track \"{}\": settle_delay {} ms is not applied yet",
-                track.name(),
-                output.settle_delay.ns() / 1_000_000
-            ));
-        }
     }
     notes
 }

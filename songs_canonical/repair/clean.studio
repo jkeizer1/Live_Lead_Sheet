@@ -1,0 +1,8 @@
+# crates/composer/src/repair.rs, tests in that file: a_clean_pair_has_no_problems.
+# A valid studio for clean.song.
+studio "Repair test studio"
+
+port "Beat pulse"
+
+track "Beat"
+  port "Beat pulse"  channel 15

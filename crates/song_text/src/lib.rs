@@ -17,5 +17,6 @@ pub mod rhythm_library;
 pub mod song_file;
 pub mod song_line;
 pub mod studio_file;
+pub mod studio_writer;
 pub mod tempo_mark_text;
 pub mod text_line;

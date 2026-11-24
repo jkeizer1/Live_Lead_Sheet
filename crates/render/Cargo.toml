@@ -13,5 +13,10 @@ composer = { path = "../composer" }
 vocabulary = { path = "../vocabulary" }
 note_spelling = { path = "../note_spelling" }
 
+# The preview example reads a studio file to fill the studio pane.
+[dev-dependencies]
+player = { path = "../player" }
+song_text = { path = "../song_text" }
+
 [lints]
 workspace = true

@@ -1,0 +1,99 @@
+# Example configuration: NiftyKEYZ and Launch Control XL3 merged into the FH-2,
+# which forwards everything to the Disting NT.
+#
+# Port names are those seen on Jim's machine. Check yours with
+#     python3 -m midi_router --list-ports
+# and validate this file with
+#     python3 -m midi_router --check examples/rack.toml
+#
+# TOML note: [name] is a section that appears once; [[name]] adds one more entry
+# to a list, so each [[port]] and each [[route]] block is one port or one route.
+
+[configuration]
+name = "NiftyKEYZ and Launch Control to the rack"
+
+# --- Ports -------------------------------------------------------------------
+# id: your short name for the port (lower-case letters, digits, - and _).
+# direction: "send" = the device sends to the router; "receive" = the router sends to it.
+
+[[port]]
+id = "fh2"
+client = "FH-2"
+port = "FH-2 MIDI 1"
+direction = "receive"
+notes = "FH-2 forwards to the Disting NT over serial MIDI"
+
+[[port]]
+id = "disting-nt-rcv"
+client = "disting NT"
+port = "disting NT MIDI 1"
+direction = "receive"
+
+[[port]]
+id = "lead-sheet-clock"
+client = "Lead Sheet"
+port = "Clock"
+direction = "send"
+
+[[port]]
+id = "lead-sheet-harmony"
+client = "Lead Sheet"
+port = "Harmony"
+direction = "send"
+
+[[port]]
+id = "lead-sheet-bass"
+client = "Lead Sheet"
+port = "Bass"
+direction = "send"
+
+[[port]]
+id = "lead-sheet-beat-pulse"
+client = "Lead Sheet"
+port = "Beat pulse"
+direction = "send"
+
+[[port]]
+id = "disting-nt"
+client = "disting NT"
+port = "disting NT MIDI 1"
+direction = "send"
+
+# --- Clock -------------------------------------------------------------------
+# One clock master. Only routes from the master may pass "clock" and "transport".
+# Use master = "none" to pass no clock at all.
+
+[clock]
+master = "lead-sheet-clock"
+
+# --- Routes ------------------------------------------------------------------
+# channels: "all" or a list such as [1, 2]. Messages on other channels are blocked.
+# messages: the message types passed; every other type is blocked. Known types:
+#   note, key-pressure, control-change, program-change, channel-pressure,
+#   pitch-bend, system-exclusive, clock, transport, timecode, active-sensing,
+#   tune-request, system-reset
+# channel_map (optional): rewrite channels, for example { 2 = 5 } sends channel 2 out on 5.
+
+[[route]]
+from = "lead-sheet-clock"
+to = "fh2"
+channels = [1]
+messages = ["clock", "transport"]
+
+[[route]]
+from = "lead-sheet-harmony"
+to = "disting-nt-rcv"
+channels = [1]
+messages = ["note"]
+
+[[route]]
+from = "lead-sheet-bass"
+to = "disting-nt-rcv"
+channels = [2]
+messages = ["note"]
+
+[[route]]
+from = "lead-sheet-beat-pulse"
+to = "fh2"
+channels = [15]
+messages = ["note"]

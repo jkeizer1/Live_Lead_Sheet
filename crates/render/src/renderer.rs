@@ -3,11 +3,10 @@
 //! system; it is handed a wgpu surface.
 
 use crate::block_on::block_on;
+use crate::canvas::Frame;
 use crate::error::RenderError;
 use crate::glyph_atlas::GlyphAtlas;
-use crate::glyph_instance::GlyphInstance;
 use crate::glyph_pipeline::GlyphPipeline;
-use crate::line_instance::LineInstance;
 use crate::line_pipeline::LinePipeline;
 use crate::theme;
 
@@ -18,6 +17,9 @@ pub struct Renderer {
     configuration: wgpu::SurfaceConfiguration,
     line_pipeline: LinePipeline,
     glyph_pipeline: GlyphPipeline,
+    /// The same two, for the layer drawn on top (menus and dialogs).
+    overlay_line_pipeline: LinePipeline,
+    overlay_glyph_pipeline: GlyphPipeline,
     adapter_summary: String,
 }
 
@@ -77,6 +79,9 @@ impl Renderer {
         let line_pipeline: LinePipeline = LinePipeline::new(&device, configuration.format);
         let glyph_pipeline: GlyphPipeline =
             GlyphPipeline::new(&device, &queue, configuration.format, atlas);
+        let overlay_line_pipeline: LinePipeline = LinePipeline::new(&device, configuration.format);
+        let overlay_glyph_pipeline: GlyphPipeline =
+            GlyphPipeline::new(&device, &queue, configuration.format, atlas);
         Ok(Renderer {
             surface,
             device,
@@ -84,6 +89,8 @@ impl Renderer {
             configuration,
             line_pipeline,
             glyph_pipeline,
+            overlay_line_pipeline,
+            overlay_glyph_pipeline,
             adapter_summary,
         })
     }
@@ -106,18 +113,14 @@ impl Renderer {
     }
 
     /// Draws one frame: the background, the lines, then the
-    /// glyphs on top.
+    /// glyphs on top, then the overlay layer's lines and glyphs.
     ///
     /// # Errors
     ///
     /// When the surface is lost or the driver rejects the frame. A frame
     /// that simply cannot be drawn now (window hidden, surface out of date)
     /// is skipped, and the next call tries again.
-    pub fn draw_frame(
-        &mut self,
-        lines: &[LineInstance],
-        glyphs: &[GlyphInstance],
-    ) -> Result<(), RenderError> {
+    pub fn draw_frame(&mut self, frame: &Frame) -> Result<(), RenderError> {
         // Window sizes are far below 2^24, so the conversion to f32 is exact.
         #[allow(clippy::cast_precision_loss)]
         let (width_pixels, height_pixels): (f32, f32) = (
@@ -125,12 +128,24 @@ impl Renderer {
             self.configuration.height as f32,
         );
         self.glyph_pipeline
-            .prepare(&self.queue, width_pixels, height_pixels, glyphs)?;
+            .prepare(&self.queue, width_pixels, height_pixels, &frame.glyphs)?;
         self.line_pipeline.prepare(
             &self.queue,
             self.configuration.width,
             self.configuration.height,
-            lines,
+            &frame.lines,
+        )?;
+        self.overlay_glyph_pipeline.prepare(
+            &self.queue,
+            width_pixels,
+            height_pixels,
+            &frame.overlay_glyphs,
+        )?;
+        self.overlay_line_pipeline.prepare(
+            &self.queue,
+            self.configuration.width,
+            self.configuration.height,
+            &frame.overlay_lines,
         )?;
         let surface_texture: wgpu::SurfaceTexture = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(texture) => texture,
@@ -183,6 +198,8 @@ impl Renderer {
                 });
             self.line_pipeline.draw(&mut pass);
             self.glyph_pipeline.draw(&mut pass);
+            self.overlay_line_pipeline.draw(&mut pass);
+            self.overlay_glyph_pipeline.draw(&mut pass);
         }
         self.queue.submit(std::iter::once(encoder.finish()));
     }

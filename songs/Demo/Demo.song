@@ -1,0 +1,71 @@
+# Demo song for the Live Lead Sheet: a two-bar count-in, then a two-bar
+# verse that plays twice. It names no port, channel or device; Demo.studio
+# says where each track goes.
+# Tossed 24 Nov 2026 (line 16): jim was here
+song "Demo"
+
+track "Clock"
+  type clock_and_transport
+
+track "Beat"
+  type mono_voice
+  clef treble
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead 
+
+track "Bass"
+  type mono_voice
+  clef bass
+
+#track "Cues"
+#  type cue_control
+#  cue "Start SQ-1"  destination "SQ-1"  start
+
+song_composition
+  key C major  meter 4/4  tempo 140 beats/min
+  "Count-in"
+  "Verse ONE"
+  "Verse TWO"  repeat 2
+  "Verse THREE"
+  "Verse CLOSE"  repeat 2
+song_composition_close
+
+section "Count-in"  count-in
+  meter 4/4  tempo 140 beats/min
+  line "Beat"  | C4:q> / / / |
+
+# C – G – Am – F
+section "Verse ONE"
+  key C major  meter 4/4  tempo 140 beats/min
+  line "Keys"  sample_source    | I IV V ii IV V vii | V V IV IV I I | I IV V ii IV V vii | V V IV IV I I |
+  line "Keys"                   | :h :q :q | :q :q :e :e :e :e | :q :e :e :q :e :e | trp(C2:e C3:e C4:e) :sx :sx :sx r:sx :q r:q|
+  line "Bass"  | trp(A2:q> A2:q A2:q) trp(A2:q A2:q B2:q) | G2:q / C2 / | E2 / /:h | C2:q> / /> /:e / |
+  line "Beat"  | C4:q> / /> /           | / / / /             | C4 / / /       | / / / / |
+
+# G – Am
+section "Verse TWO"
+  key C major  meter 4/4  tempo 140 beats/min
+
+#                G                        Am
+  line "Keys"  sample_source  | V V V V V V V V | vi vi |
+  line "Keys"                  | :q.> :e r:h | :h>> :h |
+  line "Bass"  | G2:h  B2               | A2  /               |
+  line "Beat"  | C4:q> / /> /           | / / / /             |
+
+section "Verse THREE"
+  key C major  meter 4/4  tempo 140 beats/min
+#                Baug                    Dm                 
+  line "Keys"  | vii°:h /               | ii  /               | 
+  line "Bass"  | B2:q.> /:e r:h | D2 D3 |
+  line "Beat"  | C4:q> / /> /           | / / / /             |
+
+section "Verse CLOSE"
+  key C major  meter 4/4  tempo 140 beats/min
+#                Baug                    Dm                 
+  line "Keys"  | vii°:h /               | ii  /               | 
+  line "Bass"  | B2:q.> /:e r:h | D2 D3 |
+  line "Beat"  | C4:q> / /> /           | / / / /             |
+

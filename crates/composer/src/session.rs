@@ -573,6 +573,43 @@ impl Session {
         }
     }
 
+    /// Edits the song's text with `edit` (given the text, where things are
+    /// in it, and the song as read) and takes the result, saying `what` was
+    /// done, or says `failed` and why not. True when the text changed.
+    pub fn edit_text(
+        &mut self,
+        what: &str,
+        failed: &str,
+        edit: impl FnOnce(&str, &SongSource, &Song) -> Result<String, String>,
+    ) -> bool {
+        let before: String = self.document.text().to_string();
+        match edit(
+            self.document.text(),
+            self.document.source(),
+            self.document.song(),
+        ) {
+            Ok(text) => match self.document.replace(text, what) {
+                Ok(()) => {
+                    self.after_document_change();
+                    self.say(MessageKind::Done, format!("{what}."));
+                }
+                Err(refused) => {
+                    // The reader's reasons name text lines, which the
+                    // dialog that asked does not show: the dialog says only
+                    // that the song would not accept it, and the reasons go
+                    // to the terminal.
+                    eprintln!("{what}: refused. {}", refused.messages.join("; "));
+                    self.say(
+                        MessageKind::Problem,
+                        format!("{failed}. The song would not accept it."),
+                    );
+                }
+            },
+            Err(problem) => self.say(MessageKind::Problem, format!("{failed}. {problem}")),
+        }
+        self.document.text() != before
+    }
+
     /// Takes a new text into the song, or says why it was refused.
     fn take(&mut self, text: String, what: &str) {
         match self.document.replace(text, what) {

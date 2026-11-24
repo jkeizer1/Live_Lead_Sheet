@@ -1,0 +1,13 @@
+# crates/composer/src/repair.rs, tests in that file: toss_removes_the_line_and_notes_it_at_the_top.
+# A valid studio with a setting this program no longer has (settle_delay).
+studio "Repair test studio"
+
+port "Beat pulse"
+port "Harmony"
+
+track "Beat"
+  port "Beat pulse"  channel 15
+  settle_delay 5 ms
+
+track "Keys"
+  port "Harmony"  channel 1

@@ -10,7 +10,9 @@ use crate::line_instance::LineInstance;
 use crate::strip_layout::{ScreenRect, TEXT_CAP_HEIGHT_EMS};
 
 use composer::library::LibraryTab;
+use composer::repair::RepairTarget;
 use composer::session::Mode;
+use composer::shell::ShellTarget;
 
 /// What a click on a region asks for. The app turns it into a command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +36,21 @@ pub enum HitTarget {
     LibraryRow(usize),
     /// A track's form control: coupled or sampled.
     LineForm(usize),
+    /// The menu bar, a menu's items, or a dialog.
+    Shell(ShellTarget),
+    /// The repair screen's list and buttons.
+    Repair(RepairTarget),
+    /// A message on the screen: a click copies all of it to the clipboard.
+    CopyMessage(MessageSource),
+}
+
+/// Which message a click on a message copies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MessageSource {
+    /// The message in the footer.
+    Footer,
+    /// The message in the open dialog.
+    Dialog,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -46,6 +63,10 @@ pub struct Hit {
 pub struct Frame {
     pub lines: Vec<LineInstance>,
     pub glyphs: Vec<GlyphInstance>,
+    /// Drawn after everything above, so a menu or dialog covers the text
+    /// under it (the GPU draws all lines, then all glyphs, of a layer).
+    pub overlay_lines: Vec<LineInstance>,
+    pub overlay_glyphs: Vec<GlyphInstance>,
     /// Later regions lie on top of earlier ones.
     pub hits: Vec<Hit>,
 }
@@ -67,6 +88,10 @@ pub struct Canvas<'a> {
     pub atlas: &'a GlyphAtlas,
     pub lines: Vec<LineInstance>,
     pub glyphs: Vec<GlyphInstance>,
+    overlay_lines: Vec<LineInstance>,
+    overlay_glyphs: Vec<GlyphInstance>,
+    /// Whether drawing now goes to the overlay layer.
+    in_overlay: bool,
     pub hits: Vec<Hit>,
 }
 
@@ -100,7 +125,32 @@ impl<'a> Canvas<'a> {
             atlas,
             lines: Vec::new(),
             glyphs: Vec::new(),
+            overlay_lines: Vec::new(),
+            overlay_glyphs: Vec::new(),
+            in_overlay: false,
             hits: Vec::new(),
+        }
+    }
+
+    /// From here on, everything drawn lands on top of what was drawn so far,
+    /// text included.
+    pub fn begin_overlay(&mut self) {
+        self.in_overlay = true;
+    }
+
+    fn line_layer(&mut self) -> &mut Vec<LineInstance> {
+        if self.in_overlay {
+            &mut self.overlay_lines
+        } else {
+            &mut self.lines
+        }
+    }
+
+    fn glyph_layer(&mut self) -> &mut Vec<GlyphInstance> {
+        if self.in_overlay {
+            &mut self.overlay_glyphs
+        } else {
+            &mut self.glyphs
         }
     }
 
@@ -109,6 +159,8 @@ impl<'a> Canvas<'a> {
         Frame {
             lines: self.lines,
             glyphs: self.glyphs,
+            overlay_lines: self.overlay_lines,
+            overlay_glyphs: self.overlay_glyphs,
             hits: self.hits,
         }
     }
@@ -123,7 +175,7 @@ impl<'a> Canvas<'a> {
         if height_pixels <= 0.0 || area.right_x_pixels <= area.left_x_pixels {
             return;
         }
-        self.lines.push(LineInstance {
+        self.line_layer().push(LineInstance {
             start_x_pixels: area.left_x_pixels,
             start_y_pixels: area.top_y_pixels + height_pixels / 2.0,
             end_x_pixels: area.right_x_pixels,
@@ -161,7 +213,7 @@ impl<'a> Canvas<'a> {
         thickness_pixels: f32,
         color_linear_rgba: [f32; 4],
     ) {
-        self.lines.push(LineInstance {
+        self.line_layer().push(LineInstance {
             start_x_pixels: start.0,
             start_y_pixels: start.1,
             end_x_pixels: end.0,
@@ -227,14 +279,15 @@ impl<'a> Canvas<'a> {
             Align::Center => x_pixels - width_pixels / 2.0,
             Align::Right => x_pixels - width_pixels,
         };
-        self.atlas.text(
+        let atlas: &GlyphAtlas = self.atlas;
+        atlas.text(
             GlyphFont::DejaVuSans,
             &drawable,
             left_x_pixels,
             baseline_y_pixels,
             em_pixels,
             color_linear_rgba,
-            &mut self.glyphs,
+            self.glyph_layer(),
         )?;
         Ok(width_pixels)
     }
@@ -319,7 +372,7 @@ impl<'a> Canvas<'a> {
             em_pixels,
             color_linear_rgba,
         )? {
-            self.glyphs.push(glyph);
+            self.glyph_layer().push(glyph);
         }
         Ok(())
     }

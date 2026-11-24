@@ -1,0 +1,27 @@
+# crates/composer/src/repair.rs, tests in that file: toss_removes_the_line_and_notes_it_at_the_top.
+# A valid song with two lines that mean nothing to the reader (lines 15 and 22 of this file).
+song "Repair test"
+
+track "Clock"
+  type clock_and_transport
+
+track "Beat"
+  type mono_voice
+  clef treble
+  lead
+
+track "Keys"
+  type poly_voice
+  banana split
+  clef grand
+
+section "Verse"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Beat"  | C4:q> / / / |
+  line "Keys"  | I:w |
+  wobble 3
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "Verse"
+song_composition_close

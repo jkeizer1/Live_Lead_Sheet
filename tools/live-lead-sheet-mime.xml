@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Teaches the desktop that a file ending in .song is a Live Lead Sheet song. -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="text/x-live-lead-sheet-song">
+    <comment>Live Lead Sheet song</comment>
+    <glob pattern="*.song"/>
+    <sub-class-of type="text/plain"/>
+  </mime-type>
+</mime-info>

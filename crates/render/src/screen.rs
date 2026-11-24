@@ -12,15 +12,20 @@
 //! Every size is in units of 1/90 of the window's height, so the screen
 //! scales with the window (EFS-1.12).
 
+use composer::repair::Repair;
 use composer::session::{MessageKind, Mode, Pane, Session, Zoom};
+use composer::shell::Shell;
 use composer::timeline::{EntryView, Timeline, TimelinePlace};
 
-use crate::canvas::{Align, Canvas, Frame, HitTarget, rect};
+use crate::canvas::{Align, Canvas, Frame, HitTarget, MessageSource, rect};
 use crate::error::RenderError;
 use crate::glyph_atlas::GlyphAtlas;
 use crate::screen_theme as colors;
 use crate::strip_layout::ScreenRect;
-use crate::{screen_form, screen_harmony, screen_library, screen_staff, screen_tracks};
+use crate::{
+    screen_form, screen_harmony, screen_library, screen_repair, screen_shell, screen_staff,
+    screen_tracks,
+};
 
 /// What the player is doing, as the app knows it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,11 +39,22 @@ pub struct PlayView {
     pub status: String,
 }
 
+/// What fills the screen below the menu bar.
+pub enum Content<'a> {
+    /// No song is open.
+    Empty,
+    /// A song or its studio file could not be read: the problems to repair.
+    Repair(&'a Repair),
+    Song(&'a Session),
+}
+
 /// Window height ÷ 90: the screen's unit of size.
 const UNITS_PER_HEIGHT: f32 = 90.0;
+/// The menu bar above the header.
+pub const MENU_BAR_UNITS: f32 = 2.6;
 const HEADER_UNITS: f32 = 3.4;
 const FORM_STRIP_UNITS: f32 = 6.6;
-const FOOTER_UNITS: f32 = 5.2;
+const FOOTER_UNITS: f32 = 6.6;
 const LIBRARY_FRACTION_OF_WIDTH: f32 = 0.24;
 const MARGIN_UNITS: f32 = 0.8;
 
@@ -46,6 +62,7 @@ const MARGIN_UNITS: f32 = 0.8;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ScreenLayout {
     pub unit_pixels: f32,
+    pub menu_bar: ScreenRect,
     pub header: ScreenRect,
     pub form_strip: ScreenRect,
     pub main: ScreenRect,
@@ -58,18 +75,21 @@ impl ScreenLayout {
     pub fn new(width_pixels: f32, height_pixels: f32) -> ScreenLayout {
         let unit_pixels: f32 = (height_pixels / UNITS_PER_HEIGHT).round().max(6.0);
         let margin: f32 = MARGIN_UNITS * unit_pixels;
+        let menu_bar_height: f32 = MENU_BAR_UNITS * unit_pixels;
         let header_height: f32 = HEADER_UNITS * unit_pixels;
         let strip_height: f32 = FORM_STRIP_UNITS * unit_pixels;
         let footer_height: f32 = FOOTER_UNITS * unit_pixels;
         let library_width: f32 = (width_pixels * LIBRARY_FRACTION_OF_WIDTH).max(22.0 * unit_pixels);
-        let body_top: f32 = header_height + strip_height;
+        let header_top: f32 = menu_bar_height;
+        let body_top: f32 = header_top + header_height + strip_height;
         let body_height: f32 = (height_pixels - body_top - footer_height).max(unit_pixels);
         ScreenLayout {
             unit_pixels,
-            header: rect(0.0, 0.0, width_pixels, header_height),
+            menu_bar: rect(0.0, 0.0, width_pixels, menu_bar_height),
+            header: rect(0.0, header_top, width_pixels, header_height),
             form_strip: rect(
                 margin,
-                header_height,
+                header_top + header_height,
                 width_pixels - 2.0 * margin,
                 strip_height,
             ),
@@ -95,13 +115,15 @@ impl ScreenLayout {
     }
 }
 
-/// Draws the whole screen.
+/// Draws the whole screen: the song when one is open, else the empty
+/// screen, then the menu bar, then any menu or dialog on top.
 ///
 /// # Errors
 ///
 /// When the glyph atlas lacks a music glyph the layout asks for.
 pub fn draw_screen(
-    session: &Session,
+    content: &Content<'_>,
+    shell: &Shell,
     play: &PlayView,
     atlas: &GlyphAtlas,
     width_pixels: f32,
@@ -109,25 +131,46 @@ pub fn draw_screen(
 ) -> Result<Frame, RenderError> {
     let layout: ScreenLayout = ScreenLayout::new(width_pixels, height_pixels);
     let mut canvas: Canvas = Canvas::new(atlas);
+    match content {
+        Content::Song(session) => draw_song_screen(&mut canvas, &layout, session, play)?,
+        Content::Repair(repair) => screen_repair::draw(&mut canvas, &layout, repair, shell)?,
+        Content::Empty => screen_shell::draw_empty(&mut canvas, &layout, shell)?,
+    }
+    screen_shell::draw_menu_bar(&mut canvas, &layout, shell)?;
+    canvas.begin_overlay();
+    let session: Option<&Session> = match content {
+        Content::Song(session) => Some(session),
+        Content::Repair(_) | Content::Empty => None,
+    };
+    screen_shell::draw_overlays(&mut canvas, &layout, shell, session)?;
+    Ok(canvas.finish())
+}
+
+fn draw_song_screen(
+    canvas: &mut Canvas<'_>,
+    layout: &ScreenLayout,
+    session: &Session,
+    play: &PlayView,
+) -> Result<(), RenderError> {
     let timeline: &Timeline = session.timeline();
     let place: Option<TimelinePlace> = play
         .position_ticks
         .and_then(|ticks: u64| timeline.place_at(ticks));
-    draw_header(&mut canvas, &layout, session, play, place)?;
-    draw_form_strip(&mut canvas, &layout, session, play)?;
+    draw_header(canvas, layout, session, play, place)?;
+    draw_form_strip(canvas, layout, session, play)?;
     canvas.fill(layout.main, colors::panel());
     match session.zoom {
         Zoom::Form => {
-            screen_form::draw(&mut canvas, layout.main, layout.unit_pixels, session, place)?;
+            screen_form::draw(canvas, layout.main, layout.unit_pixels, session, place)?;
         }
         Zoom::Harmony => {
-            screen_harmony::draw(&mut canvas, layout.main, layout.unit_pixels, session, place)?;
+            screen_harmony::draw(canvas, layout.main, layout.unit_pixels, session, place)?;
         }
         Zoom::Tracks => {
-            screen_tracks::draw(&mut canvas, layout.main, layout.unit_pixels, session, place)?;
+            screen_tracks::draw(canvas, layout.main, layout.unit_pixels, session, place)?;
         }
         Zoom::Staff => screen_staff::draw(
-            &mut canvas,
+            canvas,
             layout.main,
             layout.unit_pixels,
             session,
@@ -152,9 +195,9 @@ pub fn draw_screen(
         canvas.frame(badge, 2.0, colors::preview());
         canvas.text_in(&label, badge, em, colors::preview())?;
     }
-    screen_library::draw(&mut canvas, layout.library, layout.unit_pixels, session)?;
-    draw_footer(&mut canvas, &layout, session)?;
-    Ok(canvas.finish())
+    screen_library::draw(canvas, layout.library, layout.unit_pixels, session)?;
+    draw_footer(canvas, layout, session)?;
+    Ok(())
 }
 
 fn draw_header(
@@ -531,12 +574,26 @@ fn draw_footer(
             MessageKind::Done => colors::done(),
             MessageKind::Problem => colors::problem(),
         };
-        canvas.text_fitted(
+        canvas.hit(
+            rect(
+                0.0,
+                layout.footer.top_y_pixels,
+                layout.footer.right_x_pixels,
+                3.4 * unit,
+            ),
+            HitTarget::CopyMessage(MessageSource::Footer),
+        );
+        screen_shell::draw_wrapped(
+            canvas,
             &message.text,
-            left,
-            layout.footer.top_y_pixels + 1.7 * unit,
-            1.25 * unit,
-            width,
+            screen_shell::WrappedText {
+                left_pixels: left,
+                first_baseline_pixels: layout.footer.top_y_pixels + 1.6 * unit,
+                line_step_pixels: 1.5 * unit,
+                em_pixels: 1.2 * unit,
+                max_width_pixels: width,
+                max_lines: 2,
+            },
             color,
         )?;
     }
@@ -544,7 +601,7 @@ fn draw_footer(
     canvas.text_fitted(
         &first,
         left,
-        layout.footer.top_y_pixels + 3.4 * unit,
+        layout.footer.top_y_pixels + 4.9 * unit,
         1.05 * unit,
         width,
         colors::text_soft(),
@@ -552,7 +609,7 @@ fn draw_footer(
     canvas.text_fitted(
         &second,
         left,
-        layout.footer.top_y_pixels + 4.8 * unit,
+        layout.footer.top_y_pixels + 6.2 * unit,
         1.05 * unit,
         width,
         colors::text_faint(),
