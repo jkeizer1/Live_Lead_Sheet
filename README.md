@@ -51,9 +51,9 @@ shows "Editing: …", what an edit changes now:
 
 | Key | Mode | Works on | View |
 |---|---|---|---|
-| F1 | Arrange Sections | the composition: order, repeats, each entry's key and tempo, new sections | the composition as a list |
+| F1 | Arrange Song Sections | the `song_composition` block, and nothing else edits it: the song's starting key, meter and tempo, key and tempo change lines, and the entries (section, plays, the entry's own key and tempo); new sections are made and named here, not composed | one row per line of the block, with each entry's bars and harmony to the right as derived values |
 | F2 | Compose Sections | one section: its key and tempo, its lines' forms | the section's lines as lanes |
-| F3 | Edit Lines | the music on a line, note by note | the staff |
+| F3 | Section Editor | the music on a section's lines, note by note, and its bars | the staff |
 | F4 | Song Harmony | the lead line's chords | every entry's bars with chord symbols and numerals |
 | F5 | Track Harmony | one track's own harmony: a sampled line's source, or a chord track's chords | the staff, the selected bars shaded |
 
@@ -68,25 +68,47 @@ progression goes onto a coupled line or into a sampled line's source. Only a
 track with no line yet takes the lead's harmony. C (or a click on the track's
 form label) changes the form, asking first.
 
+In F1 the rows are the lines of `song_composition` in the order written:
+"Song starts in" (key, meter, tempo), "From here on" (a key or tempo change
+for every entry below it), and the entries. Each entry's Key and Beats/min
+show what it plays, with a faint word saying where the value comes from:
+"entry" (its own line), "section" (the section's own settings), or nothing
+(the composition: the start or the last change line above). The song file's
+reader takes them in that order, so F1 shows what the player plays. The
+meter of an entry is its section's; F1 changes it only while the section
+holds nothing but rests (a new section), otherwise in the Section Editor.
+
+| F1 control | Does |
+|---|---|
+| Up/Down, Left/Right, or a click | Choose a row and a cell |
+| Enter, or a click on Key, Meter or Beats/min | Edit the cell: the key picker (every key signature, major and minor), the meter picker (upper and lower figures, or a common meter), or the tempo (type it, fractions allowed, or + and -); a second click or a double-click on a section's name renames the section and every entry that plays it |
+| + / - | Plays (at 0 the entry is left out, `repeat 0`), or the tempo by 1 beat/min |
+| Delete | On an entry's Key or Beats/min, take off its own value so it inherits; on a change line's value, take it off (with neither left, the line goes); on a name, remove the row (the section is kept) |
+| Alt+Up/Down | Move the row up or down |
+| N | The new-section form: name, meter, key and tempo of its own (or the composition's), count-in. The section is written with one bar of rest on the lead track and an entry after the selected row; its bars are composed in the Section Editor (F3) |
+| E | Add an entry for a section the song already has |
+| K | Add a key change line after the selected entry, then choose its key; a tempo is given in its Beats/min cell |
+| D, M | Write the entry again after itself; leave it out (`repeat 0`) or play it once again |
+| Esc | Close the open dialog without changing anything |
+
 | Control | Does |
 |---|---|
 | F1 to F5 | The mode (above) |
 | Ctrl+`-` / Ctrl+`=` (or Ctrl+wheel) | Staff: narrower bars, more across / wider bars, fewer across. While editing, the selected entry starts at the left edge (a longer one turns whole pages from there); while playing the staff moves by half (the half shift) |
-| Arrows | Move the selection: entry (F1, F4), bar (F2, F4, F5), line or track (F2, F3, F5), note (F3) |
+| Arrows | Move the selection: entry (F4), bar (F2, F4, F5), line or track (F2, F3, F5), note (F3); in F1 see below |
 | Shift+Left/Right | Widen or narrow the bar range |
-| Shift+Up/Down | Move the selection a semitone (F1: the entry's key; F2: the section's key) |
-| Ctrl+Up/Down | Move it a scale step: a note to the next scale note, a chord to the next degree's chord (F1, F2: a key by a fifth) |
+| Shift+Up/Down | Move the selection a semitone (F2: the section's key) |
+| Ctrl+Up/Down | Move it a scale step: a note to the next scale note, a chord to the next degree's chord (F2: a key by a fifth) |
 | Ctrl+Shift+Up/Down | Move the selected note to the next tone of the lead's chord at that beat, up or down (F3) |
 | Alt+Up/Down | Move notes an octave |
-| K / Shift+K, F / Shift+F | Section key up/down a semitone, or by a fifth, composed notes moving with it (F1: the entry's own key) |
-| T / Shift+T | Tempo up/down 5 beats/min (F1: the entry's own tempo) |
-| [ / ] | One repeat fewer / more for the entry |
-| M, D, Delete, Alt+Left/Right | Mute (repeat 0) or restore, duplicate, remove, move the entry |
+| K / Shift+K, F / Shift+F | Section key up/down a semitone, or by a fifth, composed notes moving with it |
+| T / Shift+T | Section tempo up/down 5 beats/min |
+| [ / ] | One repeat fewer / more for the selected entry |
 | A | Accent, marcato, none on the selected note (F3) |
 | R | The selected rest becomes a note of the same length (the root of the lead's chord there, on a bass; the chord, on a chord track), or a note becomes a rest (F3) |
 | B | The selected mono track plays the roots of the lead's chords |
 | C, C again | Change the selected track's line in the section between coupled and sampled; the first press asks. Every note sounds as before; a sampled line whose source changes while a note sounds (track and hold) stays sampled |
-| N | A new section after the entry, from the progression under the library cursor |
+| N | A new section after the entry, from the progression under the library cursor (F2 to F5; in F1, N opens the new-section form) |
 | Tab | Between the main view and the library browser |
 | Up/Down in the library (or the wheel over it) | Browse; each row is shown applied to the selected bars as a preview |
 | Enter / Esc | Apply the preview / drop it (Esc also clears a bar range) |
@@ -111,7 +133,7 @@ Every song and studio that a test uses (the unit tests, the integration tests an
 the test that reads it (`song_file/`, `studio_file/`, `studio_writer/`, `repair/`, `song_settings/`, `sample_source/`,
 `legato_mark/`, `note_spelling/`, `lilypond_export/`, `song_notation_test/`,
 `count_in_and_verse/`, `chord_inversion/`, `layer_merge/`, `dynamics/`,
-`octave_annotation/`, `tempo_change/`, `meter_control/`, `tempo_marks/`, `minor_key/`, `progression_library/`, `function_form/`, `composer/`). Each file starts with two comment lines: which test reads
+`octave_annotation/`, `tempo_change/`, `meter_control/`, `tempo_marks/`, `minor_key/`, `progression_library/`, `function_form/`, `composer/`, `sender/`). Each file starts with two comment lines: which test reads
 it, what case it is, and for a bad file, what the loader must say. A test checks
 exactly what its file says, so edit a copy in `songs/` to experiment, not the
 canonical file.
@@ -121,6 +143,12 @@ way, with `.library` files in `rhythm_library/` and `rhythm_notation_test/`.
 ```
 cargo test
 ```
+
+`cargo test -p sender` runs the sending loop (the code that plays a song to the
+MIDI output, for the text player and the window alike) on a recording output
+with a simulated clock: played whole, from a later bar, stopped, looped,
+told to play while playing, played again and again, and played to its end.
+It needs no MIDI hardware. After each play the program prints, in the terminal, how many events it handed to ALSA late and its longest pause between looks at the clock (`Sender: ... events handed over, N late ...`); a late event also shows as a message on the screen.
 
 ## Checking and measuring programs
 
@@ -151,11 +179,11 @@ not replace trying the real program (`cargo run -p app -- ...`).
 | Command | What it does | Output |
 |---|---|---|
 | `cargo run --release -p render --example layout_preview -- [WIDTH HEIGHT] [hidden] [bar=N]` | Draws one frame of the spike on the CPU, without a window or GPU, to check the layout | `scratch/layout_preview.pgm` |
-| `cargo run --release -p render --example screen_preview -- [WIDTH HEIGHT] [song=PATH] [STEP ...]` | Draws one frame of the editor on the CPU, in colour, without a window or GPU: `songs_canonical/composer/composer_demo.song` (or the song given) after steps such as `mode=3`, `convert`, `entry=3`, `bars=2`, `library`, `down=2`, `enter`, `right=3`, `tone=1`, `barwidth=-2`, `playing=TICKS`, and the menu and dialogs `empty`, `menu`, `browser`, `browser_many`, `confirm`, `repair`, `repair_edit`, `repair_toss`, `settings`, `settings_rename`, `settings_new`, `settings_delete`, `settings_clef`, `settings_layer`, `settings_studio`, `settings_studio_none`, `settings_studio_typing`, `settings_studio_remove`, `new_song_browser`, `new_song_name`, `new_song_problem` (listed in its doc comment) | `scratch/screen_preview.ppm` |
+| `cargo run --release -p render --example screen_preview -- [WIDTH HEIGHT] [song=PATH] [STEP ...]` | Draws one frame of the editor on the CPU, in colour, without a window or GPU: `songs_canonical/composer/composer_demo.song` (or the song given) after steps such as `mode=3`, `convert`, `entry=3`, `bars=2`, `library`, `down=2`, `enter`, `right=3`, `tone=1`, `barwidth=-2`, `playing=TICKS`, and the menu and dialogs `empty`, `menu`, `browser`, `browser_many`, `confirm`, `repair`, `repair_edit`, `repair_toss`, `settings`, `settings_rename`, `settings_new`, `settings_delete`, `settings_clef`, `settings_layer`, `settings_studio`, `settings_studio_none`, `settings_studio_typing`, `settings_studio_remove`, `new_song_browser`, `new_song_name`, `new_song_problem`, and F1's `f1=down,right,enter` and `type=TEXT` (listed in its doc comment) | `scratch/screen_preview.ppm` |
 | `cargo run --release -p alsa_output --example control_track_test -- [options]` | Test: plays a count-in on the beat pulse, then a reset trigger and an SQ-1 Start on the music's first bar, with Timing Clock on its own port (D-10); optional SQ-1 restarts. Asks you to connect its ports, then waits for Enter. See its `explainer.md` | Terminal |
 | `cargo run --release -p song_text --example rhythm_notation_test -- [LIBRARY_FILE] [--play "Name" [--bpm N] [--bars N] [--channel C] [--note N] [--transport]]` | Test: loads `library/Rhythms.library` (or the file given), prints every rhythm in beats and note values, and checks that six kinds of mistake are reported as EFS-6.3 asks. With `--play`, plays that rhythm on the beat-pulse port (Timing Clock on its own port) and asks you to connect the ports first; `--transport` adds Start and Stop, which the FH-2's clock output needs. See its `explainer.md` | Terminal |
 | `cargo run -p song_text --example song_notation_test -- [SONG_FILE [STUDIO_FILE]]` | Test: loads `songs/Demo.song` and `songs/Demo.studio` (or the files given), prints the song track by track and bar by bar in beats and note values, checks that the studio gives every track and cue destination the song needs, and checks that eight kinds of mistake are reported as EFS-6.3 asks. See its `explainer.md` | Terminal |
-| `cargo run --release -p song_text --example song_play_test -- [SONG_FILE [STUDIO_FILE]]` | Test: plays `songs/Demo.song` through `songs/Demo.studio` (or the files given): count-in, beat, chords, bass, the Start cue, with Timing Clock, Start and Stop on the studio's clock port. A note that ends where the next note on its track starts is sent 5 ms short (more with the studio's `retrigger_gap`). Where a sample source changes inside a sounding note, the new notes are sent first and the old ones released after them (legato), so the gate stays high on a mono receiver set to legato. The `_` mark does the same for a note and the next note on its track that starts where it ends; a marked note followed by the same pitch becomes one longer note. Opens one output port for each port the studio lists, names them and asks you to connect them first. To hear sample sources (chords and bass notes on their own lines, rhythm below): `-- songs/Sample_source.song songs/Demo.studio`. To hear the Nov 15 notations, one section each (7/8 grouping, chord inversions, repeat signs, `euclid`, the same pitch in two voice layers, the `dynamics` line, `+8va`/`-8va`/`loco`, tempo and meter changes between sections): `-- songs/Nov15_features_1_7.song songs/Nov15_features_1_7.studio`. To hear meter patterns (a `meter_control` line: 4/4 and 5/4 alternating, 3/4 3/4 4/4, 6/8 and 9/8, between plain-meter sections): `-- songs/Meter_control/Meter_control.song songs/Meter_control/Meter_control.studio`. To hear tempo marks on the lead line (a step, a carried tempo, a ramp that slows 120 to 60 beats/min over two bars, a repeated section that restarts at its own tempo): `-- songs/Tempo_marks/Tempo_marks.song songs/Tempo_marks/Tempo_marks.studio`. A tempo change between sections or at a tempo mark is played with a new anchor at its place; a ramp has one anchor at every clock pulse. Bar numbers in the output continue through meter changes. See its `explainer.md` | Terminal |
+| `cargo run --release -p song_text --example song_play_test -- [SONG_FILE [STUDIO_FILE]]` | Test: plays `songs/Demo.song` through `songs/Demo.studio` (or the files given): count-in, beat, chords, bass, the Start cue, with Timing Clock, Start and Stop on the studio's clock port. A note that ends where the next note on its track starts is sent 5 ms short (more with the studio's `retrigger_gap`). Where a sample source changes inside a sounding note, the new notes are sent first and the old ones released after them (legato), so the gate stays high on a mono receiver set to legato. The `_` mark does the same for a note and the next note on its track that starts where it ends; a marked note followed by the same pitch becomes one longer note. Plays through the `sender` crate, the window's own sending loop, and takes commands on one set of open ports: Enter (play from the start), `from N` (from bar N), `loop A B`, `stop`, `quit`; prints the sender's timing report after each play. Opens one output port for each port the studio lists, names them and asks you to connect them first. To hear sample sources (chords and bass notes on their own lines, rhythm below): `-- songs/Sample_source.song songs/Demo.studio`. To hear the Nov 15 notations, one section each (7/8 grouping, chord inversions, repeat signs, `euclid`, the same pitch in two voice layers, the `dynamics` line, `+8va`/`-8va`/`loco`, tempo and meter changes between sections): `-- songs/Nov15_features_1_7.song songs/Nov15_features_1_7.studio`. To hear meter patterns (a `meter_control` line: 4/4 and 5/4 alternating, 3/4 3/4 4/4, 6/8 and 9/8, between plain-meter sections): `-- songs/Meter_control/Meter_control.song songs/Meter_control/Meter_control.studio`. To hear tempo marks on the lead line (a step, a carried tempo, a ramp that slows 120 to 60 beats/min over two bars, a repeated section that restarts at its own tempo): `-- songs/Tempo_marks/Tempo_marks.song songs/Tempo_marks/Tempo_marks.studio`. A tempo change between sections or at a tempo mark is played with a new anchor at its place; a ramp has one anchor at every clock pulse. Bar numbers in the output continue through meter changes. See its `explainer.md` | Terminal |
 | `cargo run -p lilypond_export --example lilypond_export_test -- SONG_FILE [OUTPUT_FILE]` | Test: writes the song as a LilyPond file, to read it as sheet music; then `lilypond -o ~/tmp ~/tmp/NAME.ly` engraves it (LilyPond is installed separately: `sudo apt install lilypond`). Draws plain and dotted values and triplets; anything else is reported with its section, track and bar. See its `explainer.md` | `~/tmp/NAME.ly` (or OUTPUT_FILE), then `~/tmp/NAME.pdf` |
 | `cargo run -p song_text --example legato_order_test -- [SONG_FILE [STUDIO_FILE]]` | Test: lists, for `songs/Legato_test.song` and `songs/Demo.studio` (or the files given), every note on and note off the player hands to the ALSA output, track by track, with its instant and channel, and checks that at a sample source change the new note on comes before the old note off. No MIDI hardware needed. To see what ALSA delivers, play the song with `song_play_test` and run `aseqdump -p "Lead Sheet"`. See its `explainer.md` | Terminal |
 | `cargo run --release -p alsa_output --example held_notes_test -- [--bpm N] [--bars N] [--channel C] [--first-note N] [--second-note N] [--velocity V]` | Test: the most basic legato case as a keyboard sends it. Each bar the port `Bass` gets a note on at beat 1, a second note on at beat 3 with the first still held, then both note offs at the end of the bar; the port `Beat pulse` gets steady quarter notes. Finds out whether a mono voice keeps one gate and changes pitch at beat 3. Asks you to connect its ports, then waits for Enter. See its `explainer.md` | Terminal |
@@ -174,8 +202,9 @@ More on the measurements: `crates/alsa_output/examples/explainer.md`.
 | `cargo run --release -p atlas_tool --example check_glyphs` | Checks the distance fields of a few glyphs | `scratch/atlas_check/` |
 | `python3 tools/migrate_to_composition.py [--at-end] [--default-header] FILE.song ...` | Tool: moves a song written the old way (`repeat n` on sections, a section written again with only `repeat n`) to the `song_composition` block. The block goes before the first section (`--at-end`: at the end, keeping line numbers). Rewrites each file in place, so keep a copy; review the starting key, meter and tempo it picks. A file that already has a `song_composition` is left alone | The files given |
 | `python3 tools/add_section_meters.py FILE.song ...` | Tool: writes a `meter` on every section that has none (a section no longer takes the meter of the one before it), copying the meter of the nearest section above, else the song_composition header's. Run it after `migrate_to_composition.py`. Rewrites each file in place, so keep a copy. A section with a `meter_control` line is left alone | The files given |
-| `tools/install_desktop.sh [install\|uninstall]` | Tool: makes a double-click on a `.song` file in the file manager open it in the program. Builds the release program (`cargo build --release -p app`), then writes only under `~/.local/share` (no sudo): a launcher `applications/live-lead-sheet.desktop` pointing at this project's `target/release/app`, and a type definition `mime/packages/live-lead-sheet.xml` saying `*.song` is a Live Lead Sheet song, and makes the launcher the default for it. The launcher has no terminal, so a message printed to the terminal is not seen; the window shows what it can (a song that will not read opens the repair view). A rebuild needs nothing more; if the project folder moves, run install again. `uninstall` removes both files. Sources: `tools/live-lead-sheet.desktop.in`, `tools/live-lead-sheet-mime.xml` | The two files under `~/.local/share` |
-| `./play_here.sh` (in a song folder: copy `play_here.sh` there, or link to it with `ln -s ~/Documents/Live_Lead_Sheet/play_here.sh .`) | Tool: plays the newest `.song` and the newest `.studio` file in the folder it is run from, with `song_play_test` (as the `cargo run --release -p song_text --example song_play_test -- SONG STUDIO` line does), from any folder. Names the file chosen when there was a choice, and says so if the folder has none of either. A copy finds the project at `~/Documents/Live_Lead_Sheet`, or at `LIVE_LEAD_SHEET_DIR` if set | Terminal; stays open until you press Enter |
+| `tools/install_desktop.sh [install\|uninstall]` | Tool: makes a double-click on a `.song` file in the file manager open it in the program. Builds the release program (`cargo build --release -p app`), then writes only under `~/.local/share` (no sudo): a launcher `applications/live-lead-sheet.desktop` that starts this project's `tools/open_song.sh`, and a type definition `mime/packages/live-lead-sheet.xml` saying `*.song` is a Live Lead Sheet song, and makes the launcher the default for it. The launcher has no terminal, so a message printed to the terminal is not seen; the window shows what it can (a song that will not read opens the repair view). A code change needs nothing more, since `open_song.sh` builds first; if the project folder moves, run install again. `uninstall` removes both files. Sources: `tools/live-lead-sheet.desktop.in`, `tools/live-lead-sheet-mime.xml` | The two files under `~/.local/share` |
+| `tools/open_song.sh [SONG_FILE]` | Tool: what the double-click launcher starts. Builds the release program (`cargo build --release -p app`), then opens the song in it, so a double-click always runs the code as it stands. When nothing changed the build only checks dates and the window opens at once; a build longer than 1 s shows a "Building" window. When the build fails, a window shows the end of cargo's errors and the program is not started, so an older build never stands in for the current code | Build output in `target/open_song_build.log` |
+| `./play_here.sh` (in a song folder: copy `play_here.sh` there, or link to it with `ln -s ~/Documents/Live_Lead_Sheet/play_here.sh .`) | Tool: plays the newest `.song` and the newest `.studio` file in the folder it is run from, with `song_play_test` (as the `cargo run --release -p song_text --example song_play_test -- SONG STUDIO` line does), from any folder. Names the file chosen when there was a choice, and says so if the folder has none of either. A copy finds the project at `~/Documents/Live_Lead_Sheet`, or at `LIVE_LEAD_SHEET_DIR` if set | Terminal; stays open for commands (Enter plays, `from N`, `loop A B`, `stop`, `quit`) |
 | `./tune_delay.sh [--runs N] [--dry-run] [--set-ms MS] [--port-skipped NAME]` (in a song folder: copy `tune_delay.sh` there, or link to it as for `play_here.sh`) | Tool, specific to Jim's studio: with audio flowing from the NT through the PC to the L-12, measures that path's delay N times (default 5; the measuring code is `~/Documents/LinuxAudioNotes/audio_state_2.py`, or `AUDIO_STATE_FILE`), takes the median in whole milliseconds, and sets `delay_trigger MS ms` in the newest `.studio` file of the folder on every track whose port is not `DistingNT`, except a track with no channel (the clock). `--dry-run` shows the change and writes nothing; `--set-ms` skips the measuring. The logic is `tools/tune_delay.py` | Terminal; the studio file |
 
 ## Keeping this file current

@@ -6,11 +6,11 @@
 #
 # It writes only under ~/.local/share (your own account, no sudo):
 #   applications/live-lead-sheet.desktop   the launcher, pointing at this
-#                                          project's target/release/app
+#                                          project's tools/open_song.sh
 #   mime/packages/live-lead-sheet.xml      says *.song is a Live Lead Sheet song
-# and makes the launcher the default for that type. After a rebuild nothing
-# needs doing: the launcher points at the program file, which cargo replaces.
-# If the project folder moves, run install again.
+# and makes the launcher the default for that type. open_song.sh builds the
+# program before starting it, so a code change needs nothing more. If the
+# project folder moves, run install again.
 
 set -eu
 

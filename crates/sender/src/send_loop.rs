@@ -1,210 +1,51 @@
-//! The sending thread (Architecture, Next, step 3): it owns the ALSA output,
-//! opened once with the studio's ports so the musician connects them once,
-//! and plays a schedule when asked, from a place in the song, once or in a
-//! loop. Events are handed to the ALSA queue up to 50 ms ahead (D-8), their
-//! instants computed from anchors (Musical Time and Clock, section 8). The
-//! window reads where the song is from a shared counter of ticks, so
-//! drawing never touches the output.
-//!
-//! The sending loop is `song_text/examples/support/event_player.rs`'s,
-//! moved to its proper home and given Stop, a start place and looping.
+//! The sending loop: waits for commands, and plays a schedule to an
+//! output, handing events over up to 50 ms ahead (D-8), their instants
+//! computed from anchors (Musical Time and Clock, section 8). It was the
+//! text player's loop (`song_text/examples/support/event_player.rs`),
+//! given Stop, a start place and looping.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
-use std::thread::{self, JoinHandle};
 use std::time::Duration as StdDuration;
 
-use alsa_output::error::AlsaOutputError;
-use alsa_output::sequencer_output::{FlushOutcome, OutputPort, SequencerOutput};
+use alsa_output::sequencer_output::{FlushOutcome, TOUCHING_NOTE_OFF_LEAD};
 use player::anchor::Anchor;
 use player::schedule::{OutputAction, ScheduledEvent};
 use player::song_plan::TempoChange;
 use vocabulary::duration::Duration;
 use vocabulary::instant::Instant;
-use vocabulary::midi_values::MidiChannel;
-use vocabulary::phrase_cue::{OutputPortName, TransportMessage};
+use vocabulary::phrase_cue::TransportMessage;
 use vocabulary::score_position::ScorePosition;
 use vocabulary::tempo::Tempo;
+
+use crate::event_output::EventOutput;
+use crate::play_report::PlayReport;
+use crate::play_request::{PlayRequest, Request};
+use crate::sounding_notes::{SoundingNote, SoundingNotes};
 
 /// The player's lead window (D-8).
 const LEAD: Duration = Duration::from_ms(50);
 /// Time between the request and the first event, so the first events are
-/// not already late when queued.
+/// not already late when sent.
 const START_DELAY: Duration = Duration::from_ms(200);
-/// How long the loop sleeps between looks at the clock: well under the lead.
-const SEND_LOOP_SLEEP: StdDuration = StdDuration::from_millis(5);
 /// How long the thread waits for a request when idle.
-const IDLE_WAIT: StdDuration = StdDuration::from_millis(50);
+pub(crate) const IDLE_WAIT: StdDuration = StdDuration::from_millis(50);
 /// No position: the counter holds this while stopped.
-const NO_POSITION: u64 = u64::MAX;
-
-/// What to play.
-pub struct PlayRequest {
-    pub events: Vec<ScheduledEvent>,
-    pub tempo: Tempo,
-    pub tempo_changes: Vec<TempoChange>,
-    /// Where to start, in ticks from the start of the song.
-    pub start_ticks: u64,
-    /// Where to stop (or loop back from); `None` plays to the end.
-    pub end_ticks: Option<u64>,
-    pub looping: bool,
-    /// The clock and transport port, for Start and Stop.
-    pub clock_port: OutputPortName,
-    /// Each note track's port and channel, silenced when playing stops.
-    pub note_outputs: Vec<(OutputPortName, MidiChannel)>,
-}
-
-enum Request {
-    Play(Box<PlayRequest>),
-    Stop,
-    Quit,
-}
-
-/// The ports the thread opened, described for the musician, or why it
-/// could not open them.
-type PortsOpened = Result<Vec<String>, String>;
+pub(crate) const NO_POSITION: u64 = u64::MAX;
 
 /// What the window reads.
-struct Shared {
-    position_ticks: AtomicU64,
-    playing: AtomicBool,
-    looping: AtomicBool,
-}
-
-pub struct Player {
-    requests: Sender<Request>,
-    problems: Receiver<String>,
-    shared: Arc<Shared>,
-    ports: Vec<String>,
-    thread: Option<JoinHandle<()>>,
-}
-
-impl Player {
-    /// Opens the output ports in the sending thread.
-    ///
-    /// # Errors
-    ///
-    /// When the ALSA sequencer cannot be opened.
-    pub fn start(port_names: Vec<String>) -> Result<Player, String> {
-        let (requests, request_receiver): (Sender<Request>, Receiver<Request>) = mpsc::channel();
-        let (problem_sender, problems): (Sender<String>, Receiver<String>) = mpsc::channel();
-        let (ready_sender, ready): (Sender<PortsOpened>, Receiver<PortsOpened>) = mpsc::channel();
-        let shared: Arc<Shared> = Arc::new(Shared {
-            position_ticks: AtomicU64::new(NO_POSITION),
-            playing: AtomicBool::new(false),
-            looping: AtomicBool::new(false),
-        });
-        let thread_shared: Arc<Shared> = Arc::clone(&shared);
-        let thread: JoinHandle<()> = thread::Builder::new()
-            .name(String::from("sending"))
-            .spawn(move || {
-                let names: Vec<&str> = port_names.iter().map(String::as_str).collect();
-                let output: SequencerOutput = match SequencerOutput::open("Lead Sheet", &names) {
-                    Ok((output, warnings)) => {
-                        for warning in &warnings {
-                            // The window shows these in its message line.
-                            let _ = problem_sender.send(warning.to_string());
-                        }
-                        output
-                    }
-                    Err(error) => {
-                        let _ =
-                            ready_sender.send(Err(format!("Cannot open the MIDI output: {error}")));
-                        return;
-                    }
-                };
-                let described: Vec<String> = output
-                    .ports()
-                    .iter()
-                    .map(|port: &OutputPort| {
-                        format!("{} {}:{}", port.name(), output.client_id(), port.port_id())
-                    })
-                    .collect();
-                let _ = ready_sender.send(Ok(described));
-                serve(&output, &request_receiver, &problem_sender, &thread_shared);
-            })
-            .map_err(|error| format!("Cannot start the sending thread: {error}"))?;
-        let ports: Vec<String> = ready.recv().map_err(|_| {
-            String::from("The sending thread stopped while opening the MIDI output.")
-        })??;
-        Ok(Player {
-            requests,
-            problems,
-            shared,
-            ports,
-            thread: Some(thread),
-        })
-    }
-
-    /// The ports, as `Name client:port`, for the musician to connect.
-    #[must_use]
-    pub fn ports(&self) -> &[String] {
-        &self.ports
-    }
-
-    /// Plays `request`, stopping whatever was playing.
-    ///
-    /// # Errors
-    ///
-    /// When the sending thread has stopped.
-    pub fn play(&self, request: PlayRequest) -> Result<(), String> {
-        self.requests
-            .send(Request::Play(Box::new(request)))
-            .map_err(|_| String::from("The sending thread has stopped; restart the program."))
-    }
-
-    /// Stops playing, silencing every note.
-    ///
-    /// # Errors
-    ///
-    /// When the sending thread has stopped.
-    pub fn stop(&self) -> Result<(), String> {
-        self.requests
-            .send(Request::Stop)
-            .map_err(|_| String::from("The sending thread has stopped; restart the program."))
-    }
-
-    #[must_use]
-    pub fn playing(&self) -> bool {
-        self.shared.playing.load(Ordering::Relaxed)
-    }
-
-    #[must_use]
-    pub fn looping(&self) -> bool {
-        self.shared.looping.load(Ordering::Relaxed)
-    }
-
-    /// Where the song is now, in ticks from its start.
-    #[must_use]
-    pub fn position_ticks(&self) -> Option<u64> {
-        let ticks: u64 = self.shared.position_ticks.load(Ordering::Relaxed);
-        (ticks != NO_POSITION).then_some(ticks)
-    }
-
-    /// A problem the thread met, if any is waiting.
-    #[must_use]
-    pub fn next_problem(&self) -> Option<String> {
-        self.problems.try_recv().ok()
-    }
-}
-
-impl Drop for Player {
-    fn drop(&mut self) {
-        // The thread silences the notes as it ends; wait for that, so no
-        // note is left sounding when the program closes.
-        let _ = self.requests.send(Request::Quit);
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
-        }
-    }
+pub(crate) struct Shared {
+    pub(crate) position_ticks: AtomicU64,
+    pub(crate) playing: AtomicBool,
+    pub(crate) looping: AtomicBool,
 }
 
 /// Waits for requests and carries them out until Quit.
-fn serve(
-    output: &SequencerOutput,
+pub(crate) fn serve<O: EventOutput>(
+    output: &O,
     requests: &Receiver<Request>,
     problems: &Sender<String>,
+    reports: &Sender<PlayReport>,
     shared: &Shared,
 ) {
     let mut next: Option<Request> = None;
@@ -223,12 +64,21 @@ fn serve(
             Request::Play(play) => {
                 shared.playing.store(true, Ordering::Relaxed);
                 shared.looping.store(play.looping, Ordering::Relaxed);
-                let outcome: Result<Option<Request>, String> =
-                    play_until_interrupted(output, &play, requests, shared);
+                let mut report: PlayReport = PlayReport::default();
+                let mut sounding: SoundingNotes = SoundingNotes::default();
+                let outcome: Result<Option<Request>, String> = play_until_interrupted(
+                    output,
+                    &play,
+                    requests,
+                    shared,
+                    &mut report,
+                    &mut sounding,
+                );
+                let _ = reports.send(report);
                 shared.playing.store(false, Ordering::Relaxed);
                 shared.looping.store(false, Ordering::Relaxed);
                 shared.position_ticks.store(NO_POSITION, Ordering::Relaxed);
-                if let Err(problem) = silence(output, &play) {
+                if let Err(problem) = silence(output, &play, &mut sounding) {
                     let _ = problems.send(problem);
                 }
                 match outcome {
@@ -245,20 +95,38 @@ fn serve(
     }
 }
 
-/// Removes what is queued, and sends Stop and All Notes Off at once.
-fn silence(output: &SequencerOutput, play: &PlayRequest) -> Result<(), String> {
+/// Stop, in the order of Musical Time and Clock, section 8: removes what is
+/// queued, sends a Note Off at once for each note still sounding, then Stop,
+/// then All Notes Off as the final safety net.
+fn silence<O: EventOutput>(
+    output: &O,
+    play: &PlayRequest,
+    sounding: &mut SoundingNotes,
+) -> Result<(), String> {
+    // The clock is read before the removal: a Note Off due between the two
+    // is then counted as removed and sent again, which is harmless.
+    let now: Instant = output.now()?;
+    let still_sounding: Vec<SoundingNote> = sounding.take_sounding_at(now);
     output
         .remove_queued_events()
         .map_err(|error| format!("Stopping: {error}"))?;
-    if let Ok(port) = find_port(output, play.clock_port.as_str()) {
+    for note in &still_sounding {
         output
-            .send_stop_now(port)
+            .send_note_off_now(
+                note.port.as_str(),
+                note.channel.wire_value(),
+                note.note.value(),
+            )
+            .map_err(|error| format!("Ending note {}: {error}", note.note.value()))?;
+    }
+    if output.has_port(play.clock_port.as_str()) {
+        output
+            .send_stop_now(play.clock_port.as_str())
             .map_err(|error| format!("Sending Stop: {error}"))?;
     }
     for (port_name, channel) in &play.note_outputs {
-        let port: &OutputPort = find_port(output, port_name.as_str())?;
         output
-            .send_all_notes_off_now(port, channel.wire_value())
+            .send_all_notes_off_now(port_name.as_str(), channel.wire_value())
             .map_err(|error| format!("Silencing {}: {error}", port_name.as_str()))?;
     }
     match output
@@ -295,11 +163,13 @@ fn ends_a_note(action: OutputAction) -> bool {
 
 /// Plays until the end (or forever, looping), or until a request comes;
 /// returns that request, so a Play while playing starts the new song.
-fn play_until_interrupted(
-    output: &SequencerOutput,
+fn play_until_interrupted<O: EventOutput>(
+    output: &O,
     play: &PlayRequest,
     requests: &Receiver<Request>,
     shared: &Shared,
+    report: &mut PlayReport,
+    sounding: &mut SoundingNotes,
 ) -> Result<Option<Request>, String> {
     let start: ScorePosition = ScorePosition::from_ticks(play.start_ticks);
     let end: Option<ScorePosition> = play.end_ticks.map(ScorePosition::from_ticks);
@@ -307,8 +177,7 @@ fn play_until_interrupted(
         .events
         .partition_point(|event: &ScheduledEvent| event.position < start);
     let first_instant: Instant = output
-        .now()
-        .map_err(|error| error.to_string())?
+        .now()?
         .checked_add(START_DELAY)
         .map_err(|error| error.to_string())?;
     let mut anchors: Vec<Anchor> = vec![Anchor::new(start, first_instant, tempo_at(play, start))];
@@ -317,14 +186,16 @@ fn play_until_interrupted(
         .partition_point(|change: &TempoChange| change.position <= start);
     let mut next: usize = first_event;
     let mut pool_full: bool = false;
+    // The latest instant anything handed over is due, delays included: the
+    // play is not over before it, or the last delayed events would be
+    // taken back unsent.
+    let mut last_due: Instant = first_instant;
+    let mut previous_look: Option<Instant> = None;
     // Followers start with the song: Start before the first clock pulse
     // when playing from anywhere but the start (the schedule has its own
     // Start at the start).
     if play.start_ticks > 0 {
-        let port: &OutputPort = find_port(output, play.clock_port.as_str())?;
-        output
-            .queue_start(port, first_instant)
-            .map_err(|error| error.to_string())?;
+        output.start(play.clock_port.as_str(), first_instant)?;
     }
     loop {
         match requests.try_recv() {
@@ -333,7 +204,14 @@ fn play_until_interrupted(
             Err(TryRecvError::Empty) => {}
             Err(TryRecvError::Disconnected) => return Ok(Some(Request::Quit)),
         }
-        let now: Instant = output.now().map_err(|error| error.to_string())?;
+        let now: Instant = output.now()?;
+        if let Some(previous) = previous_look
+            && let Ok(pause) = now.checked_sub(previous)
+        {
+            report.note_pause(pause);
+        }
+        previous_look = Some(now);
+        sounding.forget_ended(now);
         publish_position(shared, &anchors, now);
         let horizon: Instant = now.checked_add(LEAD).map_err(|error| error.to_string())?;
         while let Some(event) = play.events.get(next) {
@@ -363,10 +241,16 @@ fn play_until_interrupted(
             if at > horizon {
                 break;
             }
+            report.note_event(lateness(now, event, at, &anchors)?);
+            report.note_first(first_note_text(event, at, first_instant));
             send(output, event, at, &anchors)?;
+            track_sounding(sounding, event, at, &anchors);
+            if at > last_due {
+                last_due = at;
+            }
             next += 1;
         }
-        match output.flush().map_err(|error| error.to_string())? {
+        match output.flush()? {
             FlushOutcome::AllHandedOver => pool_full = false,
             FlushOutcome::PoolFull => pool_full = true,
         }
@@ -387,11 +271,11 @@ fn play_until_interrupted(
                     .tempo_changes
                     .partition_point(|change: &TempoChange| change.position <= start);
                 next = first_event;
-            } else if now >= end_instant {
+            } else if now >= end_instant && now >= last_due {
                 return Ok(None);
             }
         }
-        thread::sleep(SEND_LOOP_SLEEP);
+        output.wait_a_little();
     }
 }
 
@@ -417,20 +301,103 @@ fn publish_position(shared: &Shared, anchors: &[Anchor], now: Instant) {
     }
 }
 
-fn send(
-    output: &SequencerOutput,
+/// A note-on described for the report: the port, the note number, and how
+/// long after the play's first instant it is due.
+fn first_note_text(event: &ScheduledEvent, at: Instant, first_instant: Instant) -> Option<String> {
+    let OutputAction::NoteOn { note, .. } = event.action else {
+        return None;
+    };
+    let after_ms: u64 = at
+        .checked_sub(first_instant)
+        .map_or(0, |after| after.ns() / 1_000_000);
+    Some(format!(
+        "{} note {} at +{after_ms} ms",
+        event.port.as_str(),
+        note.value()
+    ))
+}
+
+/// How far ahead of its instant the output must be given an event: a
+/// note-off placed before the next note-on is sent earlier than that
+/// note-on by the larger of the output's lead and the studio's gap.
+fn send_lead(event: &ScheduledEvent, anchors: &[Anchor]) -> Duration {
+    match event.action {
+        OutputAction::TouchingNoteOff {
+            note_on_position,
+            retrigger_gap,
+            ..
+        } if anchors
+            .first()
+            .is_none_or(|start: &Anchor| note_on_position >= start.position()) =>
+        {
+            if retrigger_gap > TOUCHING_NOTE_OFF_LEAD {
+                retrigger_gap
+            } else {
+                TOUCHING_NOTE_OFF_LEAD
+            }
+        }
+        _ => Duration::ZERO,
+    }
+}
+
+/// Notes which notes `event`, just handed over for `at`, starts or ends.
+fn track_sounding(
+    sounding: &mut SoundingNotes,
+    event: &ScheduledEvent,
+    at: Instant,
+    anchors: &[Anchor],
+) {
+    match event.action {
+        OutputAction::NoteOn { channel, note, .. } => sounding.started(&event.port, channel, note),
+        OutputAction::NoteOff { channel, note } | OutputAction::LegatoNoteOff { channel, note } => {
+            sounding.ending(&event.port, channel, note, at);
+        }
+        OutputAction::TouchingNoteOff { channel, note, .. } => {
+            // The output sends it earlier than `at` by the send lead. If
+            // that would come before instant 0, `at` is kept: a later
+            // instant only risks one extra, harmless Note Off at Stop.
+            let lead: Duration = send_lead(event, anchors);
+            let due: Instant = at.ns().checked_sub(lead.ns()).map_or(at, Instant::from_ns);
+            sounding.ending(&event.port, channel, note, due);
+        }
+        OutputAction::ClockPulse
+        | OutputAction::ControlChange { .. }
+        | OutputAction::ProgramChange { .. }
+        | OutputAction::Transport(_) => {}
+    }
+}
+
+/// How late handing `event` over at `now` is, when it is: after the instant
+/// the output must send it.
+fn lateness(
+    now: Instant,
+    event: &ScheduledEvent,
+    at: Instant,
+    anchors: &[Anchor],
+) -> Result<Option<Duration>, String> {
+    let needed_by: Instant = now
+        .checked_add(send_lead(event, anchors))
+        .map_err(|error| error.to_string())?;
+    Ok(needed_by
+        .checked_sub(at)
+        .ok()
+        .filter(|late| *late > Duration::ZERO))
+}
+
+fn send<O: EventOutput>(
+    output: &O,
     event: &ScheduledEvent,
     at: Instant,
     anchors: &[Anchor],
 ) -> Result<(), String> {
-    let port: &OutputPort = find_port(output, event.port.as_str())?;
-    let result: Result<(), AlsaOutputError> = match event.action {
-        OutputAction::ClockPulse => output.queue_clock_pulse(port, at, 0),
+    let port: &str = event.port.as_str();
+    match event.action {
+        OutputAction::ClockPulse => output.clock_pulse(port, at),
         OutputAction::NoteOn {
             channel,
             note,
             velocity,
-        } => output.queue_note_on(
+        } => output.note_on(
             port,
             at,
             channel.wire_value(),
@@ -438,7 +405,7 @@ fn send(
             velocity.value(),
         ),
         OutputAction::NoteOff { channel, note } | OutputAction::LegatoNoteOff { channel, note } => {
-            output.queue_note_off(port, at, channel.wire_value(), note.value())
+            output.note_off(port, at, channel.wire_value(), note.value())
         }
         OutputAction::TouchingNoteOff {
             channel,
@@ -451,7 +418,7 @@ fn send(
         {
             // The note started before the place playing started from, so
             // its note-on was never sent and there is nothing to shorten.
-            output.queue_note_off(port, at, channel.wire_value(), note.value())
+            output.note_off(port, at, channel.wire_value(), note.value())
         }
         OutputAction::TouchingNoteOff {
             channel,
@@ -462,7 +429,7 @@ fn send(
             let note_on_at: Instant = instant_in(anchors, note_on_position)?
                 .checked_add(event.delay)
                 .map_err(|error| error.to_string())?;
-            output.queue_note_off_before_note_on(
+            output.note_off_before_note_on(
                 port,
                 note_on_at,
                 at,
@@ -475,7 +442,7 @@ fn send(
             channel,
             controller,
             value,
-        } => output.queue_control_change(
+        } => output.control_change(
             port,
             at,
             channel.wire_value(),
@@ -483,13 +450,12 @@ fn send(
             value.value(),
         ),
         OutputAction::ProgramChange { channel, program } => {
-            output.queue_program_change(port, at, channel.wire_value(), program.value())
+            output.program_change(port, at, channel.wire_value(), program.value())
         }
-        OutputAction::Transport(TransportMessage::Start) => output.queue_start(port, at),
-        OutputAction::Transport(TransportMessage::Stop) => output.queue_stop(port, at),
-        OutputAction::Transport(TransportMessage::Continue) => output.queue_continue(port, at),
-    };
-    result.map_err(|error| error.to_string())
+        OutputAction::Transport(TransportMessage::Start) => output.start(port, at),
+        OutputAction::Transport(TransportMessage::Stop) => output.stop(port, at),
+        OutputAction::Transport(TransportMessage::Continue) => output.continue_(port, at),
+    }
 }
 
 /// The instant of `position`, from the last anchor at or before it.
@@ -503,12 +469,4 @@ fn instant_in(anchors: &[Anchor], position: ScorePosition) -> Result<Instant, St
     anchor
         .instant_at(position)
         .map_err(|error| error.to_string())
-}
-
-fn find_port<'a>(output: &'a SequencerOutput, name: &str) -> Result<&'a OutputPort, String> {
-    output
-        .ports()
-        .iter()
-        .find(|port: &&OutputPort| port.name() == name)
-        .ok_or_else(|| format!("No output port named {name:?}."))
 }

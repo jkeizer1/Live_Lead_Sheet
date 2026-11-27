@@ -325,6 +325,17 @@ impl OpenWindow {
             Some(workspace) => action_for(code, self.modifiers, &workspace.session),
             None => action_without_song(code, self.modifiers),
         };
+        // An F1 dialog is open: a key with no action of its own types text.
+        if action.is_none()
+            && !self.modifiers.control_key()
+            && let Some(workspace) = self.workspace.as_mut()
+            && workspace.session.arrange_has_dialog()
+        {
+            if let Some(typed) = text {
+                workspace.session.type_text(typed);
+            }
+            return false;
+        }
         match action {
             Some(action) => self.act(action),
             None => false,
@@ -821,6 +832,7 @@ impl OpenWindow {
         };
         let command: Command = match target {
             HitTarget::Shell(_) | HitTarget::Repair(_) | HitTarget::CopyMessage(_) => return false,
+            HitTarget::Arrange(target) => Command::ArrangeClick { target, double },
             HitTarget::Mode(mode) => Command::SetMode(mode),
             HitTarget::LibraryTab(tab) => Command::SetTab(tab),
             HitTarget::Entry(entry) => Command::SelectEntry(entry),

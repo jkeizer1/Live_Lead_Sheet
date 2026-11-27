@@ -2,7 +2,7 @@
 Type=Application
 Name=Live Lead Sheet
 Comment=Open a song in the live lead sheet
-Exec=@PROJECT@/target/release/app %f
+Exec=@PROJECT@/tools/open_song.sh %f
 Path=@PROJECT@
 Icon=audio-x-generic
 Terminal=false

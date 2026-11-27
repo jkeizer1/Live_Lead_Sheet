@@ -138,6 +138,11 @@ pub fn draw_screen(
     }
     screen_shell::draw_menu_bar(&mut canvas, &layout, shell)?;
     canvas.begin_overlay();
+    if let Content::Song(session) = content
+        && session.zoom == Zoom::Form
+    {
+        screen_form::draw_dialog(&mut canvas, layout.main, layout.unit_pixels, session)?;
+    }
     let session: Option<&Session> = match content {
         Content::Song(session) => Some(session),
         Content::Repair(_) | Content::Empty => None,
@@ -625,14 +630,14 @@ pub fn help_lines(session: &Session) -> (String, String) {
         "Library:  Up/Down browse (shows a preview)   Left/Right Progressions or Rhythms   Enter apply   Esc drop   Space hear the preview   N new section from the progression   Tab back"
     } else {
         match session.mode {
-            Mode::ArrangeSections => {
-                "F1 Arrange Sections:  Left/Right or Up/Down entry   [ ] fewer/more repeats   M mute   Alt+Left/Right move entry   D duplicate   Delete remove   Shift+Up/Down entry key by semitone   Ctrl+Up/Down entry key by fifth   T/Shift+T entry tempo   N new section"
+            Mode::ArrangeSongSections => {
+                "F1 Arrange Song Sections:  Up/Down row   Left/Right cell   Enter or click edit   + - plays or tempo   Delete clears an entry's own key or tempo (on the name: removes the row)   Alt+Up/Down move row   N new section   E add entry   K key change   D duplicate   M leave out"
             }
             Mode::ComposeSections => {
                 "F2 Compose Sections:  Left/Right bar   Up/Down line   Shift+Up/Down or K/Shift+K section key by semitone   Ctrl+Up/Down or F/Shift+F section key by fifth   T/Shift+T section tempo   C coupled/sampled"
             }
-            Mode::EditLines => {
-                "F3 Edit Lines:  Left/Right note   Shift+Left/Right bars   Up/Down line   Ctrl+- / Ctrl+= more/fewer bars   Ctrl+Up/Down scale step   Ctrl+Shift+Up/Down chord tone   Shift+Up/Down semitone   Alt+Up/Down octave   A accent   R rest/note   B bass from roots"
+            Mode::SectionEditor => {
+                "F3 Section Editor:  Left/Right note   Shift+Left/Right bars   Up/Down line   Ctrl+- / Ctrl+= more/fewer bars   Ctrl+Up/Down scale step   Ctrl+Shift+Up/Down chord tone   Shift+Up/Down semitone   Alt+Up/Down octave   A accent   R rest/note   B bass from roots"
             }
             Mode::SongHarmony => {
                 "F4 Song Harmony:  Left/Right bar   Up/Down entry   Shift+Left/Right bar range   Ctrl+Up/Down chords by scale step   Shift+Up/Down chords by semitone   Tab progressions"

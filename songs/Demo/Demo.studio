@@ -15,16 +15,11 @@ track "Clock"
 track "Beat"
   port "Beat pulse"  channel 15
   velocity mezzo_forte 80  accent 127
-  octave_offset 0 octaves
 
 track "Keys"
   port "Harmony"  channel 1
 
 track "Bass"
   port "Bass"  channel 2
-  octave_offset 0 octaves
   velocity mezzo_forte 100  accent 115
-  retrigger_gap 2 ms
-
-#destination "SQ-1"
-#  port "To SQ-1"  channel 1
+  retrigger_gap 18 ms

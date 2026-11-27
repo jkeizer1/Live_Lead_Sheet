@@ -1,0 +1,19 @@
+[package]
+name = "sender"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+vocabulary = { path = "../vocabulary" }
+# The schedule the loop sends, and the anchors that turn positions into instants.
+player = { path = "../player" }
+# The real output the loop is given in the program.
+alsa_output = { path = "../alsa_output" }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+# The tests play songs read from canonical files.
+song_text = { path = "../song_text" }

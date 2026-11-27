@@ -1,6 +1,6 @@
 # Live Lead Sheet — Missing features of the editor (GUI)
 
-Revision 1 — 23 Nov 2026
+Revision 2 — 26 Nov 2026
 
 What Song Notation (Revision 27) lets a song file say, against what the
 editor draft can render and compose today. A song that uses any of these
@@ -10,8 +10,8 @@ only in the program's screen and keys.
 Each row says whether the editor **renders** the feature (shows it as
 composed) and whether it can **compose** it (create or change it with its
 own keys and library). "Partly" is explained in the note. The last column
-names the mode where it would belong (F1 Arrange Sections, F2 Compose
-Sections, F3 Edit Lines, F4 Song Harmony, F5 Track Harmony), as a first
+names the mode where it would belong (F1 Arrange Song Sections, F2 Compose
+Sections, F3 Section Editor, F4 Song Harmony, F5 Track Harmony), as a first
 guess for the order of work, not a decision.
 
 Related open questions are in `Editor Draft.md`, section "Open questions".
@@ -81,19 +81,19 @@ Related open questions are in `Editor Draft.md`, section "Open questions".
 
 | Feature | Renders | Composes | Note | Mode |
 |---|---|---|---|---|
-| Section name | Yes | No | Cannot be renamed. | F2 |
+| Section name | Yes | Yes | Renamed in F1 (a double-click or Enter on the name); every entry that plays it follows. | F1 |
 | Section `key` | Yes | Yes | K, F, and the interval keys in F2; notes move with it. | F2 |
-| Section `meter` | Partly | No | The time signature is drawn at the start of the strip only, not again where the meter changes. Cannot be changed. | F2 |
+| Section `meter` | Partly | Partly | The time signature is drawn at the start of the strip only, not again where the meter changes. F1 changes it while the section holds only rests (a new section); a section with music keeps its meter until its bars can be changed in the Section Editor. | F1, F3 |
 | Beat grouping (`grouping 2+2+3`) | No | No | Not used for beaming or accents on screen. | F2 |
 | Section `tempo` | Yes | Yes | T / Shift+T. Fractional tempos and beats/s are not composed. | F2 |
-| `count-in` | Yes | No | Shown in the form list; cannot be set or removed. | F1 |
-| Sections no entry names | No | No | A section the composition does not play is not shown anywhere. | F1 |
-| A new section | — | Partly | N makes one from a progression; there is no empty new section and no copy of a section under a new name. | F1 |
-| Entries: order, repeat, mute, duplicate, remove | Yes | Yes | Alt+Left/Right, `[` `]`, M, D, Delete. | F1 |
-| An entry naming an existing section | — | Partly | Only by duplicating an entry; no choice of section for a new entry. | F1 |
-| Entry `key` and `tempo` | Yes | Yes | K, F, T and the interval keys in F1. The entry's key does not move composed notes (Q1). | F1 |
-| `key` / `tempo` lines between entries (a new base) | Partly | No | Their effect is shown on the entries after them; they cannot be added, changed or removed. | F1 |
-| The composition's starting key, meter, tempo | Partly | No | Shown through the entries; not editable. | F1 |
+| `count-in` | Yes | Partly | Shown in the form list; set when a section is made (F1's new-section form); cannot be set or removed afterwards. | F1 |
+| Sections no entry names | No | Partly | Not shown as a row; F1's add-entry list (E) offers every section, so one can be played again. | F1 |
+| A new section | — | Yes | N in F1 opens the new-section form (name, meter, its own key and tempo or the composition's, count-in); the section gets one bar of rest on the lead track and an entry. N in F2 to F5 makes one from a progression. No copy of a section under a new name. | F1 |
+| Entries: order, repeat, mute, duplicate, remove | Yes | Yes | Alt+Up/Down, + and − (or `[` `]`), M, D, Delete on the name. | F1 |
+| An entry naming an existing section | — | Yes | E chooses the section from a list. | F1 |
+| Entry `key` and `tempo` | Yes | Yes | The key picker (any key, major or minor) and the tempo (typed, fractions allowed, or + and −); Delete takes the entry's own value off. A faint word shows where each value comes from. The entry's key does not move composed notes (Q1; Song Notation Q35). | F1 |
+| `key` / `tempo` lines between entries (a new base) | Yes | Yes | Shown as "From here on" rows; K adds one; its key and tempo are edited like an entry's; Delete takes a value off, and with neither left the line goes. | F1 |
+| The composition's starting key, meter, tempo | Yes | Yes | The "Song starts in" row: the key picker, the meter picker, the tempo typed or + and −. | F1 |
 | Repeat signs `|%` `%|`, `|%3` | Partly | No | The bars are rendered written out; an edit of the line writes them out in the file (Q5). | F3 |
 | Polymeter | — | — | Deferred in Song Notation. | — |
 | A long line over several text lines | — | Partly | Kept where an edit does not touch; an edited line is written four bars to a text line (Q5). | — |

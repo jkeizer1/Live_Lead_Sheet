@@ -9,6 +9,7 @@ members = [
     "crates/composer",
     "crates/render",
     "crates/alsa_output",
+    "crates/sender",
     "crates/app",
     "crates/atlas_tool",
 ]

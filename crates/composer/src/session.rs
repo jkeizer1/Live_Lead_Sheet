@@ -15,6 +15,11 @@ use vocabulary::song::{Section, Song, Track, TrackKind};
 use vocabulary::time_signature::TimeSignature;
 
 use crate::apply::RhythmBars;
+use crate::arrange_editor::{
+    ArrangeContext, ArrangeEditor, ArrangeKey, ArrangeRequest, ArrangeTarget,
+};
+use crate::arrange_writer::write_arrange_edit;
+use crate::arrangement::{ArrangeRow, arrangement_rows};
 use crate::edits::{
     duplicate_entry, move_entry, remove_entry, set_entry_key, set_entry_repeat, set_entry_tempo,
     set_section_key, set_section_tempo,
@@ -37,13 +42,15 @@ use crate::timeline::{EntryView, Timeline};
 /// coupled or sampled belongs to the composed line, not to a mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
-    /// The composition: sections in order, repeats, each entry's key and
-    /// tempo.
-    ArrangeSections,
+    /// The `song_composition` block: the song's start, its key and tempo
+    /// changes, and its entries (which section, how many times, in which
+    /// key and at which tempo). New sections are made here, not composed.
+    ArrangeSongSections,
     /// One section: its key and tempo, its lines' forms.
     ComposeSections,
-    /// The music on the lines, note by note on the staff.
-    EditLines,
+    /// The Section Editor: the music on a section's lines, note by note
+    /// on the staff, and its bars.
+    SectionEditor,
     /// The song's harmony: the lead line's chords.
     SongHarmony,
     /// One track's own harmony: a sampled line's source, or a chord
@@ -53,9 +60,9 @@ pub enum Mode {
 
 impl Mode {
     pub const ALL: [Mode; 5] = [
-        Mode::ArrangeSections,
+        Mode::ArrangeSongSections,
         Mode::ComposeSections,
-        Mode::EditLines,
+        Mode::SectionEditor,
         Mode::SongHarmony,
         Mode::TrackHarmony,
     ];
@@ -63,9 +70,9 @@ impl Mode {
     #[must_use]
     pub const fn title(self) -> &'static str {
         match self {
-            Mode::ArrangeSections => "Arrange Sections",
+            Mode::ArrangeSongSections => "Arrange Song Sections",
             Mode::ComposeSections => "Compose Sections",
-            Mode::EditLines => "Edit Lines",
+            Mode::SectionEditor => "Section Editor",
             Mode::SongHarmony => "Song Harmony",
             Mode::TrackHarmony => "Track Harmony",
         }
@@ -75,9 +82,9 @@ impl Mode {
     #[must_use]
     pub const fn key_name(self) -> &'static str {
         match self {
-            Mode::ArrangeSections => "F1",
+            Mode::ArrangeSongSections => "F1",
             Mode::ComposeSections => "F2",
-            Mode::EditLines => "F3",
+            Mode::SectionEditor => "F3",
             Mode::SongHarmony => "F4",
             Mode::TrackHarmony => "F5",
         }
@@ -87,17 +94,17 @@ impl Mode {
     #[must_use]
     pub const fn view(self) -> Zoom {
         match self {
-            Mode::ArrangeSections => Zoom::Form,
+            Mode::ArrangeSongSections => Zoom::Form,
             Mode::ComposeSections => Zoom::Tracks,
-            Mode::EditLines | Mode::TrackHarmony => Zoom::Staff,
+            Mode::SectionEditor | Mode::TrackHarmony => Zoom::Staff,
             Mode::SongHarmony => Zoom::Harmony,
         }
     }
 
     const fn tab(self) -> LibraryTab {
         match self {
-            Mode::EditLines => LibraryTab::Rhythms,
-            Mode::ArrangeSections
+            Mode::SectionEditor => LibraryTab::Rhythms,
+            Mode::ArrangeSongSections
             | Mode::ComposeSections
             | Mode::SongHarmony
             | Mode::TrackHarmony => LibraryTab::Progressions,
@@ -235,6 +242,13 @@ pub enum Command {
         pass_number: u32,
     },
     SelectLibraryRow(usize),
+    /// A key in F1 (Arrange Song Sections).
+    Arrange(ArrangeKey),
+    /// A click in F1.
+    ArrangeClick {
+        target: ArrangeTarget,
+        double: bool,
+    },
 }
 
 pub struct Session {
@@ -257,6 +271,8 @@ pub struct Session {
     /// The section and track whose line form change was asked about, so
     /// the next press converts it; any other command forgets it.
     form_change_asked: Option<(String, String)>,
+    /// F1's selected row and cell, and its open dialog.
+    arrange: ArrangeEditor,
 }
 
 /// Bars from about half (1.25^-3 ≈ 0.51) to 2.4 times (1.25^4 ≈ 2.44)
@@ -304,6 +320,7 @@ impl Session {
             message: None,
             messages_said_count: 0,
             form_change_asked: None,
+            arrange: ArrangeEditor::default(),
         };
         session.cursors[0] = session.first_item_row(LibraryTab::Progressions);
         session.cursors[1] = session.first_item_row(LibraryTab::Rhythms);
@@ -415,16 +432,7 @@ impl Session {
         }
         self.form_change_asked = None;
         match command {
-            Command::SetMode(mode) => {
-                self.drop_preview();
-                self.mode = mode;
-                self.zoom = mode.view();
-                self.tab = mode.tab();
-                self.say(
-                    MessageKind::Done,
-                    format!("{} {}.", mode.key_name(), mode.title()),
-                );
-            }
+            Command::SetMode(mode) => self.set_mode(mode),
             Command::StaffBarWidth(steps) => self.change_staff_bar_width(steps),
             Command::SwitchPane => {
                 self.pane = match self.pane {
@@ -506,8 +514,119 @@ impl Session {
                     self.refresh_preview();
                 }
             }
+            Command::Arrange(_) | Command::ArrangeClick { .. } => self.arrange_command(command),
             musical => self.musical(musical),
         }
+    }
+
+    fn set_mode(&mut self, mode: Mode) {
+        self.drop_preview();
+        self.arrange.close_dialog();
+        if mode == Mode::ArrangeSongSections {
+            self.arrange_select_entry_row();
+        }
+        self.mode = mode;
+        self.zoom = mode.view();
+        self.tab = mode.tab();
+        self.say(
+            MessageKind::Done,
+            format!("{} {}.", mode.key_name(), mode.title()),
+        );
+    }
+
+    /// A key or click in F1, handed to its editor; what it asks is written.
+    fn arrange_command(&mut self, command: Command) {
+        let rows: Vec<ArrangeRow> = self.arrange_rows();
+        let context: ArrangeContext =
+            arrange_context(&rows, &self.timeline, self.document.source());
+        let request: Option<ArrangeRequest> = match command {
+            Command::Arrange(key) => self.arrange.key(key, &context),
+            Command::ArrangeClick { target, double } => {
+                self.arrange.click(target, double, &context)
+            }
+            _ => None,
+        };
+        self.carry_out_arrange(request);
+    }
+
+    // ---- F1 Arrange Song Sections ---------------------------------------
+
+    /// The composition's rows, as F1 shows them.
+    #[must_use]
+    pub fn arrange_rows(&self) -> Vec<ArrangeRow> {
+        arrangement_rows(self.document.source(), self.document.song(), &self.timeline)
+    }
+
+    /// F1's selected row and cell, and its open dialog.
+    #[must_use]
+    pub fn arrange(&self) -> &ArrangeEditor {
+        &self.arrange
+    }
+
+    /// Whether F1 has a dialog open: then typed text goes to it.
+    #[must_use]
+    pub fn arrange_has_dialog(&self) -> bool {
+        self.mode == Mode::ArrangeSongSections && self.arrange.has_dialog()
+    }
+
+    /// Text typed while an F1 dialog is open.
+    pub fn type_text(&mut self, typed: &str) {
+        if self.arrange_has_dialog() {
+            self.arrange.type_text(typed);
+        }
+    }
+
+    /// Puts F1's selection on the row of the selected entry.
+    fn arrange_select_entry_row(&mut self) {
+        let rows: Vec<ArrangeRow> = self.arrange_rows();
+        if let Some(row) = rows.iter().position(|row: &ArrangeRow| {
+            matches!(row, ArrangeRow::Entry(entry) if entry.entry_index == self.selection.entry)
+        }) {
+            self.arrange.row = row;
+        }
+        self.arrange.clamp(&rows);
+    }
+
+    /// The selected entry follows F1's row, so Play and the form strip use
+    /// it.
+    fn follow_arrange_row(&mut self) {
+        let rows: Vec<ArrangeRow> = self.arrange_rows();
+        self.arrange.clamp(&rows);
+        if let Some(entry) = self.arrange.selected_entry(&rows) {
+            self.selection.entry = entry;
+            self.clamp_selection();
+        }
+    }
+
+    fn carry_out_arrange(&mut self, request: Option<ArrangeRequest>) {
+        match request {
+            None => {}
+            Some(ArrangeRequest::Say(kind, text)) => self.say(kind, text),
+            Some(ArrangeRequest::Edit { edit, then_row }) => {
+                let written: Result<(String, String), String> = write_arrange_edit(
+                    &edit,
+                    self.document.text(),
+                    self.document.source(),
+                    self.document.song(),
+                );
+                match written {
+                    Ok((text, what)) => {
+                        let before: String = self.document.text().to_string();
+                        self.take(text, &what);
+                        if self.document.text() != before {
+                            // Kept: a dialog left open for a correction
+                            // (the new-section form) has done its work.
+                            self.arrange.close_dialog();
+                            if let Some(row) = then_row {
+                                self.arrange.row = row;
+                            }
+                        }
+                    }
+                    Err(why) => self.say(MessageKind::Problem, format!("{why}.")),
+                }
+            }
+        }
+        self.follow_arrange_row();
     }
 
     fn musical(&mut self, command: Command) {
@@ -709,8 +828,12 @@ impl Session {
             }
             // Note by note only where the notes are edited; the harmony
             // of a track is edited bar by bar.
-            (Zoom::Staff, Command::Left) if self.mode == Mode::EditLines => self.step_element(-1),
-            (Zoom::Staff, Command::Right) if self.mode == Mode::EditLines => self.step_element(1),
+            (Zoom::Staff, Command::Left) if self.mode == Mode::SectionEditor => {
+                self.step_element(-1);
+            }
+            (Zoom::Staff, Command::Right) if self.mode == Mode::SectionEditor => {
+                self.step_element(1);
+            }
             (Zoom::Harmony | Zoom::Tracks | Zoom::Staff, Command::Left) => self.step_bar(-1),
             (Zoom::Harmony | Zoom::Tracks | Zoom::Staff, Command::Right) => self.step_bar(1),
             (Zoom::Tracks | Zoom::Staff, Command::Up) => self.step_track(-1),
@@ -973,12 +1096,12 @@ impl Session {
             .selected_section()
             .is_some_and(|section: &Section| is_sampled(section, track));
         match self.mode {
-            Mode::ArrangeSections => format!(
+            Mode::ArrangeSongSections => format!(
                 "Editing: the composition, entry {} \"{section}\"",
                 self.selection.entry + 1
             ),
             Mode::ComposeSections => format!("Editing: section \"{section}\""),
-            Mode::EditLines => {
+            Mode::SectionEditor => {
                 let form: &str = if sampled { "sampled" } else { "coupled" };
                 format!(
                     "Editing: {track} line ({form}), \"{section}\" {bars}, note {}",
@@ -1089,7 +1212,7 @@ impl Session {
         match self.mode {
             // The entry's key (Arrange) or the section's, notes moving
             // with it (Compose); `change_key` tells them apart by the view.
-            Mode::ArrangeSections | Mode::ComposeSections => match step {
+            Mode::ArrangeSongSections | Mode::ComposeSections => match step {
                 Step::Chromatic(semitones) => self.change_key(semitones, false),
                 Step::Diatonic(steps) => self.change_key(steps, true),
                 Step::Octave(_) => Err(String::from(
@@ -1112,7 +1235,7 @@ impl Session {
                     )
                 })
             }),
-            Mode::EditLines => {
+            Mode::SectionEditor => {
                 let element: usize = self.selection.element;
                 self.with_target(|target| {
                     move_contents(target, step, Some(element))
@@ -1130,8 +1253,10 @@ impl Session {
             "chord tones"
         };
         let words: String = format!("{direction} {} {tone}", steps.unsigned_abs());
-        if self.mode != Mode::EditLines {
-            return Err(String::from("chord tones move notes: use F3 Edit Lines"));
+        if self.mode != Mode::SectionEditor {
+            return Err(String::from(
+                "chord tones move notes: use F3 Section Editor",
+            ));
         }
         let element: usize = self.selection.element;
         self.with_target(|target| {
@@ -1332,9 +1457,9 @@ impl Session {
     }
 
     fn accent_selected(&self) -> Result<(String, String), String> {
-        if self.mode != Mode::EditLines {
+        if self.mode != Mode::SectionEditor {
             return Err(String::from(
-                "accents are set note by note: use F3 Edit Lines",
+                "accents are set note by note: use F3 Section Editor",
             ));
         }
         let element: usize = self.selection.element;
@@ -1411,9 +1536,9 @@ impl Session {
     }
 
     fn toggle_selected_rest(&self) -> Result<(String, String), String> {
-        if self.mode != Mode::EditLines {
+        if self.mode != Mode::SectionEditor {
             return Err(String::from(
-                "rests are changed note by note: use F3 Edit Lines",
+                "rests are changed note by note: use F3 Section Editor",
             ));
         }
         let element: usize = self.selection.element;
@@ -1462,6 +1587,24 @@ impl Session {
                 self.selection.entry + 1
             ),
         ))
+    }
+}
+
+/// What F1's editor reads of the song. A free function, so the editor (a
+/// field of the session) can be borrowed apart from what it reads.
+fn arrange_context<'a>(
+    rows: &'a [ArrangeRow],
+    timeline: &'a Timeline,
+    source: &SongSource,
+) -> ArrangeContext<'a> {
+    ArrangeContext {
+        rows,
+        timeline,
+        section_names: source
+            .sections
+            .iter()
+            .map(|section| section.name.clone())
+            .collect(),
     }
 }
 
@@ -1545,7 +1688,7 @@ mod tests {
     #[test]
     fn a_rhythm_keeps_the_chords_and_a_bass_follows_the_lead() {
         let mut session: Session = session();
-        session.handle(Command::SetMode(Mode::EditLines));
+        session.handle(Command::SetMode(Mode::SectionEditor));
         session.handle(Command::SelectTrack(1));
         session.handle(Command::SwitchPane);
         // Rhythms in 4/4 come first: the whole-note pulse.
@@ -1586,7 +1729,7 @@ mod tests {
                 .text()
                 .contains("line \"Bass\"  | D2:h A2 | B2:q F#2 B2 F#2 |")
         );
-        session.handle(Command::SetMode(Mode::ArrangeSections));
+        session.handle(Command::SetMode(Mode::ArrangeSongSections));
         session.handle(Command::Repeat(1));
         expect_done(&session);
         assert!(session.document().text().contains("\"Verse\"  repeat 3"));
@@ -1597,7 +1740,7 @@ mod tests {
     #[test]
     fn bass_notes_move_through_the_leads_chord_tones() {
         let mut session: Session = session();
-        session.handle(Command::SetMode(Mode::EditLines));
+        session.handle(Command::SetMode(Mode::SectionEditor));
         let select = |element: usize, bar: usize| Command::SelectElement {
             entry: 1,
             bar,
@@ -1644,7 +1787,7 @@ mod tests {
         let libraries: Libraries =
             Libraries::read("p.library", PROGRESSIONS, "r.library", RHYTHMS).unwrap();
         let mut session: Session = Session::new(document, libraries);
-        session.handle(Command::SetMode(Mode::EditLines));
+        session.handle(Command::SetMode(Mode::SectionEditor));
         let select = |track: usize, bar: usize, element: usize| Command::SelectElement {
             entry: 0,
             bar,
@@ -1687,7 +1830,7 @@ mod tests {
     #[test]
     fn the_staff_steps_through_each_time_a_repeated_entry_plays() {
         let mut session: Session = session();
-        session.handle(Command::SetMode(Mode::EditLines));
+        session.handle(Command::SetMode(Mode::SectionEditor));
         session.handle(Command::SelectTrack(1));
         let place = |session: &Session| {
             (
@@ -1740,7 +1883,7 @@ mod tests {
     #[test]
     fn a_line_converts_between_coupled_and_sampled_keeping_its_notes() {
         let mut session: Session = session();
-        session.handle(Command::SetMode(Mode::EditLines));
+        session.handle(Command::SetMode(Mode::SectionEditor));
         session.handle(Command::SelectTrack(1));
         let before: Vec<(usize, u64, Vec<String>)> = played(&session, 1, 1);
         // The first press only asks.
@@ -1784,7 +1927,7 @@ mod tests {
         let libraries: Libraries =
             Libraries::read("p.library", PROGRESSIONS, "r.library", RHYTHMS).unwrap();
         let mut held: Session = Session::new(document, libraries);
-        held.handle(Command::SetMode(Mode::EditLines));
+        held.handle(Command::SetMode(Mode::SectionEditor));
         held.handle(Command::SelectTrack(1));
         held.handle(Command::ConvertLineForm);
         held.handle(Command::ConvertLineForm);
@@ -1795,7 +1938,7 @@ mod tests {
     #[test]
     fn a_rhythm_applied_to_a_coupled_bass_keeps_its_composed_notes() {
         let mut session: Session = session();
-        session.handle(Command::SetMode(Mode::EditLines));
+        session.handle(Command::SetMode(Mode::SectionEditor));
         session.handle(Command::SelectTrack(1));
         session.handle(Command::SwitchPane);
         // Rhythms in 4/4 come first: the whole-note pulse, then quarters.
@@ -1813,7 +1956,7 @@ mod tests {
         let mut session: Session = session();
         session.handle(Command::SelectEntry(3));
         session.handle(Command::ExtendRight);
-        session.handle(Command::SetMode(Mode::EditLines));
+        session.handle(Command::SetMode(Mode::SectionEditor));
         session.handle(Command::SetTab(LibraryTab::Progressions));
         session.handle(Command::SwitchPane);
         session.handle(Command::Commit);
@@ -1839,5 +1982,113 @@ mod tests {
             .collect();
         assert_eq!(names[2], "ii-V-I");
         assert_eq!(symbols(&session, 2), vec!["Dm7", "G7", "CM7", "CM7"]);
+    }
+}
+
+#[cfg(test)]
+mod arrange_tests {
+    use super::*;
+    use crate::arrange_editor::ArrangeKey;
+
+    const ARRANGE: &str = include_str!("../../../songs_canonical/composer/arrange_song.song");
+
+    fn press(session: &mut Session, keys: &[ArrangeKey]) {
+        for key in keys {
+            session.handle(Command::Arrange(*key));
+            if let Some(message) = session.message() {
+                assert_eq!(message.kind, MessageKind::Done, "{}", message.text);
+            }
+        }
+    }
+
+    const AFTER_F1: &str =
+        include_str!("../../../songs_canonical/composer/arrange_song_after_f1.song");
+
+    /// The text after the two comment lines every canonical file starts
+    /// with, which say which test reads it.
+    fn without_header(text: &str) -> String {
+        text.lines().skip(2).collect::<Vec<&str>>().join("\n")
+    }
+
+    /// A series of F1 keys writes exactly the expected text, which the
+    /// song file's reader then plays as the text player would.
+    #[test]
+    fn f1_edits_write_the_song_composition() {
+        use ArrangeKey::{Backspace, Delete, Down, End, Enter, Left, NewSection, Plus, Right, Up};
+        let document: SongDocument =
+            SongDocument::new("arrange_song.song", ARRANGE.to_string()).unwrap();
+        let libraries: Libraries = Libraries::read(
+            "p.library",
+            include_str!("../../../songs_canonical/composer/composer_progressions.library"),
+            "r.library",
+            include_str!("../../../songs_canonical/composer/composer_rhythms.library"),
+        )
+        .unwrap();
+        let mut session: Session = Session::new(document, libraries);
+        session.handle(Command::SetMode(Mode::ArrangeSongSections));
+        press(&mut session, &[Right, Plus, Up, Enter, Right, Enter]);
+        press(&mut session, &[Down, Down, Delete]);
+        press(
+            &mut session,
+            &[Right, Right, Enter, Backspace, Backspace, Backspace],
+        );
+        session.type_text("112.5");
+        press(
+            &mut session,
+            &[
+                Enter, Down, Plus, Down, Down, Left, Left, Left, Left, Enter, End,
+            ],
+        );
+        session.type_text(" B");
+        press(&mut session, &[Enter, NewSection]);
+        session.type_text("Outro");
+        press(&mut session, &[Down]);
+        session.type_text("-");
+        press(&mut session, &[Down, Right, Down]);
+        session.type_text("80");
+        press(&mut session, &[Enter]);
+        assert_eq!(
+            without_header(session.document().text()),
+            without_header(AFTER_F1)
+        );
+        assert!(read_song("arrange_song_after_f1.song", AFTER_F1).is_ok());
+        // Undo takes back the new section in one step.
+        session.handle(Command::Undo);
+        assert!(!session.document().text().contains("Outro"));
+    }
+
+    #[test]
+    fn f1_refuses_what_the_notation_does_not_allow() {
+        use ArrangeKey::{Delete, Down, Enter, Right};
+        let document: SongDocument =
+            SongDocument::new("arrange_song.song", ARRANGE.to_string()).unwrap();
+        let libraries: Libraries = Libraries::read(
+            "p.library",
+            include_str!("../../../songs_canonical/composer/composer_progressions.library"),
+            "r.library",
+            include_str!("../../../songs_canonical/composer/composer_rhythms.library"),
+        )
+        .unwrap();
+        let mut session: Session = Session::new(document, libraries);
+        session.handle(Command::SetMode(Mode::ArrangeSongSections));
+        let problem = |session: &Session| {
+            session
+                .message()
+                .is_some_and(|message| message.kind == MessageKind::Problem)
+        };
+        // The Riff has music, so F1 does not change its meter.
+        session.handle(Command::Arrange(Down));
+        for _ in 0..3 {
+            session.handle(Command::Arrange(Right));
+        }
+        session.handle(Command::Arrange(Enter));
+        assert!(problem(&session));
+        assert!(!session.arrange_has_dialog());
+        // The Intro writes no key of its own, so there is none to clear.
+        session.handle(Command::Arrange(ArrangeKey::Up));
+        session.handle(Command::Arrange(ArrangeKey::Left));
+        session.handle(Command::Arrange(Delete));
+        assert!(problem(&session));
+        assert_eq!(session.document().text(), ARRANGE);
     }
 }

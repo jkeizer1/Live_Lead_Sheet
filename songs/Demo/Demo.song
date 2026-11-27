@@ -3,13 +3,7 @@
 # says where each track goes.
 # Tossed 24 Nov 2026 (line 16): jim was here
 song "Demo"
-
-track "Clock"
-  type clock_and_transport
-
-track "Beat"
-  type mono_voice
-  clef treble
+chord_numeral_standard key_dependent
 
 track "Keys"
   type poly_voice
@@ -20,6 +14,13 @@ track "Bass"
   type mono_voice
   clef bass
 
+track "Beat"
+  type mono_voice
+  clef treble
+
+track "Clock"
+  type clock_and_transport
+
 #track "Cues"
 #  type cue_control
 #  cue "Start SQ-1"  destination "SQ-1"  start
@@ -27,23 +28,26 @@ track "Bass"
 song_composition
   key C major  meter 4/4  tempo 140 beats/min
   "Count-in"
-  "Verse ONE"
-  "Verse TWO"  repeat 2
-  "Verse THREE"
-  "Verse CLOSE"  repeat 2
+  "Verse TWO"  key C major
+  "Verse ONE"  key C major
+  "Verse THREE"  tempo 140 beats/min
+  "Verse CLOSE"  repeat 2  tempo 145 beats/min
+  "Verse TWO"  key C major  tempo 145 beats/min
+  "Verse ONE"  key C major  tempo 145 beats/min
+  "Verse CLOSE"  repeat 2  key C major  tempo 120 beats/min
 song_composition_close
 
 section "Count-in"  count-in
   meter 4/4  tempo 140 beats/min
-  line "Beat"  | C4:q> / / / |
+  line "Beat"  | C5:q> C4:q C3:q C2:q |
 
 # C – G – Am – F
 section "Verse ONE"
   key C major  meter 4/4  tempo 140 beats/min
-  line "Keys"  sample_source    | I IV V ii IV V vii | V V IV IV I I | I IV V ii IV V vii | V V IV IV I I |
-  line "Keys"                   | :h :q :q | :q :q :e :e :e :e | :q :e :e :q :e :e | trp(C2:e C3:e C4:e) :sx :sx :sx r:sx :q r:q|
-  line "Bass"  | trp(A2:q> A2:q A2:q) trp(A2:q A2:q B2:q) | G2:q / C2 / | E2 / /:h | C2:q> / /> /:e / |
-  line "Beat"  | C4:q> / /> /           | / / / /             | C4 / / /       | / / / / |
+  line "Keys"  sample_source  | ii7 | V7 | i7 | i7 |
+  line "Keys"  | :h :q :q | :h> :h | :q :e :e :q :e :e | :q> :q :q :q |
+  line "Bass"  | A2:q.> /:e r:h | G2:q / C2 / | E2 / /:h | C2:q> / /> /:e / |
+  line "Beat"  | D4:q> / /> / | C4 E4 C4 / | / E4 A4 C5 | C4 / / / |
 
 # G – Am
 section "Verse TWO"
@@ -53,19 +57,19 @@ section "Verse TWO"
   line "Keys"  sample_source  | V V V V V V V V | vi vi |
   line "Keys"                  | :q.> :e r:h | :h>> :h |
   line "Bass"  | G2:h  B2               | A2  /               |
-  line "Beat"  | C4:q> / /> /           | / / / /             |
+  line "Beat"  | C4:q> / C5> / | C4:e> C5 F5 C5 / A4 F4 C4 |
 
 section "Verse THREE"
   key C major  meter 4/4  tempo 140 beats/min
 #                Baug                    Dm                 
   line "Keys"  | vii°:h /               | ii  /               | 
-  line "Bass"  | B2:q.> /:e r:h | D2 D3 |
+  line "Bass"  | B2:q.> /:e r:h | D3 D4 |
   line "Beat"  | C4:q> / /> /           | / / / /             |
 
 section "Verse CLOSE"
-  key C major  meter 4/4  tempo 140 beats/min
+  key F major  meter 4/4  tempo 140 beats/min
 #                Baug                    Dm                 
-  line "Keys"  | vii°:h /               | ii  /               | 
-  line "Bass"  | B2:q.> /:e r:h | D2 D3 |
-  line "Beat"  | C4:q> / /> /           | / / / /             |
+  line "Keys"  | iii:h / | ii / |
+  line "Bass"  | E2:q.> /:e r:h | Eb2:q> / / / |
+  line "Beat"  | E4:q> / /> / | C4 / / / |
 

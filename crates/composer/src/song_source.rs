@@ -60,7 +60,32 @@ pub struct SectionSource {
     /// Setting lines (`key`, `meter`, `tempo`, ...), the header included
     /// when it carries settings.
     pub setting_indices: Vec<usize>,
+    /// The section's own settings, as written: `D major`, `3/4`,
+    /// `132 beats/min`.
+    pub key_words: Option<String>,
+    pub meter_words: Option<String>,
+    pub tempo_words: Option<String>,
     pub lines: Vec<LineSource>,
+}
+
+/// A `key` or `tempo` line between entries of the composition: the new
+/// base for every entry below it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChangeSource {
+    pub index: usize,
+    pub key_words: Option<String>,
+    pub tempo_words: Option<String>,
+}
+
+/// One line of the composition block, in the order written.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CompositionRowSource {
+    /// The key, meter and tempo the song starts in (one or more text lines
+    /// before the first entry).
+    Start,
+    Change(ChangeSource),
+    /// An entry, by its place in `CompositionSource::entries`.
+    Entry(usize),
 }
 
 /// An entry of the composition: `"Verse"  repeat 2  key D major`.
@@ -79,10 +104,58 @@ pub struct EntrySource {
 pub struct CompositionSource {
     pub open_index: usize,
     pub close_index: usize,
-    /// The first settings line after `song_composition` (the starting key,
-    /// meter and tempo).
-    pub header_index: Option<usize>,
+    /// The text lines that give the starting key, meter and tempo: the
+    /// `song_composition` line when it carries them, and every settings
+    /// line before the first entry.
+    pub start_indices: Vec<usize>,
+    /// The starting values as written: `G major`, `4/4`, `100 beats/min`.
+    pub start_key_words: Option<String>,
+    pub start_meter_words: Option<String>,
+    pub start_tempo_words: Option<String>,
     pub entries: Vec<EntrySource>,
+    /// Every line of the block in order: the start, then entries and
+    /// change lines as written.
+    pub rows: Vec<CompositionRowSource>,
+}
+
+impl CompositionSource {
+    /// The text line a row stands on (the start's last line for the start),
+    /// so a new line can go after it.
+    #[must_use]
+    pub fn row_line_index(&self, row: &CompositionRowSource) -> usize {
+        match row {
+            CompositionRowSource::Start => self
+                .start_indices
+                .last()
+                .copied()
+                .unwrap_or(self.open_index),
+            CompositionRowSource::Change(change) => change.index,
+            CompositionRowSource::Entry(entry) => self
+                .entries
+                .get(*entry)
+                .map_or(self.open_index, |written: &EntrySource| written.index),
+        }
+    }
+}
+
+/// The words after `keyword` in a settings text, as many as the setting
+/// takes: `key` two (`C major`), `meter` one (`4/4`), `tempo` two
+/// (`120 beats/min`). `None` when the keyword is not there.
+#[must_use]
+pub fn setting_words(text: &str, keyword: &str) -> Option<String> {
+    let count: usize = match keyword {
+        "meter" => 1,
+        _ => 2,
+    };
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let position: usize = words.iter().position(|word: &&str| *word == keyword)?;
+    let value: Vec<&str> = words
+        .iter()
+        .skip(position + 1)
+        .take(count)
+        .copied()
+        .collect();
+    (value.len() == count).then(|| value.join(" "))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -126,16 +199,24 @@ impl SongSource {
                 }
                 continue;
             }
-            if keyword_rest(line, "song_composition").is_some() {
+            if let Some(rest) = keyword_rest(line, "song_composition") {
                 close_track(&mut source, &mut track);
                 close_section(&mut source, &mut section);
                 in_composition = true;
-                composition = Some(CompositionSource {
+                let mut open: CompositionSource = CompositionSource {
                     open_index: index,
                     close_index: index,
-                    header_index: None,
+                    start_indices: Vec::new(),
+                    start_key_words: None,
+                    start_meter_words: None,
+                    start_tempo_words: None,
                     entries: Vec::new(),
-                });
+                    rows: vec![CompositionRowSource::Start],
+                };
+                if !rest.trim().is_empty() {
+                    read_start_line(&mut open, index, rest);
+                }
+                composition = Some(open);
             } else if keyword_rest(line, "song").is_some() {
                 source.song_index = Some(index);
             } else if keyword_rest(line, "chord_numeral_standard").is_some() {
@@ -156,17 +237,20 @@ impl SongSource {
                 close_track(&mut source, &mut track);
                 close_section(&mut source, &mut section);
                 let (name, after): (&str, &str) = quoted_prefix(rest).unwrap_or(("", ""));
-                section = Some(SectionSource {
+                let mut open: SectionSource = SectionSource {
                     name: name.to_string(),
                     header_index: index,
                     last_index: index,
-                    setting_indices: if after.is_empty() {
-                        Vec::new()
-                    } else {
-                        vec![index]
-                    },
+                    setting_indices: Vec::new(),
+                    key_words: None,
+                    meter_words: None,
+                    tempo_words: None,
                     lines: Vec::new(),
-                });
+                };
+                if !after.trim().is_empty() {
+                    read_section_settings(&mut open, index, after);
+                }
+                section = Some(open);
             } else if let Some(open) = section.as_mut() {
                 read_section_line(open, index, line);
             } else if let Some(open) = track.as_mut() {
@@ -263,14 +347,57 @@ fn read_section_line(section: &mut SectionSource, index: usize, line: &str) {
             last.last_index = index;
         }
     } else {
-        section.setting_indices.push(index);
+        read_section_settings(section, index, line);
     }
+}
+
+/// A settings text line of a section (or the settings after its name).
+fn read_section_settings(section: &mut SectionSource, index: usize, settings: &str) {
+    section.setting_indices.push(index);
+    let settings: &str = without_comment(settings);
+    section.key_words = section.key_words.take().or(setting_words(settings, "key"));
+    section.meter_words = section
+        .meter_words
+        .take()
+        .or(setting_words(settings, "meter"));
+    section.tempo_words = section
+        .tempo_words
+        .take()
+        .or(setting_words(settings, "tempo"));
+}
+
+/// A text line giving the song's starting key, meter or tempo.
+fn read_start_line(composition: &mut CompositionSource, index: usize, settings: &str) {
+    composition.start_indices.push(index);
+    let settings: &str = without_comment(settings);
+    composition.start_key_words = composition
+        .start_key_words
+        .take()
+        .or(setting_words(settings, "key"));
+    composition.start_meter_words = composition
+        .start_meter_words
+        .take()
+        .or(setting_words(settings, "meter"));
+    composition.start_tempo_words = composition
+        .start_tempo_words
+        .take()
+        .or(setting_words(settings, "tempo"));
 }
 
 fn read_composition_line(composition: &mut CompositionSource, index: usize, line: &str) {
     let Some((name, after)) = quoted_prefix(line) else {
-        if composition.header_index.is_none() {
-            composition.header_index = Some(index);
+        // Before the first entry a settings line is part of the start, as
+        // the song file's reader takes it; after it, a change line.
+        if composition.entries.is_empty() {
+            read_start_line(composition, index, line);
+        } else {
+            composition
+                .rows
+                .push(CompositionRowSource::Change(ChangeSource {
+                    index,
+                    key_words: setting_words(line, "key"),
+                    tempo_words: setting_words(line, "tempo"),
+                }));
         }
         return;
     };
@@ -299,6 +426,9 @@ fn read_composition_line(composition: &mut CompositionSource, index: usize, line
             _ => position += 1,
         }
     }
+    composition
+        .rows
+        .push(CompositionRowSource::Entry(composition.entries.len()));
     composition.entries.push(EntrySource {
         index,
         section_name: name.to_string(),
@@ -401,6 +531,39 @@ mod tests {
         assert_eq!(tracks, vec!["Keys", "Bass", "Beat"]);
         // The Keys line goes on over a second text line.
         assert_eq!(verse.lines[0].last_index, verse.lines[0].first_index + 1);
+    }
+
+    #[test]
+    fn the_outline_lists_the_start_change_lines_and_entries_in_order() {
+        let text: &str = include_str!("../../../songs_canonical/composer/arrange_song.song");
+        let source: SongSource = SongSource::read(text);
+        let composition: &CompositionSource = source.composition.as_ref().unwrap();
+        assert_eq!(composition.start_key_words.as_deref(), Some("G major"));
+        assert_eq!(composition.start_meter_words.as_deref(), Some("4/4"));
+        assert_eq!(
+            composition.start_tempo_words.as_deref(),
+            Some("100 beats/min")
+        );
+        assert_eq!(
+            composition.rows,
+            vec![
+                CompositionRowSource::Start,
+                CompositionRowSource::Entry(0),
+                CompositionRowSource::Entry(1),
+                CompositionRowSource::Change(ChangeSource {
+                    index: 21,
+                    key_words: Some(String::from("E minor")),
+                    tempo_words: Some(String::from("120 beats/min")),
+                }),
+                CompositionRowSource::Entry(2),
+                CompositionRowSource::Entry(3),
+            ]
+        );
+        let bridge: &SectionSource = source.section("Bridge").unwrap();
+        assert_eq!(bridge.key_words.as_deref(), Some("C major"));
+        assert_eq!(bridge.meter_words.as_deref(), Some("3/4"));
+        assert_eq!(bridge.tempo_words.as_deref(), Some("90 beats/min"));
+        assert_eq!(source.section("Riff").unwrap().key_words, None);
     }
 
     #[test]

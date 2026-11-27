@@ -1,6 +1,6 @@
 # Live Lead Sheet — Musical Time and Clock
 
-Revision 19 — 16 Nov 2026
+Revision 20 — 26 Nov 2026
 
 How the program represents *where* things are in a song, *how long* they
 last, and *when* they happen. Every term is defined before it is used;
@@ -888,6 +888,10 @@ The tick size (section 4) and the clock (section 5, D-8) are decided.
   Stop, and Start is a phrase cue.
 - **O-11** How the screen gets the anchor in effect when a new anchor has
   been made for a position not yet reached (section 11).
+- **When Start and Stop go out on the clock port and on cue ports.** The
+  code sends Start on the clock port at the first Timing Clock of every
+  play, which section 9 does not say. Open with driving external
+  sequencers: see Song Notation, Q19.
 
 **Following an external clock (future, section 12).** Decided by Jim,
 1 Nov 2026, and written into EFS-2.9: O-1 (the slider is disabled),

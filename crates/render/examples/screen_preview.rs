@@ -10,7 +10,7 @@
 //! | Step | Does |
 //! |---|---|
 //! | `song=PATH` | first step only: opens that song instead |
-//! | `mode=N` | picks mode N, as F1 to F5 do (1 Arrange Sections, 2 Compose Sections, 3 Edit Lines, 4 Song Harmony, 5 Track Harmony) |
+//! | `mode=N` | picks mode N, as F1 to F5 do (1 Arrange Song Sections, 2 Compose Sections, 3 Section Editor, 4 Song Harmony, 5 Track Harmony) |
 //! | `entry=N` | selects entry N (1 the first) |
 //! | `bars=N` | widens the selection to N bars |
 //! | `track=N` | selects voice track N (1 the first) |
@@ -36,10 +36,13 @@
 //! | `browser_down=N` | moves the browser's selection down N rows |
 //! | `browser_wheel=N` | scrolls the browser's view down N rows, as the wheel does |
 //! | `confirm` | asks the quit question |
+//! | `f1=KEYS` | F1 keys, comma separated: `up`, `down`, `left`, `right`, `enter`, `esc`, `plus`, `minus`, `delete`, `tab`, `new`, `entry`, `change` |
+//! | `type=TEXT` | types TEXT into the open F1 dialog |
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+use composer::arrange_editor::ArrangeKey;
 use composer::folder_browser::{BrowserEntry, BrowserEntryKind};
 use composer::library::{Libraries, LibraryTab};
 use composer::repair::{Repair, RepairFile, RepairFileKind};
@@ -395,6 +398,32 @@ fn run() -> Result<(), String> {
                 None
             }
             "convert" => Some(Command::ConvertLineForm),
+            other if other.starts_with("f1=") => {
+                for name in other["f1=".len()..].split(',') {
+                    let key: ArrangeKey = match name {
+                        "up" => ArrangeKey::Up,
+                        "down" => ArrangeKey::Down,
+                        "left" => ArrangeKey::Left,
+                        "right" => ArrangeKey::Right,
+                        "enter" => ArrangeKey::Enter,
+                        "esc" => ArrangeKey::Escape,
+                        "plus" => ArrangeKey::Plus,
+                        "minus" => ArrangeKey::Minus,
+                        "delete" => ArrangeKey::Delete,
+                        "tab" => ArrangeKey::NextField,
+                        "new" => ArrangeKey::NewSection,
+                        "entry" => ArrangeKey::AddEntry,
+                        "change" => ArrangeKey::AddChange,
+                        _ => return Err(format!("{name:?} is not an F1 key in {other:?}")),
+                    };
+                    session.handle(Command::Arrange(key));
+                }
+                None
+            }
+            other if other.starts_with("type=") => {
+                session.type_text(&other["type=".len()..]);
+                None
+            }
             other if other.starts_with("barwidth=") => {
                 let steps: i8 = other["barwidth=".len()..]
                     .parse()

@@ -12,7 +12,8 @@ composer = { path = "../composer" }
 # Reads the studio configuration the song is played through.
 song_text = { path = "../song_text" }
 render = { path = "../render" }
-alsa_output = { path = "../alsa_output" }
+# Plays the schedule: the sending loop and its thread.
+sender = { path = "../sender" }
 winit = { workspace = true }
 wgpu = { workspace = true }
 

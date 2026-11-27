@@ -1,0 +1,3 @@
+# MIDI router configuration for Demo_New_Test. Start the router here with router_here.sh.
+[configuration]
+name = "Demo_New_Test"

@@ -1,0 +1,45 @@
+# crates/sender, src/commanded_play_tests.rs: every test that plays a whole song.
+# A count-in bar, a two-bar verse played twice, a closing bar; constant tempo 120; Bass has touching notes.
+song "Sender test"
+chord_numeral_standard key_dependent
+
+track "Clock"
+  type clock_and_transport
+
+track "Beat"
+  type mono_voice
+  clef treble
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+track "Bass"
+  type mono_voice
+  clef bass
+
+song_composition
+  key C major  meter 4/4  tempo 120 beats/min
+  "Count-in"
+  "Verse"  repeat 2
+  "Close"
+song_composition_close
+
+section "Count-in"  count-in
+  meter 4/4  tempo 120 beats/min
+  line "Beat"  | C4:q> / / / |
+
+section "Verse"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Keys"  sample_source  | I | V |
+  line "Keys"  | :w | :h :h |
+  line "Bass"  | G2:q> / C2 / | E2 / /:h |
+  line "Beat"  | D4:q> / /> / | / / / / |
+
+section "Close"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Keys"  sample_source  | I |
+  line "Keys"  | :w |
+  line "Bass"  | C2:q> / /> /:e / |
+  line "Beat"  | C4:q> / /> / |

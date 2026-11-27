@@ -1,6 +1,6 @@
 # Live Lead Sheet — Editor, first draft
 
-Revision 2 — 23 Nov 2026
+Revision 3 — 26 Nov 2026
 
 A first working editor and player screen, built as a fast sprint to be tried,
 not a specification. It is the basis for writing the authoring view's
@@ -28,14 +28,15 @@ and carries its key; the header always says what an edit changes now
 
 | Key | Mode | Works on | View | Library |
 |---|---|---|---|---|
-| F1 | Arrange Sections | the composition: sections in order, repeats, each entry's key and tempo, new sections | the composition as a list | Progressions (N: a new section) |
+| F1 | Arrange Song Sections | the song_composition block, and nothing else edits it: the song's starting key, meter and tempo, key and tempo change lines, the entries (section, plays, the entry's own key and tempo); new sections are made and named here, not composed | one row per line of the block; each entry's bars and harmony to the right, in green, as derived values | Progressions |
 | F2 | Compose Sections | one section: its key and tempo, its lines' forms (coupled or sampled) | the section's lines as lanes | Progressions, onto the selected line as in F5 (to revisit) |
-| F3 | Edit Lines | the music on a line, note by note | the staff | Rhythms |
+| F3 | Section Editor | the music on a section's lines, note by note, and its bars | the staff | Rhythms |
 | F4 | Song Harmony | the lead line's chords | every entry's bars with chord symbols and numerals | Progressions |
 | F5 | Track Harmony | one track's own harmony: a sampled line's source, or a chord track's chords | the staff, the selected bars shaded | Progressions |
 
-A section's name, its meter, adding and removing lines, and voice part
-layers belong to F2 and are not built yet.
+A section is made and named in F1, with one bar of rest; F1 also changes its
+meter while it holds nothing but rests. Its bars, adding and removing lines,
+and voice part layers belong to the Section Editor (F3) and are not built yet.
 
 **Coupled and sampled are the composed line's form, not a mode.** A coupled
 line has each note or chord with its own length; a sampled line has a sample
@@ -86,7 +87,8 @@ scale step moves a note to the key's next note and a chord to the next degree's
 own chord (`I` to `ii`, `IM7` to `ii7`), so the composer thinks in degrees and
 the letters follow. Changing a section's key (F2, or K and F) moves its
 composed notes with it; the chord numerals need no change, since they follow
-the key.
+the key. A key written in the composition (F1) moves no notes, as the
+notation says; see Q1.
 
 **Apply** (Song Notation, section 7) is built as specified, rules 1 to 4: the
 rhythm and the harmony can each come from the library or from what the line
@@ -103,9 +105,13 @@ has no line yet.
   takes commands. Apply's place was left open by Song Notation, section 8.
 - `crates/render`: the editor's screen (`screen*.rs`), laid out from the
   session, with click regions; the spike's strip stays for `layout_preview`.
-- `crates/app`: the window, the key map, the song file (saved, watched), and
-  the sending thread (`playback.rs`, the event player's loop moved to its
-  proper home, with Stop, a start place and looping).
+- `crates/app`: the window, the key map, and the song file (saved, watched).
+- `crates/sender`: the sending loop and its thread, which play a schedule to
+  a MIDI output from any place in the song, once or looping, and stop on
+  command; the window controls it and reads where the song is. The output
+  is behind an interface, so the loop is tested against a recording output
+  with a simulated clock. It reports, after each play, how many events it
+  handed over late and its longest pause between looks at the clock.
 
 ## Left out of this draft
 
@@ -137,8 +143,12 @@ the notes its section composes?
   interval between the keys; (b) a notation for notes as scale degrees (a
   bass of `1 5 1 3` that follows the key): composition by intervals in the
   file itself; (c) keep it and warn. The draft does (c) in F1 Arrange
-  Sections, and moves notes with the key when the section's own key is
+  Song Sections, and moves notes with the key when the section's own key is
   changed (F2 Compose Sections).
+- Continued (Jim, 26 Nov 2026): Song Notation Q35 records the feature
+  wanted: a key change that also rewrites the written notes of every coupled
+  line, not only the bass, each note kept on its scale step. How to implement
+  it is open there.
 - Raised: Claude, building the editor draft, 23 Nov 2026.
 
 **OPEN_QUESTION Q2 (2026-11-23 14:00):** Should a track declare that its

@@ -1,0 +1,23 @@
+# Demo_New_Test: a new song. Song settings (F6) manages its tracks and its studio.
+song "Demo_New_Test"
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  clef grand
+  lead
+
+track "Bass"
+  type mono_voice
+  clef bass
+
+song_composition
+  key C major  meter 4/4  tempo 120 beats/min
+  "Section"
+song_composition_close
+
+section "Section"
+  key C major  meter 4/4  tempo 120 beats/min
+  line "Keys"  | r:w |

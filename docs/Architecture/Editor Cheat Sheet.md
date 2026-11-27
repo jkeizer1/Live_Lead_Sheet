@@ -1,6 +1,6 @@
 # Live Lead Sheet — Editor Cheat Sheet
 
-Revision 3 — 23 Nov 2026
+Revision 4 — 26 Nov 2026
 
 The keys and buttons of the editor draft as built today
 (`cargo run --release -p app`). Each one either **only changes what you
@@ -25,9 +25,9 @@ changes the score.
 
 | Key | Mode | Works on | View | Library tab |
 |---|---|---|---|---|
-| F1 | Arrange Sections | the composition: order, repeats, each entry's key and tempo, new sections | the composition as a list | Progressions (N: a new section) |
+| F1 | Arrange Song Sections | the song_composition block, and nothing else edits it: the song's starting key, meter and tempo, key and tempo change lines, the entries (section, plays, the entry's own key and tempo); new sections are made and named here, not composed | one row per line of the block; each entry's bars and harmony to the right, in green, as derived values | Progressions |
 | F2 | Compose Sections | one section: its key and tempo, its lines' forms | the section's lines as lanes | Progressions (onto the selected line, as F5; to revisit) |
-| F3 | Edit Lines | the music on a line, note by note | the staff | Rhythms |
+| F3 | Section Editor | the music on a section's lines, note by note, and its bars | the staff | Rhythms |
 | F4 | Song Harmony | the lead line's chords | every entry's bars with chord symbols and numerals | Progressions |
 | F5 | Track Harmony | one track's own harmony: a sampled line's source, or a chord track's chords | the staff, the selected bars shaded | Progressions |
 
@@ -42,22 +42,23 @@ always named in red at the bottom right of the view: "Hidden for room: …".
 | Where | What is kept in view | To see something hidden |
 |---|---|---|
 | F2 Compose Sections | The selected line and the lead, then the other tracks in the song's order; whole rows of bars, the selected bar's row kept in view | Up / Down to select a hidden track; Left / Right to a hidden bar |
-| F3 Edit Lines, F5 Track Harmony | The selected track and the lead, then the others in order; the bars across the staff, the selected section at the left edge | Up / Down to select a hidden track; Ctrl+`-` for more bars across |
-| F1 Arrange Sections, the library | The list follows the selection as it nears the bottom | Up / Down |
+| F3 Section Editor, F5 Track Harmony | The selected track and the lead, then the others in order; the bars across the staff, the selected section at the left edge | Up / Down to select a hidden track; Ctrl+`-` for more bars across |
+| F1 Arrange Song Sections, the library | The list follows the selection as it nears the bottom | Up / Down |
 
 ## Only changes what you see
 
 | Key | Does |
 |---|---|
 | F1 to F5 | The mode |
-| Left / Right | Next entry (F1), bar (F2, F4, F5), note (F3) |
-| Up / Down | Next entry (F1, F4), line or track (F2, F3, F5) |
+| Left / Right | Next cell (F1), bar (F2, F4, F5), note (F3) |
+| Up / Down | Next row (F1), entry (F4), line or track (F2, F3, F5) |
 | Shift+Left / Right | Widen / narrow the selected bars |
 | Ctrl+`-` / Ctrl+`=`, or Ctrl+wheel | Staff: more / fewer bars across |
-| Click | Select an entry, bar, track, note, mode, tab or library row |
+| Click | Select a cell (F1), entry, bar, track, note, mode, tab or library row |
 | Tab | Between the main view and the library |
 | Up / Down in the library, or the wheel over it | Browse; each row shows as a PREVIEW |
 | Esc | Drop the preview, or the bar range |
+| Esc in an F1 dialog | Close it; nothing changes |
 | Space | Play from the selected entry, or stop; plays the preview if one is shown |
 | Shift+Space, L | Play from the start; loop the selected entry |
 | Ctrl+Q | Quit; asks again if there are unsaved edits |
@@ -69,7 +70,7 @@ Apply from the library:
 | Key | Does |
 |---|---|
 | Enter, or double-click a library row | Apply the preview to the selected bars |
-| N | A new section after the entry, from the progression under the library cursor |
+| N | A new section after the entry, from the progression under the library cursor (F2 to F5; in F1, N opens the new-section form) |
 
 Move by intervals; what moves depends on the mode:
 
@@ -93,19 +94,31 @@ Sections and lines:
 | Key | Does |
 |---|---|
 | C, then C again | Change the track's line in this section between coupled and sampled; the first press only asks. Every note sounds as before. |
-| K / Shift+K | Section key up / down a semitone, its notes moving with it (F1: the entry's own key; notes do not move) |
+| K / Shift+K | Section key up / down a semitone, its notes moving with it (F1: K adds a key change line; Shift+K moves the entry's own key down, notes do not move) |
 | F / Shift+F | The same, round the circle of fifths |
 | T / Shift+T | Tempo up / down 5 beats/min (F1: the entry's own tempo) |
 
-The composition (F1):
+The composition (F1). The rows are the lines of `song_composition` in the
+order written: "Song starts in", "From here on" (a key or tempo change for
+every entry below it), and the entries. Each entry's key and tempo show what
+it plays, with a faint word for where the value comes from: "entry",
+"section", or nothing (the composition). The song file's reader takes them in
+that order. An entry's meter is its section's; F1 changes it only while the
+section holds nothing but rests.
 
 | Key | Does |
 |---|---|
+| Enter, or a click on Key, Meter or Beats/min | Edit the cell: the key picker (every key, major and minor), the meter picker, or the tempo (typed, fractions allowed, or + and −) |
+| Double-click, or a second click, on a section's name | Rename the section and every entry that plays it |
+| + / − | Plays (at 0 the entry is left out), or the tempo by 1 beat/min |
 | `[` / `]` | One repeat fewer / more |
-| M | Mute the entry (repeat 0), or restore it |
-| D | Duplicate the entry after itself |
-| Delete | Remove the entry |
-| Alt+Left / Right | Move the entry earlier / later |
+| Delete | On an entry's key or tempo: take off its own value so it inherits. On a change line's value: take it off (with neither left, the line goes). On a name: remove the row; the section is kept |
+| Alt+Up / Down | Move the row up / down |
+| N | The new-section form: name, meter, its own key and tempo (or the composition's), count-in. The section gets one bar of rest on the lead track and an entry after the selected row; its bars are composed in the Section Editor (F3) |
+| E | Add an entry for a section the song already has |
+| K | Add a key change line after the selected entry |
+| D | Write the entry again after itself |
+| M | Leave the entry out (repeat 0), or put it back |
 
 Undo and save:
 
@@ -121,8 +134,9 @@ Undo and save:
 - **Applying a progression** replaces the chords of the selected bars: the
   lead's in F4, the selected track's in F2 and F5.
 - **K and F** (and the interval keys in F2) move every composed note of the
-  section. In F1 they change the entry's own key and do not move notes, so a
-  section played in another key keeps its bass notes.
+  section. In F1, Shift+K, F, Shift+F and the key picker change only a key
+  written in the composition and do not move notes, so a section played in
+  another key keeps its bass notes.
 - **Any edit rewrites the whole line in the song text.** Comments between
   that line's text lines are lost, and repeat signs and `euclid` come back
   written out. Other lines are left as composed.

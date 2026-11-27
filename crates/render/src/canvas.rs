@@ -9,6 +9,7 @@ use crate::glyph_instance::GlyphInstance;
 use crate::line_instance::LineInstance;
 use crate::strip_layout::{ScreenRect, TEXT_CAP_HEIGHT_EMS};
 
+use composer::arrange_editor::ArrangeTarget;
 use composer::library::LibraryTab;
 use composer::repair::RepairTarget;
 use composer::session::Mode;
@@ -42,6 +43,8 @@ pub enum HitTarget {
     Repair(RepairTarget),
     /// A message on the screen: a click copies all of it to the clipboard.
     CopyMessage(MessageSource),
+    /// A cell or a dialog's control in F1 (Arrange Song Sections).
+    Arrange(ArrangeTarget),
 }
 
 /// Which message a click on a message copies.

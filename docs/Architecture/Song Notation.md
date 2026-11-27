@@ -1,6 +1,6 @@
 # Live Lead Sheet — Song Notation
 
-Revision 27 — 20 Nov 2026 (chord table; sus2, sus4, 5, 6, 9, 13 and more chord types; studio `delay_trigger`; the song_composition block plays the sections; sections are unique definitions; an entry may change key and tempo; `meter_control` as one repeating pattern per section; tempo marks on the lead line, `tempo_control` removed; tempo ramps; a carried tempo keeps the beats per minute)
+Revision 28 — 26 Nov 2026 (Q19: scope of driving external sequencers, and what the code sends today on the clock port and cue ports)
 
 **Status: draft for trial.** *Decided* marks what Jim has decided;
 everything else is a proposal to try with a working player. Every open
@@ -1395,6 +1395,48 @@ Korg SQ-1? *Required, not yet designed.*
   stalled. Cue tracks lack enough definition to be implemented and will
   be taken up as a whole. Limiting a cue to chosen passes of a repeated
   section is part of that work.
+- Scope (Jim, 26 Nov 2026 15:13): the wider subject is running each kind
+  of external sequencer once (one shot) or N times (N runs of its current
+  sequence length), from cue markers, with reset, gates or Timing Clock
+  as each device needs. Devices differ: the SQ-1's step resolution is
+  configurable; the Volcas follow Timing Clock and transport; the
+  Behringer 182 advances only on a gate, with a sequence length set by
+  hand on the device. This needs device profiles that generalise these
+  behaviours. Lower priority than the player's and the window's
+  functional gaps.
+- Findings from the code, 26 Nov 2026 15:13 (read, not run; no test plays
+  a cue track through the sending loop):
+  - The `clock_and_transport` track sends Start on the clock port at the
+    first position (the count-in's first bar) and Stop at the end
+    (`player::song_plan::transport_track`). A play from a later position
+    also sends Start on the clock port at its first Timing Clock
+    (`sender::send_loop`). For devices with no song position (the FH-2,
+    the disting NT's Clock algorithm) this Start means "run from here",
+    and they need it after a Stop. Musical Time and Clock, section 9,
+    says instead that Play sends only Timing Clock and that Start comes
+    only from phrase cues; the two disagree until this question is
+    settled.
+  - A Start cue on a port of its own (D-10) does not meet the clock
+    port's Start. Playing from the beginning, or from the cue's own
+    section, the device starts at the cue's bar. Playing from after the
+    cue's bar, nothing before the start position is sent, so the device
+    gets no Start: the state in effect at the start position (D-10,
+    EFS-4.5) is not built, and D-10 does not say whether that state
+    includes transport.
+  - A Start cue on the clock port, through a router that passes the
+    clock port's transport to the device, is defeated: the device starts
+    with the count-in at the automatic Start, then the cue's Start
+    restarts it at the cue's bar. This contradicts D-10's "a transport
+    cue on the music's first bar starts the followers, so they never play
+    the count-in".
+  - On Stop, MIDI Stop is sent only on the clock port. A device started
+    on its own port gets no Stop, so the next Start cue reaches a device
+    that was never stopped (the SQ-1 is recorded as resetting on Stop
+    then Start; Start alone is not recorded). EFS-2.1 reads "Stop sends
+    MIDI Stop ... on every output port in use".
+  - Stop now sends a Note Off for each sounding note before MIDI Stop
+    (Musical Time and Clock, section 8), so a note-driven device (a gate
+    from a note) is left with no gate held, whatever its transport does.
 - Raised: Jim, 5 Nov 2026.
 
 **Q34 (CLOSED, Jim, 14 Nov 2026 — see Status below):** How does a track send pitch to a device that
@@ -1474,7 +1516,33 @@ gates on every note on, to be heard as **legato**?
     at 100 ms and at 2 ms. So on 14 Nov 2026 legato from the `_` mark works
     on the System 35 chain (CM1A, 911, 902) and on the FH-2's CV and gate
     into Poly FM, and does not work in the NT's own MIDI mode (Poly FM).
-  
+
+**OPEN_QUESTION Q35 (26 Nov 2026 20:00):** When the editor changes the key
+an entry or a section plays in, how should it move the section's written
+notes with the key?
+- Context: a key written in `song_composition` (on an entry, or on a key
+  line between entries) sets the key signature and what a chord numeral
+  means; the section's written notes are not transposed (section 5). That
+  is right for the text file and stays so. The editor could offer more: a
+  key change that also rewrites the written notes of the coupled lines.
+  Each note would be read as a scale step of the original key (with its
+  alteration, if it has one) and written again on the same step in the new
+  key, so the intervals of every line keep their place in the scale. This
+  applies to all coupled lines, not only the bass line.
+- Why it matters: a section can be reused in another key with its melody
+  and inner voices following the harmony. Typing in the text file cannot
+  do this; it is a feature of the editor.
+- Open points: what happens to a chromatic note; whether a change from
+  major to minor moves the 3rd, 6th and 7th steps or keeps their pitches;
+  whether a beat pulse (one fixed pitch, section 5) is left alone, as the
+  editor's F2 key change does now; whether the rewrite goes into the
+  section (every entry that plays it) or needs a copy of the section.
+- Options: none chosen yet.
+- Raised earlier as Editor Draft Q1 (23 Nov 2026), which offered moving the
+  notes by the interval between the keys, notes written as scale degrees, or
+  keeping them and warning.
+- Raised: Jim, 26 Nov 2026, while redesigning F1 (Arrange Song Sections).
+
 ### Deferred (Jim, 11 Nov 2026)
 
 These are decisions to wait, not open questions. Each becomes its own

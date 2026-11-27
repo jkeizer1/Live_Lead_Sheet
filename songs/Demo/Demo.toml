@@ -94,6 +94,6 @@ messages = ["note"]
 
 [[route]]
 from = "lead-sheet-beat-pulse"
-to = "fh2"
+to = "disting-nt-rcv"
 channels = [15]
 messages = ["note"]

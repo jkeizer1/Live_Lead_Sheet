@@ -895,7 +895,7 @@ fn draw_bar_music(
             bar.length_ticks,
         );
         let is_selected: bool = selected_bar
-            && session.mode == Mode::EditLines
+            && session.mode == Mode::SectionEditor
             && track_index == session.selection.track
             && element.line_element_index == session.selection.element;
         let top: f32 = layout.top_y;

@@ -1,0 +1,38 @@
+# Read by crates/composer (song_source, arrangement, edits, session tests: the F1 Arrange Song Sections cases).
+# A composition with a start line, a change line, an entry key, a section key, and one section played by two entries.
+song "Arrange song"
+chord_numeral_standard key_dependent
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  clef treble
+  lead
+
+track "Bass"
+  type mono_voice
+  clef bass
+
+song_composition
+  key G major  meter 4/4  tempo 100 beats/min
+  "Intro"  repeat 2
+  "Riff"  key A major
+  key E minor  tempo 120 beats/min
+  "Riff"
+  "Bridge"
+song_composition_close
+
+section "Intro"
+  meter 4/4
+  line "Keys"  | I:w | V:w |
+
+section "Riff"
+  meter 4/4
+  line "Keys"  | I:h IV | V:w |
+  line "Bass"  | G2:h C2 | D2:w |
+
+section "Bridge"
+  meter 3/4  key C major  tempo 90 beats/min
+  line "Keys"  | ii7:h. | V7:h. |

@@ -1,6 +1,8 @@
 # song_play_test
 
-Revision 7 — 15 Nov 2026 (tempo changes between sections are played; bar numbers continue through meter changes; the Nov 15 listening song)
+Revision 9 — 26 Nov 2026 (stop sends a Note Off for each note still sounding before Stop and All Notes Off)
+
+Revision 8 — 25 Nov 2026 (plays through the sender crate, the same sending loop as the window; start from any bar, loop, stop, play again)
 
 ## What it proves
 
@@ -60,9 +62,29 @@ cargo run --release -p song_text --example song_play_test -- path/to/other.song 
 Run from the project folder. The program opens one output port for each
 port in the studio (`Clock`, `Harmony`, `Bass`, `Beat pulse`, `To SQ-1`
 for the Demo), names them, and waits for you to connect them (the MIDI
-router or `aconnect`) and press Enter. The client is named `Lead Sheet`.
-The sending loop is `../support/event_player.rs`, shared with
-`rhythm_notation_test`.
+router or `aconnect`). The client is named `Lead Sheet`.
+
+The program plays through `crates/sender`, the sending loop the window
+uses, so the window and this program send the same messages in the same
+way. It takes one command per line, and the ports stay open between
+plays, as in the window:
+
+| Command | Does |
+|---|---|
+| Enter, or `play` | plays from the start |
+| `from N` | plays from bar N (counted from 1 through the whole song) |
+| `loop A B` | plays bars A to B again and again |
+| `stop` | stops, silencing every note: a Note Off for each note still sounding, then Stop on the clock port, then All Notes Off on each track's channel |
+| `quit`, or Ctrl+D | ends the program |
+
+A new play while one is going stops it first, as in the window. After each
+play the sender's timing report is printed (events handed over late, the
+longest pause, the first notes).
+
+To compare with the window: watch `aseqdump -p "Lead Sheet"`, then in
+this program press Enter, `stop` during the count-in, Enter again, and
+`from 5`; do the same in the window. The messages should have the same
+structure.
 
 As the song plays, one line is printed at the start of each play of a
 section, so each repeat has its own: the section's name, its pass out of
@@ -70,7 +92,8 @@ its repeat count, its key, meter and tempo (in the meter's beats), and the
 bar and beat where it starts, for example
 `Section "A", pass 2 of 3: C major, 4/4, 100 beats/min (bar 5 beat 1)`.
 A section played again by name (Song Notation, section 5) is announced
-the same way. A count-in section says so and has no key.
+the same way. A count-in section says so and has no key. The lines for each note
+that earlier revisions printed are gone; the sender does not report them.
 
 ## Findings
 
@@ -117,3 +140,6 @@ Bass note without its gate. Not yet heard with this change.
   count-in velocities are 127 and 80 (the studio's normal and accent).
 - 15 Nov 2026, revision 6: a line is printed at the start of each play of
   a section.
+- 25 Nov 2026, revision 8: plays through `crates/sender`; commands for
+  play, `from N`, `loop A B` and `stop` on one set of open ports; the
+  per-note lines are no longer printed. Not yet listened to.

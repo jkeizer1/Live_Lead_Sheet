@@ -18,12 +18,13 @@ use player::schedule::{ScheduledEvent, schedule};
 use player::song_plan::{SongPlan, plan_song};
 use player::studio_configuration::StudioConfiguration;
 use render::screen::PlayView;
+use sender::play_request::PlayRequest;
+use sender::player::Player;
 use song_text::studio_file::parse_studio;
 use song_text::studio_writer::write_studio;
 use song_text::text_line::leading_comments;
 use vocabulary::song::TrackKind;
 
-use crate::playback::{PlayRequest, Player};
 use crate::song_files::{LoadedSong, SongFile, short_name, studio_path_beside};
 
 /// How often the song file is looked at for changes made elsewhere.
@@ -423,6 +424,16 @@ impl Workspace {
             self.session
                 .say(MessageKind::Problem, format!("MIDI output: {problem}"));
         }
+        if let Some(player) = &self.player
+            && let Some(report) = player.next_report()
+        {
+            // Every play is reported in the terminal; a late event is also
+            // a problem on the screen, so it is not missed.
+            println!("{}", report.summary());
+            if report.late_events > 0 {
+                self.session.say(MessageKind::Problem, report.summary());
+            }
+        }
         if self.last_file_check.elapsed() < FILE_CHECK_INTERVAL {
             return;
         }
@@ -488,6 +499,23 @@ impl Workspace {
         };
         let what: String =
             describe_play(entry, from_start, looping, self.session.preview().is_some());
+        // What this window asked the sender to play, in the terminal, so a
+        // play that sounds wrong can be told from one asked for wrongly.
+        println!(
+            "Play asked: {} from {} at tick {start_ticks}{}{}.",
+            if self.session.preview().is_some() {
+                "the PREVIEW"
+            } else {
+                "the song"
+            },
+            if from_start {
+                String::from("the start")
+            } else {
+                format!("\"{}\"", entry.section_name)
+            },
+            end_ticks.map_or_else(String::new, |end| format!(" to tick {end}")),
+            if looping { ", looping" } else { "" },
+        );
         let song = self.session.playing_song();
         let request: Result<PlayRequest, String> = plan_song(song, studio)
             .map_err(|error| format!("Cannot play: {error}"))

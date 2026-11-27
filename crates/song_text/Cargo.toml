@@ -13,6 +13,8 @@ player = { path = "../player" }
 # rhythm_notation_test plays a rhythm: the MIDI output is the ALSA
 # adapter's.
 alsa_output = { path = "../alsa_output" }
+# song_play_test plays through the same sending loop as the window.
+sender = { path = "../sender" }
 
 [lints]
 workspace = true

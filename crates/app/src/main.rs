@@ -11,7 +11,6 @@
 
 mod clipboard;
 mod key_map;
-mod playback;
 mod repair_work;
 mod song_files;
 mod window_app;

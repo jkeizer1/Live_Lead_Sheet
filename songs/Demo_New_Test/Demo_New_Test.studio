@@ -1,0 +1,17 @@
+# Studio of Demo_New_Test.song: where its tracks go. Add ports and an output for each track in Song settings (F6, then Tab).
+studio "Demo_New_Test studio"
+
+port "Lead_Keys"
+port "Lead_Bass"
+port "Lead_Clock"
+
+track "Keys"
+  port "Lead_Keys"  channel 1
+  retrigger_gap 2 ms
+
+track "Bass"
+  port "Lead_Bass"  channel 2
+  retrigger_gap 2 ms
+
+track "Clock"
+  port "Lead_Clock"

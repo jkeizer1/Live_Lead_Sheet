@@ -6,6 +6,7 @@
 //! interval keys. Ctrl+Shift on them moves notes through the tones of the
 //! lead's chord.
 
+use composer::arrange_editor::ArrangeKey;
 use composer::session::{Command, Mode, Pane, Session, Zoom};
 use composer::session_music::Step;
 use winit::keyboard::{KeyCode, ModifiersState};
@@ -75,10 +76,20 @@ pub fn action_for(code: KeyCode, modifiers: ModifiersState, session: &Session) -
         };
     }
     let in_library: bool = session.pane == Pane::Library;
+    if session.mode == Mode::ArrangeSongSections && !in_library {
+        if let Some(key) = arrange_key(code, shift, alt, session.arrange_has_dialog()) {
+            return command(Command::Arrange(key));
+        }
+        // With a dialog open, every other key but the function keys types
+        // text (the window hands it to the dialog).
+        if session.arrange_has_dialog() && !is_function_key(code) {
+            return None;
+        }
+    }
     match code {
-        KeyCode::F1 => command(Command::SetMode(Mode::ArrangeSections)),
+        KeyCode::F1 => command(Command::SetMode(Mode::ArrangeSongSections)),
         KeyCode::F2 => command(Command::SetMode(Mode::ComposeSections)),
-        KeyCode::F3 => command(Command::SetMode(Mode::EditLines)),
+        KeyCode::F3 => command(Command::SetMode(Mode::SectionEditor)),
         KeyCode::F4 => command(Command::SetMode(Mode::SongHarmony)),
         KeyCode::F5 => command(Command::SetMode(Mode::TrackHarmony)),
         KeyCode::F10 => Some(Action::OpenMenu),
@@ -117,5 +128,57 @@ pub fn action_for(code: KeyCode, modifiers: ModifiersState, session: &Session) -
         KeyCode::KeyN => command(Command::NewSectionFromProgression),
         KeyCode::KeyL => Some(Action::LoopEntry),
         _ => None,
+    }
+}
+
+fn is_function_key(code: KeyCode) -> bool {
+    matches!(
+        code,
+        KeyCode::F1
+            | KeyCode::F2
+            | KeyCode::F3
+            | KeyCode::F4
+            | KeyCode::F5
+            | KeyCode::F6
+            | KeyCode::F10
+    )
+}
+
+/// F1's keys. With a dialog open only the editing keys are F1's; the rest
+/// type text. Without one, the arrows move through the cells, + and -
+/// change plays and tempo, and letters add rows.
+fn arrange_key(code: KeyCode, shift: bool, alt: bool, dialog: bool) -> Option<ArrangeKey> {
+    let editing: Option<ArrangeKey> = match code {
+        KeyCode::ArrowUp => Some(ArrangeKey::Up),
+        KeyCode::ArrowDown => Some(ArrangeKey::Down),
+        KeyCode::ArrowLeft => Some(ArrangeKey::Left),
+        KeyCode::ArrowRight => Some(ArrangeKey::Right),
+        KeyCode::Enter | KeyCode::NumpadEnter => Some(ArrangeKey::Enter),
+        KeyCode::Escape => Some(ArrangeKey::Escape),
+        KeyCode::Delete => Some(ArrangeKey::Delete),
+        KeyCode::Backspace => Some(ArrangeKey::Backspace),
+        KeyCode::Home => Some(ArrangeKey::Home),
+        KeyCode::End => Some(ArrangeKey::End),
+        KeyCode::Tab => Some(ArrangeKey::NextField),
+        _ => None,
+    };
+    if dialog {
+        return editing;
+    }
+    match code {
+        KeyCode::ArrowUp if alt => Some(ArrangeKey::MoveRowUp),
+        KeyCode::ArrowDown if alt => Some(ArrangeKey::MoveRowDown),
+        // Shift+= types +, as does the keypad's +.
+        KeyCode::Equal | KeyCode::NumpadAdd => Some(ArrangeKey::Plus),
+        KeyCode::Minus | KeyCode::NumpadSubtract => Some(ArrangeKey::Minus),
+        KeyCode::KeyN => Some(ArrangeKey::NewSection),
+        KeyCode::KeyE => Some(ArrangeKey::AddEntry),
+        KeyCode::KeyK => Some(ArrangeKey::AddChange),
+        KeyCode::KeyD => Some(ArrangeKey::Duplicate),
+        KeyCode::KeyM => Some(ArrangeKey::ToggleMute),
+        // Tab still switches to the library; Esc still drops a preview.
+        KeyCode::Tab | KeyCode::Escape => None,
+        _ if shift => None,
+        _ => editing,
     }
 }
