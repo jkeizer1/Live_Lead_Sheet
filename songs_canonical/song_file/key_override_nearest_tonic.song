@@ -1,0 +1,23 @@
+# Canonical test song: crates/song_text/src/song_file.rs, test `an_override_moves_to_the_nearest_tonic`.
+# "Riff" in C major plays its tonic C2; overridden with B major it plays B1, with F# major F#1 (a tritone goes below), with E major E2.
+song "Nearest tonic"
+
+track "Clock"
+  type clock_and_transport
+
+track "Bass"
+  type mono_voice
+  notes pitched
+  clef bass
+  lead
+
+section "Riff"  key C major  meter 4/4
+  line "Bass"  tonic_octave 2  | P1:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "Riff"
+  "Riff"  key B major
+  "Riff"  key F# major
+  "Riff"  key E major
+song_composition_close

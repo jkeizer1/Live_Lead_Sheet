@@ -6,7 +6,7 @@
 
 use vocabulary::key::{Key, Mode};
 use vocabulary::numeral_standard::NumeralStandard;
-use vocabulary::pitch::Accidental;
+use vocabulary::pitch::{Accidental, NoteLetter, NoteName};
 use vocabulary::roman_chord::{ChordKind, RomanChord, ScaleDegree};
 
 use crate::key_signature::SEMITONES_PER_OCTAVE;
@@ -173,6 +173,41 @@ pub fn diatonic_chord_step(
     RomanChord::new(accidental, degree, kind)
 }
 
+/// The chord a copy of a section in the other mode plays where the
+/// original plays `chord` (Editor Draft, "A key override in F1"): a chord
+/// of the old key's scale (its degree's triad, seventh or ninth) becomes the
+/// new scale's chord on the same degree, except that the dominant (`V`,
+/// `V7`) stays going into minor, as minor music raises its seventh step for
+/// it; any other chord keeps its kind and its root's distance from the
+/// tonic, written on the same degree.
+#[must_use]
+pub fn chord_in_mode(
+    chord: RomanChord,
+    from: Mode,
+    to: Mode,
+    numeral_standard: Option<NumeralStandard>,
+) -> RomanChord {
+    // The tonic only names the key; the numerals do not depend on it.
+    let tonic: NoteName = NoteName::new(NoteLetter::C, Accidental::Natural);
+    let diatonic_from: RomanChord =
+        diatonic_chord_step(chord, Key::new(tonic, from), numeral_standard, 0);
+    if diatonic_from == chord {
+        if from == Mode::Major && to == Mode::Minor && chord.degree() == ScaleDegree::Fifth {
+            return chord;
+        }
+        return diatonic_chord_step(chord, Key::new(tonic, to), numeral_standard, 0);
+    }
+    let index: usize = degree_index(chord.degree());
+    let root_semitones: i16 =
+        numeral_scale(from, numeral_standard)[index] + chord.accidental().semitone_offset();
+    let accidental: Option<Accidental> = Accidental::from_semitone_offset(
+        root_semitones - numeral_scale(to, numeral_standard)[index],
+    );
+    accidental.map_or(chord, |accidental: Accidental| {
+        RomanChord::new(accidental, chord.degree(), chord.kind())
+    })
+}
+
 /// The chord with its root `semitones` higher (lower when negative), the
 /// same kind of chord. The root is written on the degree that names it
 /// plainly when there is one, otherwise with a sharp going up and a flat
@@ -211,7 +246,6 @@ pub fn chromatic_chord_step(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vocabulary::pitch::{NoteLetter, NoteName};
 
     fn c_major() -> Key {
         Key::new(
@@ -251,6 +285,53 @@ mod tests {
             diatonic_chord_step(i_minor, a_minor, Some(NumeralStandard::MajorReferential), 2)
                 .to_string(),
             "bIII"
+        );
+    }
+
+    #[test]
+    fn a_chord_takes_its_degrees_chord_in_the_other_mode() {
+        let to_minor = |degree: ScaleDegree, kind: ChordKind| {
+            chord_in_mode(
+                numeral(degree, kind),
+                Mode::Major,
+                Mode::Minor,
+                Some(NumeralStandard::KeyDependent),
+            )
+            .to_string()
+        };
+        assert_eq!(to_minor(ScaleDegree::First, ChordKind::Major), "i");
+        assert_eq!(
+            to_minor(ScaleDegree::Second, ChordKind::MinorSeventh),
+            "iiø7"
+        );
+        assert_eq!(to_minor(ScaleDegree::Sixth, ChordKind::Minor), "VI");
+        // The dominant stays.
+        assert_eq!(
+            to_minor(ScaleDegree::Fifth, ChordKind::DominantSeventh),
+            "V7"
+        );
+        // Not of the major scale: the root keeps its distance from the tonic.
+        let flat_seven: RomanChord =
+            RomanChord::new(Accidental::Flat, ScaleDegree::Seventh, ChordKind::Major);
+        assert_eq!(
+            chord_in_mode(
+                flat_seven,
+                Mode::Major,
+                Mode::Minor,
+                Some(NumeralStandard::KeyDependent)
+            )
+            .to_string(),
+            "VII"
+        );
+        assert_eq!(
+            chord_in_mode(
+                numeral(ScaleDegree::First, ChordKind::Minor),
+                Mode::Minor,
+                Mode::Major,
+                None
+            )
+            .to_string(),
+            "I"
         );
     }
 

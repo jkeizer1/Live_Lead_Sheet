@@ -29,10 +29,12 @@ was meant:
   gives no velocity for, are caught by the coverage check; those two are in
   the unit tests of `studio_file.rs`.
 
-The Demo's `Beat` track is an ordinary `mono_voice` that writes one pitch with
-the accent where it is wanted (`| C4:q> / / / |`); there is no beat pulse
-track type, and the studio gives it a port, a channel and velocities like
-any voice.
+The Demo's `Beat` track is an ordinary `mono_voice` with `notes midi_note`,
+which writes note names with the accent where it is wanted (`| C4:q> / / / |`)
+and is never transposed; there is no beat pulse track type, and the studio
+gives it a port, a channel and velocities like any voice. The pitched tracks
+write intervals from the section's key (`| P1:q P5 |`), and the program
+prints each track's notes.
 
 It sends no MIDI. Playing the song is `song_play_test`, the next step.
 
@@ -64,3 +66,4 @@ seventh, and where it sits on the staff) are worked out in `song_play_test`.
 - Revision 4, 8 Nov 2026: song lines write what an element plays first, then its length (Song Notation Revision 15); voice layers printed; the mistake "a first note that says nothing" became "a first note with no length", and "a line in the old order" was added.
 - Revision 6, 19 Nov 2026: the "chords with no key" case is gone: every song now starts in a key (the song_composition names it), so a section always has one. The songs now end with a song_composition.
 - Revision 5, 14 Nov 2026: the nine bad songs and studios are files in `songs_canonical/song_notation_test/`, each with a comment saying what is wrong, instead of text inside the program; the lines in the expected messages moved down by the two comment lines.
+- Revision 7, 27 Nov 2026: tracks declare `notes pitched` or `notes midi_note` and the program prints it; the canonical songs write pitched lines as intervals (Song Notation Revision 29), so the expected line numbers moved down by the inserted `notes` lines.

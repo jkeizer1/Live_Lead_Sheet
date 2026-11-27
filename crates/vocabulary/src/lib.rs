@@ -7,6 +7,7 @@ pub mod control_track;
 pub mod duration;
 pub mod dynamics;
 pub mod instant;
+pub mod interval;
 pub mod key;
 pub mod midi_values;
 pub mod numeral_standard;

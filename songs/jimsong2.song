@@ -9,15 +9,18 @@ track "Clock"
 
 track "Harmony"
   type poly_voice
+  notes pitched
   clef grand
   lead
 
 track "Beat"
   type mono_voice
+  notes midi_note
   clef treble
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 
 song_composition
@@ -37,9 +40,9 @@ section "Gate test"
                   | I:e. V          | IV:e       IV:q    |  vii°  /:e                         |
                   | I:e. V          | IV7     IV         |  vii°:q  /:e                         |    
         
-  line "Bass"     | C2:e> E2 G2     | F2>  A2  C3        |  G2    D2 B2                        |
-                  | C2> E2 G2       | F1>  A2  C3        |  G3    D2 B2                        |
-                  | C2> E2 G2       | F1>  A2  C4        |  G2    D2 B2                        |
+  line "Bass"  tonic_octave 1     | P8:e> M10 P12     | P11>  M13  P15        |  P12    M9 M14                        |
+                  | P8> M10 P12       | P4>  M13  P15        |  P19    M9 M14                        |
+                  | P8> M10 P12       | P4>  M13  P22        |  P12    M9 M14                        |
 
   line "Beat"     | C6:e> B3 /      | F6> A3 C2          |  C6:sx r C5> r C4 C5                | 
                   | C6:e> B3 /      | C6> B3 C2          |  C6:sx r C5> r C4 C5                |

@@ -96,6 +96,9 @@ impl ArrangeRow {
     }
 }
 
+/// `key section` on a song composition entry: play the section's own key.
+pub const SECTION_KEY_WORD: &str = "section";
+
 /// The rows of the composition as written in `source`, for `song` (as
 /// read from the same text) and its `timeline`.
 #[must_use]
@@ -103,6 +106,9 @@ pub fn arrangement_rows(source: &SongSource, song: &Song, timeline: &Timeline) -
     let Some(composition) = source.composition.as_ref() else {
         return Vec::new();
     };
+    // A key line between entries overrides the entries below it (Song
+    // Notation, section 5).
+    let mut key_line_above: bool = false;
     composition
         .rows
         .iter()
@@ -112,11 +118,14 @@ pub fn arrangement_rows(source: &SongSource, song: &Song, timeline: &Timeline) -
                 meter_words: composition.start_meter_words.clone(),
                 tempo_words: composition.start_tempo_words.clone(),
             })),
-            CompositionRowSource::Change(change) => Some(ArrangeRow::Change(ChangeRow {
-                line_index: change.index,
-                key_words: change.key_words.clone(),
-                tempo_words: change.tempo_words.clone(),
-            })),
+            CompositionRowSource::Change(change) => {
+                key_line_above |= change.key_words.is_some();
+                Some(ArrangeRow::Change(ChangeRow {
+                    line_index: change.index,
+                    key_words: change.key_words.clone(),
+                    tempo_words: change.tempo_words.clone(),
+                }))
+            }
             CompositionRowSource::Entry(entry_index) => {
                 let written = composition.entries.get(*entry_index)?;
                 let section = source.section(&written.section_name);
@@ -137,10 +146,17 @@ pub fn arrangement_rows(source: &SongSource, song: &Song, timeline: &Timeline) -
                 Some(ArrangeRow::Entry(EntryRow {
                     entry_index: *entry_index,
                     section_name: written.section_name.clone(),
-                    key_origin: origin(
-                        written.key_words.is_some(),
-                        section.is_some_and(|section| section.key_words.is_some()),
-                    ),
+                    // `key section` plays the section's own key; else the
+                    // entry's own, else a key line above, else the section's.
+                    key_origin: match written.key_words.as_deref() {
+                        Some(SECTION_KEY_WORD) => Origin::Section,
+                        Some(_) => Origin::Entry,
+                        None if key_line_above => Origin::Composition,
+                        None => origin(
+                            false,
+                            section.is_some_and(|section| section.key_words.is_some()),
+                        ),
+                    },
                     tempo_origin: origin(
                         written.tempo_words.is_some(),
                         section.is_some_and(|section| section.tempo_words.is_some()),
@@ -189,10 +205,11 @@ mod tests {
                 (String::from("Intro"), String::from("G major"), 100_000),
                 // The entry's own key; the start's tempo.
                 (String::from("Riff"), String::from("A major"), 100_000),
-                // The change line's key and tempo.
-                (String::from("Riff"), String::from("E minor"), 120_000),
-                // The section's own key and tempo win over the change line.
-                (String::from("Bridge"), String::from("C major"), 90_000),
+                // The change line's key, an override of the section's own,
+                // and its tempo.
+                (String::from("Riff"), String::from("E major"), 120_000),
+                // The change line's key; the section's own tempo wins.
+                (String::from("Bridge"), String::from("E major"), 90_000),
             ]
         );
         let origins: Vec<(Origin, Origin)> = arrangement_rows(&source, &song, &timeline)
@@ -205,10 +222,10 @@ mod tests {
         assert_eq!(
             origins,
             vec![
-                (Origin::Composition, Origin::Composition),
+                (Origin::Section, Origin::Composition),
                 (Origin::Entry, Origin::Composition),
                 (Origin::Composition, Origin::Composition),
-                (Origin::Section, Origin::Section),
+                (Origin::Composition, Origin::Section),
             ]
         );
     }

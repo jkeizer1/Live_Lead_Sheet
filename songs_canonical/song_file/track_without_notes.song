@@ -1,0 +1,19 @@
+# Canonical test song (deliberately wrong): crates/song_text/src/song_file.rs, test `a_voice_track_must_say_what_its_notes_are`.
+# Track "Bass" has no notes line. The loader must refuse it at the track (line 8) and say to add notes pitched or notes midi_note.
+song "No notes"
+
+track "Clock"
+  type clock_and_transport
+
+track "Bass"
+  type mono_voice
+  clef bass
+  lead
+
+section "Riff"  key C major  meter 4/4
+  line "Bass"  tonic_octave 2  | P1:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "Riff"
+song_composition_close

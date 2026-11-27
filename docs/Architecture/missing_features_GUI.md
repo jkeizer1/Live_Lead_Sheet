@@ -1,6 +1,6 @@
 # Live Lead Sheet — Missing features of the editor (GUI)
 
-Revision 2 — 26 Nov 2026
+Revision 3 — 27 Nov 2026
 
 What Song Notation (Revision 27) lets a song file say, against what the
 editor draft can render and compose today. A song that uses any of these
@@ -55,7 +55,10 @@ Related open questions are in `Editor Draft.md`, section "Open questions".
 | Mono notes (`C2`, `F#2`) | Yes | Partly | Moved by semitone, scale step, chord tone or octave; a rest becomes the lead's root (R). A note cannot be typed or picked by its letter. | F3 |
 | Cue names on a cue line | No | No | Cue lines are not rendered. | F3 |
 | `:q` elements of a rhythm line | Yes | Yes | Shown on the rhythm line of a sampled track; applied rhythms go there. | F3 |
-| A beat pulse (one fixed pitch) | Yes | Partly | Left alone when a section's key moves (inferred, Q2). | F3 |
+| A beat pulse (a `notes midi_note` track) | Yes | Partly | Never moved by a key; any notes may be written. | F3 |
+| Notes as intervals from the section's tonic (`P1`, `m3`, `M9`, `-P4`, `tonic_octave n`) | Partly | Partly | Read by the loader and written back by every edit, measured from the key of the selected song composition entry; the staff draws the pitches, not the intervals. A line with no `tonic_octave` gets one from its lowest note. | F3, F5 |
+| `notes pitched` / `notes midi_note` on a voice track | No | Partly | Read by the loader. Song settings (F6) writes `notes pitched` on a new voice track and has no control to change it; a MIDI note track is set in the text. The staff does not show which a track is. | F6 |
+| Non-diatonic notes in soft amber (EFS-1.9a) | No | — | Not built. | F3, F5 |
 
 ## The song (section 5)
 
@@ -91,7 +94,8 @@ Related open questions are in `Editor Draft.md`, section "Open questions".
 | A new section | — | Yes | N in F1 opens the new-section form (name, meter, its own key and tempo or the composition's, count-in); the section gets one bar of rest on the lead track and an entry. N in F2 to F5 makes one from a progression. No copy of a section under a new name. | F1 |
 | Entries: order, repeat, mute, duplicate, remove | Yes | Yes | Alt+Up/Down, + and − (or `[` `]`), M, D, Delete on the name. | F1 |
 | An entry naming an existing section | — | Yes | E chooses the section from a list. | F1 |
-| Entry `key` and `tempo` | Yes | Yes | The key picker (any key, major or minor) and the tempo (typed, fractions allowed, or + and −); Delete takes the entry's own value off. A faint word shows where each value comes from. The entry's key does not move composed notes (Q1; Song Notation Q35). | F1 |
+| Entry `key` and `tempo` | Yes | Yes | The key picker (any key, major or minor) and the tempo (typed, fractions allowed, or + and −); Delete takes the entry's own value off. A faint word shows where each value comes from. An override, on the entry or from a key line above it, plays the section with its intervals kept, on the tonic nearest the section's own. S in the picker writes `key section`. A key of the other mode asks for the name of a new section, made as a close transposition (each note on its scale step, chords on their degrees, the dominant kept going into minor), which the entry then plays. A key line between entries is not checked until the song is read back. | F1 |
+| F3's `Section Key` and `Transposition` list | Yes | — | Above the staves; a click selects the first entry that plays the section in that key. When every entry transposes the section, its own key is listed and cannot be shown. | F3 |
 | `key` / `tempo` lines between entries (a new base) | Yes | Yes | Shown as "From here on" rows; K adds one; its key and tempo are edited like an entry's; Delete takes a value off, and with neither left the line goes. | F1 |
 | The composition's starting key, meter, tempo | Yes | Yes | The "Song starts in" row: the key picker, the meter picker, the tempo typed or + and −. | F1 |
 | Repeat signs `|%` `%|`, `|%3` | Partly | No | The bars are rendered written out; an edit of the line writes them out in the file (Q5). | F3 |

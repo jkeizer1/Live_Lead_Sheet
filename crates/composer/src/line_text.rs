@@ -7,6 +7,8 @@
 use std::fmt;
 
 use note_spelling::note_value::{BaseValue, NoteValue};
+use vocabulary::interval::Interval;
+use vocabulary::pitch::Pitch;
 use vocabulary::rhythm_pattern::{AccentLevel, ElementMarks};
 use vocabulary::song::ElementContents;
 
@@ -22,6 +24,18 @@ pub enum WrittenSound {
     /// Nothing before the colon: takes what it plays from the track's
     /// sample source (`:q`).
     FromSource,
+}
+
+/// How a line writes its notes (Song Notation, section 4): note names on a
+/// `notes midi_note` track, intervals from the tonic on a pitched one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoteSpelling {
+    NoteNames,
+    /// From the section's tonic, as the selected entry plays it, in the
+    /// line's `tonic_octave`.
+    Intervals {
+        tonic: Pitch,
+    },
 }
 
 /// One element of a line, as the editor builds it.
@@ -53,6 +67,8 @@ pub enum LineTextError {
     TieInsideTriplet { bar_number: usize },
     /// An octave annotation other than +8va, -8va or none.
     OctaveShiftNotWritable { bar_number: usize, octaves: i8 },
+    /// A note that is no interval the notation writes from the tonic.
+    NoteNotWritable { pitch: Pitch, tonic: Pitch },
 }
 
 impl fmt::Display for LineTextError {
@@ -78,6 +94,11 @@ impl fmt::Display for LineTextError {
                 f,
                 "bar {bar_number} is {octaves} octaves from the clef's; only +8va and -8va can be \
                  written"
+            ),
+            LineTextError::NoteNotWritable { pitch, tonic } => write!(
+                f,
+                "{pitch} is no interval the notation writes from the tonic {tonic}. Respell the \
+                 note in the text for this line"
             ),
         }
     }
@@ -135,28 +156,69 @@ fn ordinal(number: u8) -> String {
     format!("{number}{suffix}")
 }
 
+/// A note as the line writes it: `C2`, or `P5` from the tonic.
+fn note_text(pitch: Pitch, spelling: NoteSpelling) -> Result<String, LineTextError> {
+    match spelling {
+        NoteSpelling::NoteNames => Ok(pitch.to_string()),
+        NoteSpelling::Intervals { tonic } => Interval::between(tonic, pitch)
+            .map(|interval: Interval| interval.to_string())
+            .map_err(|_| LineTextError::NoteNotWritable { pitch, tonic }),
+    }
+}
+
 /// What an element's contents are as the song writes them before the colon.
-#[must_use]
-pub fn contents_text(contents: &ElementContents) -> String {
-    let notes_text = |notes: &[vocabulary::pitch::Pitch]| -> String {
-        let names: Vec<String> = notes.iter().map(ToString::to_string).collect();
-        format!("[{}]", names.join(" "))
+///
+/// # Errors
+///
+/// When a note is no interval the notation writes from the tonic.
+pub fn contents_text(
+    contents: &ElementContents,
+    spelling: NoteSpelling,
+) -> Result<String, LineTextError> {
+    let notes_text = |notes: &[Pitch]| -> Result<String, LineTextError> {
+        let names: Vec<String> = notes
+            .iter()
+            .map(|pitch: &Pitch| note_text(*pitch, spelling))
+            .collect::<Result<Vec<String>, LineTextError>>()?;
+        Ok(format!("[{}]", names.join(" ")))
     };
-    match contents {
+    Ok(match contents {
         ElementContents::Chord(chord) => chord.to_string(),
         ElementContents::Notes(notes) => match notes.as_slice() {
-            [single] => single.to_string(),
-            many => notes_text(many),
+            [single] => note_text(*single, spelling)?,
+            many => notes_text(many)?,
         },
         ElementContents::ChordWithNotes { chord, notes } => {
-            format!("{chord}{}", notes_text(notes))
+            format!("{chord}{}", notes_text(notes)?)
         }
         ElementContents::InvertedChord { chord, inversion } => {
             format!("{chord}[{}Inversion]", ordinal(inversion.number()))
         }
         ElementContents::Dynamic(mark) => mark.to_string(),
         ElementContents::Cue(name) => format!("\"{name}\""),
+    })
+}
+
+/// The octave of the tonic a pitched line is measured from, for a line that
+/// has none yet: the tonic at or below the lowest note, or the one above
+/// when that one is a fifth or more below it, so the intervals stay small.
+#[must_use]
+pub fn tonic_octave_for(tonic: vocabulary::pitch::NoteName, lowest: Pitch) -> i8 {
+    // 7 semitones: a perfect fifth.
+    const FIFTH_SEMITONES: i16 = 7;
+    let mut octave: i8 = lowest.octave().saturating_add(1);
+    while octave > -1
+        && Pitch::new(tonic, octave).semitones_above_c_minus_1()
+            > lowest.semitones_above_c_minus_1()
+    {
+        octave -= 1;
     }
+    if lowest.semitones_above_c_minus_1() - Pitch::new(tonic, octave).semitones_above_c_minus_1()
+        >= FIFTH_SEMITONES
+    {
+        octave = octave.saturating_add(1);
+    }
+    octave
 }
 
 /// Where the next element's length need not be written: the length
@@ -173,6 +235,7 @@ fn bar_text(
     bar_number: usize,
     bar: &WrittenBar,
     carry: &mut Carry,
+    spelling: NoteSpelling,
 ) -> Result<String, LineTextError> {
     let mut words: Vec<String> = Vec::new();
     let mut index: usize = 0;
@@ -199,10 +262,11 @@ fn bar_text(
             carry.last_sound = None;
         }
         if NoteValue::from_ticks(element.length_ticks).is_some() {
-            words.push(single_text(element, carry));
+            words.push(single_text(element, carry, spelling)?);
             index += 1;
         } else {
-            let (word, used): (String, usize) = triplet_text(bar_number, &bar.elements[index..])?;
+            let (word, used): (String, usize) =
+                triplet_text(bar_number, &bar.elements[index..], spelling)?;
             words.push(word);
             index += used;
             // After a group the carried length is the one before it, and
@@ -216,7 +280,11 @@ fn bar_text(
 }
 
 /// An element with a plain or dotted value.
-fn single_text(element: &WrittenElement, carry: &mut Carry) -> String {
+fn single_text(
+    element: &WrittenElement,
+    carry: &mut Carry,
+    spelling: NoteSpelling,
+) -> Result<String, LineTextError> {
     let length_written: bool = carry.length_ticks != Some(element.length_ticks)
         || element.sound == WrittenSound::FromSource;
     let length: String = if length_written {
@@ -231,7 +299,7 @@ fn single_text(element: &WrittenElement, carry: &mut Carry) -> String {
     } else {
         format!(":{length}")
     };
-    match &element.sound {
+    Ok(match &element.sound {
         WrittenSound::Rest => format!("r{colon_length}{marks}"),
         WrittenSound::FromSource => {
             carry.last_sound = Some(WrittenSound::FromSource);
@@ -243,10 +311,13 @@ fn single_text(element: &WrittenElement, carry: &mut Carry) -> String {
             if repeated {
                 format!("/{colon_length}{marks}")
             } else {
-                format!("{}{colon_length}{marks}", contents_text(contents))
+                format!(
+                    "{}{colon_length}{marks}",
+                    contents_text(contents, spelling)?
+                )
             }
         }
-    }
+    })
 }
 
 /// A triplet: the elements from the start of `elements` whose lengths are
@@ -255,6 +326,7 @@ fn single_text(element: &WrittenElement, carry: &mut Carry) -> String {
 fn triplet_text(
     bar_number: usize,
     elements: &[WrittenElement],
+    spelling: NoteSpelling,
 ) -> Result<(String, usize), LineTextError> {
     let mut played_ticks: u64 = 0;
     let mut parts: Vec<String> = Vec::new();
@@ -283,7 +355,9 @@ fn triplet_text(
                 uncoupled = true;
                 format!("{length}{marks}")
             }
-            WrittenSound::Plays(contents) => format!("{}:{length}{marks}", contents_text(contents)),
+            WrittenSound::Plays(contents) => {
+                format!("{}:{length}{marks}", contents_text(contents, spelling)?)
+            }
         });
         played_ticks += element.length_ticks;
         if NoteValue::from_ticks(played_ticks).is_some() {
@@ -308,6 +382,7 @@ pub fn line_text(
     indent: &str,
     header: &str,
     bars: &[WrittenBar],
+    spelling: NoteSpelling,
 ) -> Result<Vec<String>, LineTextError> {
     let mut carry: Carry = Carry {
         length_ticks: None,
@@ -316,7 +391,7 @@ pub fn line_text(
     };
     let mut bar_texts: Vec<String> = Vec::with_capacity(bars.len());
     for (index, bar) in bars.iter().enumerate() {
-        bar_texts.push(bar_text(index + 1, bar, &mut carry)?);
+        bar_texts.push(bar_text(index + 1, bar, &mut carry, spelling)?);
     }
     Ok(join_bars(indent, header, &bar_texts))
 }
@@ -379,7 +454,8 @@ mod tests {
                 plays("C4", QUARTER_TICKS),
             ],
         };
-        let lines: Vec<String> = line_text("  ", "line \"Beat\"", &[bar]).unwrap();
+        let lines: Vec<String> =
+            line_text("  ", "line \"Beat\"", &[bar], NoteSpelling::NoteNames).unwrap();
         assert_eq!(lines, vec!["  line \"Beat\"  | C4:q> / / / |"]);
     }
 
@@ -395,7 +471,8 @@ mod tests {
             ],
         };
         // Three triplet quarters fill a half note; a plain half follows.
-        let lines: Vec<String> = line_text("", "line \"Keys\"", &[bar]).unwrap();
+        let lines: Vec<String> =
+            line_text("", "line \"Keys\"", &[bar], NoteSpelling::NoteNames).unwrap();
         assert_eq!(lines, vec!["line \"Keys\"  | trp(I:q I:q V:q) V:h |"]);
     }
 }

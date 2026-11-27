@@ -5,10 +5,12 @@ track "Clock"
   type clock_and_transport
 track "Manual"
   type poly_voice
+  notes pitched
   clef grand
   lead
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 track "Cues"
   type cue_control

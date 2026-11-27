@@ -1,12 +1,90 @@
 //! The words a line element can carry after its colon, and the words of
-//! a key: chord names (`ii7`, `bVII7`), pitches (`C2`, `F#2`, `Bb1`),
-//! notes in brackets (`[D3 F3 A3 C4]`) and cue names (`"Start SQ-1"`)
-//! (Song Notation, sections 2 and 4).
+//! a key: chord names (`ii7`, `bVII7`), intervals (`P5`, `m3`, `-P4`) on a
+//! pitched track, note names (`C2`, `F#2`, `Bb1`) on a MIDI note track,
+//! notes in brackets (`[M2 P4 M6]`, `[D3 F3 A3]`) and cue names (`"Start
+//! SQ-1"`) (Song Notation, sections 2 and 4).
 
+use vocabulary::interval::{Interval, IntervalDirection, IntervalQuality};
 use vocabulary::key::{Key, Mode};
 use vocabulary::pitch::{Accidental, NoteLetter, NoteName, Pitch};
 use vocabulary::roman_chord::{ChordKind, Inversion, InversionError, RomanChord, ScaleDegree};
 use vocabulary::song::{ElementContents, VoiceKind};
+
+/// How a line's notes are written, from its track's `notes` (Song
+/// Notation, section 5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoteReading {
+    /// `notes midi_note`: note names, `C2`.
+    NoteNames,
+    /// `notes pitched`: intervals from `tonic`, the section's tonic (as the
+    /// entry plays it) in the line's `tonic_octave`. `None` when the line has
+    /// no `tonic_octave` or the section no key; a note is then refused with
+    /// `missing`, which says what to write.
+    Intervals {
+        tonic: Option<Pitch>,
+        missing: &'static str,
+    },
+}
+
+/// `P5`, `m3`, `A4`, `M9`, `-P4` → an interval.
+///
+/// # Errors
+///
+/// A message saying what is wrong and how to write it.
+pub fn parse_interval(text: &str) -> Result<Interval, String> {
+    let wrong = || {
+        format!(
+            "\"{text}\" is not an interval. Write P, M, m, A or d, then the number, with - \
+             before it below the tonic, e.g. P1, m3, P5, M9 or -P4"
+        )
+    };
+    let (direction, rest): (IntervalDirection, &str) = match text.strip_prefix('-') {
+        Some(after) => (IntervalDirection::Down, after),
+        None => (IntervalDirection::Up, text),
+    };
+    let mut characters = rest.chars();
+    let quality: IntervalQuality = characters
+        .next()
+        .and_then(IntervalQuality::from_letter)
+        .ok_or_else(wrong)?;
+    let number: u8 = characters.as_str().parse::<u8>().map_err(|_| wrong())?;
+    Interval::new(quality, number, direction).map_err(|error| format!("{text}: {error}"))
+}
+
+/// A note as the line's track writes it: a note name or an interval.
+fn parse_note(text: &str, reading: NoteReading) -> Result<Pitch, String> {
+    match reading {
+        NoteReading::NoteNames => {
+            if parse_interval(text).is_ok() && !text.starts_with('A') {
+                return Err(format!(
+                    "\"{text}\" is an interval, and this track has notes midi_note. Write a \
+                     note name, e.g. C4"
+                ));
+            }
+            parse_pitch(text)
+        }
+        NoteReading::Intervals { tonic, missing } => {
+            let interval: Interval = parse_interval(text).map_err(|why| {
+                if parse_pitch(text).is_ok() {
+                    format!(
+                        "\"{text}\" is a note name, and this track has notes pitched. Write \
+                         it as an interval from the section's tonic, e.g. P1, m3 or P5"
+                    )
+                } else {
+                    why
+                }
+            })?;
+            let tonic: Pitch = tonic.ok_or_else(|| String::from(missing))?;
+            let pitch: Pitch = interval
+                .from_tonic(tonic)
+                .map_err(|error| error.to_string())?;
+            pitch
+                .note_number()
+                .map_err(|error| format!("{interval} from {tonic} is {pitch}: {error}"))?;
+            Ok(pitch)
+        }
+    }
+}
 
 /// `C2`, `F#2`, `Bb1` → a pitch, checked to be a note a MIDI device has.
 ///
@@ -42,24 +120,26 @@ pub fn parse_pitch(text: &str) -> Result<Pitch, String> {
     Ok(pitch)
 }
 
-/// `[D3 F3 A3 C4]` → pitches.
+/// `[M2 P4 M6]` or `[D3 F3 A3]` → pitches, as the track writes notes.
 ///
 /// # Errors
 ///
 /// When the brackets are wrong, empty, or a note is not a note.
-pub fn parse_notes(text: &str) -> Result<Vec<Pitch>, String> {
+pub fn parse_notes(text: &str, reading: NoteReading) -> Result<Vec<Pitch>, String> {
+    let example: &str = match reading {
+        NoteReading::NoteNames => "[D3 F3 A3 C4]",
+        NoteReading::Intervals { .. } => "[M2 P4 M6 m7]",
+    };
     let inner: &str = text
         .strip_prefix('[')
         .and_then(|rest: &str| rest.strip_suffix(']'))
-        .ok_or_else(|| format!("\"{text}\" is not a list of notes. Write e.g. [D3 F3 A3 C4]"))?;
+        .ok_or_else(|| format!("\"{text}\" is not a list of notes. Write e.g. {example}"))?;
     let pitches: Vec<Pitch> = inner
         .split_whitespace()
-        .map(parse_pitch)
+        .map(|note: &str| parse_note(note, reading))
         .collect::<Result<Vec<Pitch>, String>>()?;
     if pitches.is_empty() {
-        return Err(String::from(
-            "no notes between [ and ]. Write e.g. [D3 F3 A3 C4]",
-        ));
+        return Err(format!("no notes between [ and ]. Write e.g. {example}"));
     }
     Ok(pitches)
 }
@@ -224,17 +304,23 @@ pub fn parse_key(tonic_text: &str, mode_text: &str) -> Result<Key, String> {
 /// # Errors
 ///
 /// When the text is not a chord, note or notes, or does not suit the voice.
-pub fn parse_voice_contents(text: &str, voice: VoiceKind) -> Result<ElementContents, String> {
+pub fn parse_voice_contents(
+    text: &str,
+    voice: VoiceKind,
+    reading: NoteReading,
+) -> Result<ElementContents, String> {
     if text.starts_with('"') {
         return Err(String::from(
             "a quoted name is a cue; cues belong on a cue control track",
         ));
     }
     if text.starts_with('[') {
-        return Ok(ElementContents::Notes(parse_notes(text)?));
+        return Ok(ElementContents::Notes(parse_notes(text, reading)?));
     }
-    if text.starts_with(|character: char| "ABCDEFG".contains(character)) {
-        return Ok(ElementContents::Notes(vec![parse_pitch(text)?]));
+    // A note name starts with its letter, an interval with its quality or a
+    // minus sign; a chord numeral with I, V, b or #.
+    if text.starts_with(|character: char| "ABCDEFGPMmd-".contains(character)) {
+        return Ok(ElementContents::Notes(vec![parse_note(text, reading)?]));
     }
     if let Some(bracket) = text.find('[') {
         if voice == VoiceKind::Mono {
@@ -250,7 +336,7 @@ pub fn parse_voice_contents(text: &str, voice: VoiceKind) -> Result<ElementConte
         }
         return Ok(ElementContents::ChordWithNotes {
             chord,
-            notes: parse_notes(&text[bracket..])?,
+            notes: parse_notes(&text[bracket..], reading)?,
         });
     }
     Ok(ElementContents::Chord(parse_chord(text)?))
@@ -308,25 +394,92 @@ mod tests {
         assert!(parse_chord("ii+").unwrap_err().contains("lower case"));
     }
 
+    fn in_c(octave: i8) -> NoteReading {
+        NoteReading::Intervals {
+            tonic: Some(Pitch::new(
+                NoteName::new(NoteLetter::C, Accidental::Natural),
+                octave,
+            )),
+            missing: "no tonic",
+        }
+    }
+
+    fn notes_of(contents: ElementContents) -> Vec<String> {
+        match contents {
+            ElementContents::Notes(notes) | ElementContents::ChordWithNotes { notes, .. } => {
+                notes.iter().map(ToString::to_string).collect()
+            }
+            other => panic!("not notes: {other:?}"),
+        }
+    }
+
     #[test]
     fn contents_follow_the_kind_of_voice() {
         assert!(matches!(
-            parse_voice_contents("ii7", VoiceKind::Poly).unwrap(),
+            parse_voice_contents("ii7", VoiceKind::Poly, in_c(3)).unwrap(),
             ElementContents::Chord(_)
         ));
-        assert!(matches!(
-            parse_voice_contents("[D3 F3 A3]", VoiceKind::Poly).unwrap(),
-            ElementContents::Notes(notes) if notes.len() == 3
-        ));
-        assert!(matches!(
-            parse_voice_contents("ii7[F3 A3 C4]", VoiceKind::Poly).unwrap(),
-            ElementContents::ChordWithNotes { .. }
-        ));
-        assert!(matches!(
-            parse_voice_contents("C2", VoiceKind::Mono).unwrap(),
-            ElementContents::Notes(notes) if notes.len() == 1
-        ));
-        assert!(parse_voice_contents("ii7[F3]", VoiceKind::Mono).is_err());
+        assert_eq!(
+            notes_of(parse_voice_contents("[M2 P4 M6]", VoiceKind::Poly, in_c(3)).unwrap()),
+            ["D3", "F3", "A3"]
+        );
+        assert_eq!(
+            notes_of(parse_voice_contents("ii7[P4 M6 P8]", VoiceKind::Poly, in_c(3)).unwrap()),
+            ["F3", "A3", "C4"]
+        );
+        assert_eq!(
+            notes_of(parse_voice_contents("C2", VoiceKind::Mono, NoteReading::NoteNames).unwrap()),
+            ["C2"]
+        );
+        assert!(parse_voice_contents("ii7[P4]", VoiceKind::Mono, in_c(3)).is_err());
+    }
+
+    #[test]
+    fn a_track_takes_only_its_own_notation() {
+        // A4 is the augmented fourth on a pitched track, the note on a MIDI note track.
+        assert_eq!(
+            notes_of(parse_voice_contents("A4", VoiceKind::Mono, in_c(2)).unwrap()),
+            ["F#2"]
+        );
+        assert_eq!(
+            notes_of(parse_voice_contents("A4", VoiceKind::Mono, NoteReading::NoteNames).unwrap()),
+            ["A4"]
+        );
+        let name_on_pitched: String =
+            parse_voice_contents("C2", VoiceKind::Mono, in_c(2)).unwrap_err();
+        assert!(
+            name_on_pitched.contains("is a note name"),
+            "{name_on_pitched}"
+        );
+        let interval_on_midi: String =
+            parse_voice_contents("P5", VoiceKind::Mono, NoteReading::NoteNames).unwrap_err();
+        assert!(
+            interval_on_midi.contains("is an interval"),
+            "{interval_on_midi}"
+        );
+        let without_tonic: String = parse_voice_contents(
+            "P5",
+            VoiceKind::Mono,
+            NoteReading::Intervals {
+                tonic: None,
+                missing: "write tonic_octave",
+            },
+        )
+        .unwrap_err();
+        assert_eq!(without_tonic, "write tonic_octave");
+    }
+
+    #[test]
+    fn intervals_are_read_with_quality_number_and_direction() {
+        assert_eq!(parse_interval("P5").unwrap().to_string(), "P5");
+        assert_eq!(parse_interval("-P4").unwrap().to_string(), "-P4");
+        assert_eq!(parse_interval("M9").unwrap().to_string(), "M9");
+        assert!(parse_interval("M5").unwrap_err().contains("perfect"));
+        assert!(
+            parse_interval("X3")
+                .unwrap_err()
+                .contains("not an interval")
+        );
     }
 
     #[test]

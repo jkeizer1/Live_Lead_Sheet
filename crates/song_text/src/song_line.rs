@@ -13,7 +13,7 @@ use vocabulary::song::{
 };
 use vocabulary::tempo_mark::TempoMark;
 
-use crate::contents_text::parse_voice_contents;
+use crate::contents_text::{NoteReading, parse_voice_contents};
 use crate::length_words::describe_place_in_bars;
 use crate::repeat_signs::write_out_repeat_signs;
 use crate::rhythm_bar::{BarElement, BarNotation, LineCarry, parse_bars, parse_source_bars};
@@ -49,6 +49,7 @@ pub fn build_line(
     line_number: usize,
     parts: &[BarsText],
     bar_meters: impl Into<BarMeters>,
+    reading: NoteReading,
 ) -> Result<Line, LineError> {
     let bar_meters: BarMeters = bar_meters.into();
     let mut bars: Vec<Vec<BarElement>> = Vec::new();
@@ -120,8 +121,9 @@ pub fn build_line(
                 message,
             };
             let place: String = describe_place_in_bars(start_ticks, &bar_meters, 0);
-            let contents: Option<ElementContents> = contents_of(track, role, placed, &mut carried)
-                .map_err(|why| at(format!("{place}: {why}")))?;
+            let contents: Option<ElementContents> =
+                contents_of(track, role, placed, reading, &mut carried)
+                    .map_err(|why| at(format!("{place}: {why}")))?;
             let element: RhythmElement = RhythmElement::new(
                 ScoreLength::from_ticks(start_ticks),
                 ScoreLength::from_ticks(placed.length_ticks),
@@ -208,6 +210,7 @@ fn contents_of(
     track: &Track,
     role: LineRole,
     placed: &BarElement,
+    reading: NoteReading,
     carried: &mut Option<Carried>,
 ) -> Result<Option<ElementContents>, String> {
     if placed.kind == ElementKind::Rest {
@@ -239,7 +242,7 @@ fn contents_of(
     }
     match (track.kind(), &placed.contents_text) {
         (TrackKind::Voice { voice, .. }, Some(text)) => {
-            let contents: ElementContents = parse_voice_contents(text, *voice)?;
+            let contents: ElementContents = parse_voice_contents(text, *voice, reading)?;
             *carried = Some(Carried::Written(contents.clone()));
             Ok(Some(contents))
         }
@@ -318,7 +321,7 @@ fn describe_song_error(error: &SongError, bar_meters: &BarMeters) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vocabulary::song::Clef;
+    use vocabulary::song::{Clef, TrackNotes};
     use vocabulary::time_signature::TimeSignature;
 
     fn four_four() -> TimeSignature {
@@ -337,11 +340,33 @@ mod tests {
         }]
     }
 
+    /// A MIDI note track writes note names; a pitched one intervals, here
+    /// from C4.
+    fn reading_of(track: &Track) -> NoteReading {
+        match track.kind() {
+            TrackKind::Voice {
+                notes: TrackNotes::Pitched,
+                ..
+            } => NoteReading::Intervals {
+                tonic: Some(vocabulary::pitch::Pitch::new(
+                    vocabulary::pitch::NoteName::new(
+                        vocabulary::pitch::NoteLetter::C,
+                        vocabulary::pitch::Accidental::Natural,
+                    ),
+                    4,
+                )),
+                missing: "no tonic",
+            },
+            _ => NoteReading::NoteNames,
+        }
+    }
+
     fn keys() -> Track {
         Track::new(
             "Keys",
             TrackKind::Voice {
                 voice: VoiceKind::Poly,
+                notes: TrackNotes::Pitched,
                 clef: Clef::Grand,
                 lead: true,
                 voice_layer_names: Vec::new(),
@@ -355,6 +380,7 @@ mod tests {
             "Bass",
             TrackKind::Voice {
                 voice: VoiceKind::Mono,
+                notes: TrackNotes::MidiNote,
                 clef: Clef::Bass,
                 lead: false,
                 voice_layer_names: Vec::new(),
@@ -371,6 +397,7 @@ mod tests {
             1,
             &one("| C2:q / / / | r D2:h G2:q |"),
             four_four(),
+            reading_of(&bass()),
         )
         .unwrap();
         assert_eq!(line.bar_count(), 2);
@@ -391,6 +418,7 @@ mod tests {
             1,
             &one("| /:q / / / |"),
             four_four(),
+            reading_of(&keys()),
         )
         .unwrap_err()
         .message;
@@ -408,6 +436,7 @@ mod tests {
             1,
             &one("| C2:q / / ii7 |"),
             four_four(),
+            reading_of(&bass()),
         )
         .unwrap_err()
         .message;
@@ -417,9 +446,16 @@ mod tests {
 
     #[test]
     fn a_short_bar_is_explained_in_note_values() {
-        let error: String = build_line(&keys(), first_layer(), 1, &one("| I:q / / |"), four_four())
-            .unwrap_err()
-            .message;
+        let error: String = build_line(
+            &keys(),
+            first_layer(),
+            1,
+            &one("| I:q / / |"),
+            four_four(),
+            reading_of(&keys()),
+        )
+        .unwrap_err()
+        .message;
         assert!(error.contains("bar 1 is 4/4 and short by a quarter note"));
     }
 
@@ -435,7 +471,15 @@ mod tests {
                 text: "| A2:w | / |",
             },
         ];
-        let line: Line = build_line(&bass(), first_layer(), 20, &parts, four_four()).unwrap();
+        let line: Line = build_line(
+            &bass(),
+            first_layer(),
+            20,
+            &parts,
+            four_four(),
+            reading_of(&bass()),
+        )
+        .unwrap();
         assert_eq!(line.bar_count(), 4);
         // The last whole note carries A2 from the bar before, across the parts.
         assert!(line.elements().last().unwrap().contents().is_some());
@@ -454,8 +498,15 @@ mod tests {
                 text: "| /:q / / |",
             },
         ];
-        let error: LineError =
-            build_line(&bass(), first_layer(), 20, &short, four_four()).unwrap_err();
+        let error: LineError = build_line(
+            &bass(),
+            first_layer(),
+            20,
+            &short,
+            four_four(),
+            reading_of(&bass()),
+        )
+        .unwrap_err();
         assert_eq!(error.line_number, 21);
         assert!(
             error.message.starts_with("bar 3 is 4/4 and short"),
@@ -473,8 +524,15 @@ mod tests {
                 text: "| /:q ii7 /:h |",
             },
         ];
-        let error: LineError =
-            build_line(&bass(), first_layer(), 20, &chord, four_four()).unwrap_err();
+        let error: LineError = build_line(
+            &bass(),
+            first_layer(),
+            20,
+            &chord,
+            four_four(),
+            reading_of(&bass()),
+        )
+        .unwrap_err();
         assert_eq!(error.line_number, 21);
         assert!(
             error.message.starts_with("bar 3 beat 2:"),
@@ -495,23 +553,45 @@ mod tests {
                 text: "| / / |",
             },
         ];
-        let line: Line = build_line(&bass(), first_layer(), 5, &parts, four_four()).unwrap();
+        let line: Line = build_line(
+            &bass(),
+            first_layer(),
+            5,
+            &parts,
+            four_four(),
+            reading_of(&bass()),
+        )
+        .unwrap();
         assert_eq!(line.bar_count(), 2);
     }
 
     #[test]
     fn a_line_with_no_bars_says_where_to_write_them() {
-        let error: LineError = build_line(&bass(), first_layer(), 7, &[], four_four()).unwrap_err();
+        let error: LineError = build_line(
+            &bass(),
+            first_layer(),
+            7,
+            &[],
+            four_four(),
+            reading_of(&bass()),
+        )
+        .unwrap_err();
         assert_eq!(error.line_number, 7);
         assert!(error.message.starts_with("this line has no bars"));
     }
 
     #[test]
     fn a_chord_with_its_length_run_on_is_told_to_add_the_colon() {
-        let error: String =
-            build_line(&keys(), first_layer(), 1, &one("| Iq / / / |"), four_four())
-                .unwrap_err()
-                .message;
+        let error: String = build_line(
+            &keys(),
+            first_layer(),
+            1,
+            &one("| Iq / / / |"),
+            four_four(),
+            reading_of(&keys()),
+        )
+        .unwrap_err()
+        .message;
         assert!(
             error.contains(
                 "\"Iq\" is not a chord. A chord needs a colon before its length: write I:q"
@@ -524,6 +604,7 @@ mod tests {
             1,
             &one("| ii7h. V7:q |"),
             four_four(),
+            reading_of(&keys()),
         )
         .unwrap_err()
         .message;
@@ -542,7 +623,15 @@ mod tests {
                 text: "| A2 F2 |",
             },
         ];
-        let line: Line = build_line(&bass(), first_layer(), 3, &parts, four_four()).unwrap();
+        let line: Line = build_line(
+            &bass(),
+            first_layer(),
+            3,
+            &parts,
+            four_four(),
+            reading_of(&bass()),
+        )
+        .unwrap();
         assert_eq!(line.elements()[3].element().length().ticks(), 10_080);
     }
 
@@ -550,11 +639,26 @@ mod tests {
     fn a_second_voice_layer_is_a_line_of_its_own() {
         let second: LineRole =
             LineRole::VoiceLayer(vocabulary::song::VoiceLayerNumber::new(2).unwrap());
-        let line: Line = build_line(&keys(), second, 1, &one("| r:h A4 |"), four_four()).unwrap();
+        let line: Line = build_line(
+            &keys(),
+            second,
+            1,
+            &one("| r:h A4 |"),
+            four_four(),
+            reading_of(&keys()),
+        )
+        .unwrap();
         assert_eq!(line.role(), second);
-        let error: String = build_line(&bass(), second, 1, &one("| C2:w |"), four_four())
-            .unwrap_err()
-            .message;
+        let error: String = build_line(
+            &bass(),
+            second,
+            1,
+            &one("| C2:w |"),
+            four_four(),
+            reading_of(&bass()),
+        )
+        .unwrap_err()
+        .message;
         assert!(error.contains("only voice layer 1"), "{error}");
     }
 }

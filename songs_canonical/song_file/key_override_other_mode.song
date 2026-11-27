@@ -1,0 +1,21 @@
+# Canonical test song (deliberately wrong): crates/song_text/src/song_file.rs, test `a_key_override_of_the_other_mode_is_refused`.
+# "Riff" is in C major and its entry overrides it with A minor. The loader must refuse it at the entry (line 20): an override keeps major or minor.
+song "Other mode"
+
+track "Clock"
+  type clock_and_transport
+
+track "Bass"
+  type mono_voice
+  notes pitched
+  clef bass
+  lead
+
+section "Riff"  key C major  meter 4/4
+  line "Bass"  tonic_octave 2  | P1:w |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "Riff"
+  "Riff"  key A minor
+song_composition_close

@@ -5,17 +5,19 @@ track "Clock"
   type clock_and_transport
 track "Manual"
   type poly_voice
+  notes pitched
   clef grand
   lead
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 track "Cues"
   type cue_control
   cue "Go" destination "X" start
 section "A"
   key C major  meter 6/8  tempo 60 beats/min
-  line "Bass"  | C2:q. G2 |
+  line "Bass"  tonic_octave 2  | P1:q. P5 |
 
 song_composition
   key C major  meter 4/4  tempo 100 beats/min

@@ -7,12 +7,13 @@ track "Clock"
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 
 section "no time"
   key C major  meter 4/4  tempo 100 beats/min
-  line "Keys"  | C4:w |
+  line "Keys"  tonic_octave 4  | P1:w |
   line "Keys"  dynamics  | p:h f:h < |
 
 song_composition

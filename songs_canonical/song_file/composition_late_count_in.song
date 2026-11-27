@@ -7,14 +7,15 @@ track "Clock"
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
   lead
 
-section "Riff"  meter 4/4
-  line "Bass" | C2:w |
+section "Riff"  meter 4/4  key C major
+  line "Bass"  tonic_octave 2 | P1:w |
 
-section "Intro"  count-in  meter 4/4
-  line "Bass" | G2:w |
+section "Intro"  count-in  meter 4/4  key C major
+  line "Bass"  tonic_octave 3 | -P4:w |
 
 song_composition
   key C major  meter 4/4  tempo 100 beats/min

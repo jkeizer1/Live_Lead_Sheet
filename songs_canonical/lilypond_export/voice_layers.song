@@ -5,19 +5,21 @@ track "Clock"
   type clock_and_transport
 track "Manual"
   type poly_voice
+  notes pitched
   clef grand
   lead
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 track "Cues"
   type cue_control
   cue "Go" destination "X" start
 section "A"
   key C major  meter 4/4  tempo 60 beats/min
-  line "Manual"  voice_layer 1  | G4:h F4 |
-  line "Manual"  voice_layer 2  | Eb4:q D4 C4 D4 |
-  line "Manual"  voice_layer 3  | C3:w |
+  line "Manual"  voice_layer 1  tonic_octave 4  | P5:h P4 |
+  line "Manual"  voice_layer 2  tonic_octave 4  | m3:q M2 P1 M2 |
+  line "Manual"  voice_layer 3  tonic_octave 3  | P1:w |
 
 song_composition
   key C major  meter 4/4  tempo 100 beats/min

@@ -4,11 +4,12 @@ song "T"
 track "A"
   clef treble
   type poly_voice
+  notes pitched
   wobble
 track "B"
   type bass_synth
-section "S"  meter 4/4
-  line "A" | C4:w |
+section "S"  meter 4/4  key C major
+  line "A"  tonic_octave 4 | P1:w |
 
 song_composition
   key C major  meter 4/4  tempo 100 beats/min

@@ -17,6 +17,12 @@ pub enum OutputWarning {
         requested_events: u32,
         reason: String,
     },
+    /// Another sequencer client has our name: most often a second copy of
+    /// the program.
+    SameNameClient {
+        client_name: String,
+        other_client_id: i32,
+    },
 }
 
 impl fmt::Display for OutputWarning {
@@ -43,6 +49,14 @@ impl fmt::Display for OutputWarning {
                 "MIDI output pool not enlarged to {requested_events} events ({reason}). \
                  Songs play; very fast bursts may run late."
             ),
+            OutputWarning::SameNameClient {
+                client_name,
+                other_client_id,
+            } => write!(
+                f,
+                "Another {client_name} is already open (MIDI client {other_client_id}). Close \
+                 one: the MIDI router cannot tell the two apart."
+            ),
             OutputWarning::QueueTimerFileUnreadable { file, reason } => write!(
                 f,
                 "Cannot confirm MIDI timing: {file} is unreadable ({reason}). \
@@ -55,6 +69,19 @@ impl fmt::Display for OutputWarning {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_second_copy_is_named_with_what_to_do() {
+        assert_eq!(
+            OutputWarning::SameNameClient {
+                client_name: "Lead Sheet".to_string(),
+                other_client_id: 130
+            }
+            .to_string(),
+            "Another Lead Sheet is already open (MIDI client 130). Close one: the MIDI \
+             router cannot tell the two apart."
+        );
+    }
 
     #[test]
     fn not_hr_warning_names_queue_timer_and_fix() {

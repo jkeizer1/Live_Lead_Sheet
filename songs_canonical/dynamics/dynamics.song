@@ -10,26 +10,27 @@ track "Clock"
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 
 section "levels"
   key C major  meter 4/4  tempo 100 beats/min
-  line "Keys"  | C4:w | / | / | / | / | / |
+  line "Keys"  tonic_octave 4  | P1:w | / | / | / | / | / |
   line "Keys"  dynamics  | pp:w | p | mp | mf | f | ff |
 
 section "ramp"
   key C major  meter 4/4  tempo 100 beats/min
-  line "Keys"  | C4:w | / | / | / |
+  line "Keys"  tonic_octave 4  | P1:w | / | / | / |
   line "Keys"  dynamics  | p:w | <:w | r:w | f:w |
 
 section "plain"
   key C major  meter 4/4  tempo 100 beats/min
-  line "Keys"  | C4:w |
+  line "Keys"  tonic_octave 4  | P1:w |
 
 section "marks"
   key C major  meter 4/4  tempo 100 beats/min
-  line "Keys"  | C4:w | C4:w> | C4:w< |
+  line "Keys"  tonic_octave 4  | P1:w | P1:w> | P1:w< |
   line "Keys"  dynamics  | p:w | r | r |
 
 song_composition

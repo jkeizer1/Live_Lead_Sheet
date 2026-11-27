@@ -11,15 +11,18 @@ track "Clock"
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 
 track "Beat"
   type mono_voice
+  notes midi_note
   clef treble
 
 song_composition
@@ -39,7 +42,7 @@ section "Chords and bass from sources"
 #  line "Keys"  sample_source  | I ii ii        | IV IV V        |
 #  line "Keys"                 | :h r:q r:q     | :h :h          |
 
-   line "Bass"  sample_source  | F2 F2 G2    | 
+   line "Bass"  tonic_octave 2  sample_source  | P4 P4 P5    | 
    line "Bass"                 | :q :q :q :q | 
    line "Beat"                 | C4:q>> / /> /  |
 
@@ -47,8 +50,8 @@ section "Chords and bass from sources"
 section "relief"  meter 4/4
    line "Beat"                 | C4:q>> / /> /  |
 
-section "Bass from sources B"  meter 4/4
-   line "Bass"  sample_source  | C2 D2 E2 F2 E2 D2 C2 D2 E2 F2 G2                      | F2 E2 G2 B2 C3 |
+section "Bass from sources B"  meter 4/4  key C major
+   line "Bass"  tonic_octave 2  sample_source  | P1 M2 M3 P4 M3 M2 P1 M2 M3 P4 P5                      | P4 M3 P5 M7 P8 |
    line "Bass"                 | :q :sx>> :sx<< :sx<< :sx<< :h                         | :q :q :h       |
    line "Beat"                 | C4:q>> / /> /       | C4:q>> / /> /   |
 

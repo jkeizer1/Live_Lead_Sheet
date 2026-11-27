@@ -5,12 +5,13 @@ track "Clock"
   type clock_and_transport
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 section "A"
   key C major  meter 3/8  tempo 30 beats/min
   line "Keys" | I:q. |
-section "B"
+section "B"  key C major
   meter 9/8  tempo 60 beats/min
   line "Keys" | I:h. /:q. |
 

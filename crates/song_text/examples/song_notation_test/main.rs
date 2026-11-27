@@ -63,7 +63,7 @@ const MISTAKE_CASES: [MistakeCase; 8] = [
         text: include_str!(
             "../../../../songs_canonical/song_notation_test/chord_on_mono_bass.song"
         ),
-        expected_message: "mistake.song line 15: line \"Bass\": bar 1 beat 4: track \"Bass\" cannot \
+        expected_message: "mistake.song line 17: line \"Bass\": bar 1 beat 4: track \"Bass\" cannot \
                            play that: a mono voice plays one note at a time; write a single note \
                            such as C2",
     },
@@ -73,14 +73,14 @@ const MISTAKE_CASES: [MistakeCase; 8] = [
         text: include_str!(
             "../../../../songs_canonical/song_notation_test/first_note_without_length.song"
         ),
-        expected_message: "mistake.song line 12: line \"Keys\": \"I\" has no length, and nothing \
+        expected_message: "mistake.song line 13: line \"Keys\": \"I\" has no length, and nothing \
                            before it in this line gives one. Write it, e.g. I:q",
     },
     MistakeCase {
         what: "a line in the old order, length first",
         kind: Kind::Song,
         text: include_str!("../../../../songs_canonical/song_notation_test/length_first.song"),
-        expected_message: "mistake.song line 12: line \"Keys\": \"q:I\": a song line writes what it \
+        expected_message: "mistake.song line 13: line \"Keys\": \"q:I\": a song line writes what it \
                            plays first, then its length, e.g. C4:q, I:q or r:q, not q:C4",
     },
     MistakeCase {
@@ -94,7 +94,7 @@ const MISTAKE_CASES: [MistakeCase; 8] = [
         what: "a chord the notation does not know",
         kind: Kind::Song,
         text: include_str!("../../../../songs_canonical/song_notation_test/unknown_chord.song"),
-        expected_message: "mistake.song line 12: line \"Keys\": bar 1 beat 1: \"IV9b\" is not a chord. \
+        expected_message: "mistake.song line 13: line \"Keys\": bar 1 beat 1: \"IV9b\" is not a chord. \
                            After an upper case numeral write nothing, 5, 6, 7, 9, 13, M7 or maj7, \
                            M9 or maj9, add9, sus2, sus4, 7sus4, 7b9, 7#9, + or +7 (7#5)",
     },
@@ -237,6 +237,7 @@ fn describe_track(track: &Track) -> String {
     match track.kind() {
         TrackKind::Voice {
             voice,
+            notes,
             clef,
             lead,
             voice_layer_names,
@@ -261,7 +262,8 @@ fn describe_track(track: &Track) -> String {
                 );
             }
             format!(
-                "{voice_text}, {} clef{lead_text}{names_text}",
+                "{voice_text}, notes {}, {} clef{lead_text}{names_text}",
+                notes.text(),
                 clef_name(*clef)
             )
         }

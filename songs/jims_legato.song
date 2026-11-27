@@ -12,19 +12,23 @@ track "Clock"
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef treble
 
 track "Beat"
   type mono_voice
+  notes midi_note
   clef treble
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
   lead
 
 track "Cymbol"
   type mono_voice
+  notes pitched
   clef treble
 
 song_composition
@@ -40,9 +44,9 @@ section "Count-in"  count-in
 section "Bass 1"  meter 4/4
   key C major
   line "Keys"                   | ii:w                  | IV:w                  |  r:w                | ii:w                     | I:w                   | r:w                   | I:w                   |
-  line "Bass" sample_source     | D2 E2 F2 G2           |  D2 E2 F2 G2 A2       |  D2 E2 F2 G2        | D2 E2 F2 G2 A2 B3        | C3 E2 G2 D2 E2        | C3 E2 G2 D2 E2        | C3 E2 G2 D2 E3 D3 G4  |                  
+  line "Bass"  tonic_octave 2 sample_source     | M2 M3 P4 P5           |  M2 M3 P4 P5 M6       |  M2 M3 P4 P5        | M2 M3 P4 P5 M6 M14        | P8 M3 P5 M2 M3        | P8 M3 P5 M2 M3        | P8 M3 P5 M2 M10 M9 P19  |                  
   line "Bass"                   | :q :q :q :q           | :q :q :q :q           | :q :q :q :q         | :q :q :q :q              | :h :h                 | :h :h                 | :h :h                 |  
   line "Beat"                   | B3:q G2:q G2:q G2:q   | B3:q G2:q G2:q G2:q   | B3:q G2:q G2:q G2:q | B3:q G2:q G2:q G2:q      |  B3:q G2:q G2:q G2:q  | B3:q G2:q G2:q G2:q   | B3:q G2:q G2:q r:q    |
-  line "Cymbol"                 | r:q C2:q r:q C2:q     | r:q C2:q r:q C2:q     | r:q C2:q r:q C2:    | r:q C2:q r:q C2:q        | r:q C2:q r:q C2:q     | r:q C2:q r:q C2:q     | r:q C2:q r:q C2:q     |
+  line "Cymbol"  tonic_octave 2                 | r:q P1:q r:q P1:q     | r:q P1:q r:q P1:q     | r:q P1:q r:q P1:    | r:q P1:q r:q P1:q        | r:q P1:q r:q P1:q     | r:q P1:q r:q P1:q     | r:q P1:q r:q P1:q     |
  
 

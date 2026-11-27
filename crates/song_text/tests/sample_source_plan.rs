@@ -375,7 +375,7 @@ fn a_length_a_mark_a_tie_or_a_rest_on_a_source_is_refused() {
         assert!(errors[0].contains(expected), "{file_name}: {}", errors[0]);
         // The source line is line 16 of each of these files.
         assert!(
-            errors[0].starts_with(&format!("{file_name} line 16:")),
+            errors[0].starts_with(&format!("{file_name} line 17:")),
             "{}",
             errors[0]
         );

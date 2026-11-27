@@ -12,15 +12,18 @@ track "Clock"
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 
 track "Beat"
   type mono_voice
+  notes midi_note
   clef treble
 
 # 1. GROUPING. 7/8 grouped 2+2+3 eighths: three beats, two short and one long. Played twice.
@@ -51,7 +54,7 @@ song_composition_close
 section "1 grouping"
   key C major  meter 7/8  grouping 2+2+3  tempo 400 beats/min
   line "Keys"  | I:q ii:q V:q.    |
-  line "Bass"  | C2:q D2:q G2:q.  |
+  line "Bass"  tonic_octave 2  | P1:q M2:q P5:q.  |
   line "Beat"  | C2:q / C2:e / /  |
 
 # 2. INVERSIONS. The same C chord four ways, then ii7 in third inversion.
@@ -59,13 +62,13 @@ section "1 grouping"
 section "2 inversions"
   key C major  meter 4/4  tempo 100 beats/min
   line "Keys"  | I:w  | I[1stInversion]:w | I[2ndInversion]:w | ii7[3rdInversion]:w |
-  line "Bass"  | C2:w | /                 | /                 | /                   |
+  line "Bass"  tonic_octave 2  | P1:w | /                 | /                 | /                   |
 
 # 3. REPEAT SIGNS. |% ... %| plays the two bars inside twice: I, IV, V, IV, V, I.
 section "3 repeat signs"
   key C major  meter 4/4  tempo 100 beats/min
   line "Keys"  | I:w   |% IV:w | V:w  %| I:w  |
-  line "Bass"  | C2:w  |% F2:w | G2:w %| C2:w |
+  line "Bass"  tonic_octave 2  | P1:w  |% P4:w | P5:w %| P1:w |
 
 # 4. EUCLID. Three hits spread over eight steps, then five over eight: Bjorklund's patterns
 #    (x..x..x. and x.xx.xx.). Listen: the Beat track.
@@ -76,7 +79,7 @@ section "4 F minor"
 #                             | Fm (F Ab C), Bb minor (Bb Db F)    |      Cm (C Eb G) Fm (F Ab C)   |
    line "Keys" sample_source  | I              IV                  |      V           I             |
    line "Keys"                | :h             :h                  |+8va  :h          :h            |
-   line "Bass"                | F2:trp(q q q)  G2:h                | C2:trp(q q q)    F2:q Ab1:q    |
+   line "Bass"  tonic_octave 1                | P8:trp(q q q)  M9:h                | P5:trp(q q q)    P8:q m3:q    |
 
 #   line "Beat"                | C2:q / / /      |  C2: / / C2:trp(e e e)   |
 
@@ -87,7 +90,7 @@ section "4 F Major"
    key F major  meter 4/4  tempo 140 beats/min --- 8000 beats/min is too fast (rejected), 7999 bpm works.
    line "Keys" sample_source  | I  vi                     |      IV          vii°          |
    line "Keys"                |  :w                       |+8va  :h :trp(q q q)            |
-   line "Bass"                | trp(F2:q A2:q C2:q)  D2:h | Bb2:trp(q q q)    E2:q C1:q    |
+   line "Bass"  tonic_octave 1                | trp(P8:q M10:q P5:q)  M6:h | P11:trp(q q q)    M7:q -P4:q    |
 #   line "Beat"               | C2:q / / /                |  C2: / / C2:trp(e e e)         |
 
 # 4. EUCLID. Three hits spread over eight steps, then five over eight: Bjorklund's patterns
@@ -95,7 +98,7 @@ section "4 F Major"
 section "4 euclid B"
   key C major  meter 8/8  tempo 420 beats/min
    line "Keys"  |%2 I:w      | -8va V:w  %|%2 loco ii:w | V:w %|
-   line "Bass"  | G3:q / / / | G2:euclid(3,8)                       |  G2:euclid(4,8)          |  G2:euclid(5,6)          |  G2:euclid(2,3)          | G2:euclid(7,8)          | G2:euclid(8,8) |  r:w |       
+   line "Bass"  tonic_octave 3  | P5:q / / / | -P4:euclid(3,8)                       |  -P4:euclid(4,8)          |  -P4:euclid(5,6)          |  -P4:euclid(2,3)          | -P4:euclid(7,8)          | -P4:euclid(8,8) |  r:w |       
    line "Beat"  | G3:q / / / |%6 C2:e r:e r:e r:e C3 r:e r:e r:e   %|  C2:q B2:q C3:q C4:q |
 
 # 5. SAME PITCH IN TWO LAYERS. Bar 1: layer 1 holds C4 on beats 1-2, layer 2 on beats 2-3:
@@ -103,9 +106,9 @@ section "4 euclid B"
 #    two separate notes.
 section "5 layer merge"
   key C major  meter 4/4  tempo 100 beats/min
-  line "Keys" voice_layer 1  | C4:h r:h       | C4:q r:h.    |
-  line "Keys" voice_layer 2  | r:q  C4:h> r:q | r:q C4:q r:h |
-  line "Bass"                | C2:w           | /            | 
+  line "Keys" voice_layer 1  tonic_octave 4  | P1:h r:h       | P1:q r:h.    |
+  line "Keys" voice_layer 2  tonic_octave 4  | r:q  P1:h> r:q | r:q P1:q r:h |
+  line "Bass"  tonic_octave 2                | P1:w           | /            | 
   line "Beat"                | C2:q / / /     | / / / /      |
  
 # 6. DYNAMICS. A line "Keys" dynamics: the six levels, one bar each: pp p mp mf f ff.
@@ -122,14 +125,14 @@ section "6b crescendo diminuendo"
   key C major  meter 4/4  tempo 100 beats/min
   line "Keys"  | I:w | / | / | / | / | / | / | / |
   line "Keys"  dynamics  | pp:w | <:w | r:w | f:w | >:w | r:w | p:w | mf:w |
-  line "Bass"            | C2:w    | / |   / | / | / | / | / | / |
+  line "Bass"  tonic_octave 2            | P1:w    | / |   / | / | / | / | / | / |
   line "Bass"  dynamics  | pp:w    | <:w | r:w | f:w | >:w | r:w | p:w | mf:w |
 
 # 6b2. CRESCENDO AND DIMINUENDO. p, then a crescendo over two bars to f, then a diminuendo over
 #     two bars to p, then mf. The < and > end where the next level starts.
 section "6b2crescendo diminuendo"
   key C major  meter 4/4  tempo 100 beats/min
-   line "Bass"            | C2:w    | / |   / | / | / | / | / | / |
+   line "Bass"  tonic_octave 2            | P1:w    | / |   / | / | / | / | / | / |
    line "Bass"  dynamics  | pp:w    | <:w | r:w | f:w | >:w | r:w | p:w | mf:w |
 
 # 6c. ACCENT UNDER p. The studio's accent (velocity 100) is absolute: the first chord in the
@@ -145,8 +148,8 @@ section "6c accent under p"
 #    text still up, then -8va (an octave down), then loco (back to the clef's octave).
 section "7 octaves"
   key C major  meter 4/4  tempo 150 beats/min
-  line "Keys"  | C4:q E4 G4 C5 | +8va C4:q E4 G4 C5 | C4:q E4 G4 C5 | -8va C4:q E4 G4 C5 | loco C4:q E4 G4 C5 | r:w               |
-  line "Bass"  | C2:w          | /                  | /             | /                  | /                  | C2:q> /<< /<< /<< |
+  line "Keys"  tonic_octave 4  | P1:q M3 P5 P8 | +8va P1:q M3 P5 P8 | P1:q M3 P5 P8 | -8va P1:q M3 P5 P8 | loco P1:q M3 P5 P8 | r:w               |
+  line "Bass"  tonic_octave 2  | P1:w          | /                  | /             | /                  | /                  | P1:q> /<< /<< /<< |
 
 # 8. TEMPO BETWEEN SECTIONS (and the meter change). 100 beats/min, then 140, then 3/4 keeps
 #    140 beats/min (same beat speed), then 6/8 keeps 140 beats/min (the beat is now a dotted
@@ -155,21 +158,21 @@ section "8a slow"
   key C major  meter 4/4 
   tempo 100 beats/min
   line "Keys"  | I:w        | IV:w    |
-  line "Bass"  | C2:w       | F2:w    |
+  line "Bass"  tonic_octave 2  | P1:w       | P4:w    |
   line "Beat"  | C2:q / / / | / / / / |
 
 section "8b faster"
   key C major  meter 4/4 
   tempo 140 beats/min
   line "Keys"  | V:w        | I:w     |
-  line "Bass"  | G2:w       | C2:w    |
+  line "Bass"  tonic_octave 2  | P5:w       | P1:w    |
   line "Beat"  | C2:q / / / | / / / / |
 
 section "8c three four"
   key C major meter 3/4
   tempo 140 beats/min
   line "Keys"  | I:h.      | IV:h. | V:h.  | I:h.  |
-  line "Bass"  | C2:h.     | F2:h. | G2:h. | C2:h. |
+  line "Bass"  tonic_octave 2  | P1:h.     | P4:h. | P5:h. | P1:h. |
   line "Beat"  | C2:q / /  | / / / | / / / | / / / |
 
 section "8ca three four"
@@ -189,4 +192,4 @@ section "8d six eight"
 section "8e back to slow"
   key C major meter 4/4  tempo 100 beats/min
   line "Keys"  | I:w |
-  line "Bass"  | C2:w |
+  line "Bass"  tonic_octave 2  | P1:w |

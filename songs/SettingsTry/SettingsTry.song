@@ -9,15 +9,18 @@ track "Clock"
 
 track "Beat"
   type mono_voice
+  notes midi_note
   clef treble
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead 
 
 track "Bass2"
   type mono_voice
+  notes pitched
   clef bass
 
 #track "Cues"
@@ -41,8 +44,8 @@ section "Count-in"  count-in
 section "Verse ONE"
   key C major  meter 4/4  tempo 140 beats/min
   line "Keys"  sample_source    | I IV V ii IV V vii | V V IV IV I I | I IV V ii IV V vii | V V IV IV I I |
-  line "Keys"                   | :h :q :q | :q :q :e :e :e :e | :q :e :e :q :e :e | trp(C2:e C3:e C4:e) :sx :sx :sx r:sx :q r:q|
-  line "Bass2"  | trp(A2:q> A2:q A2:q) trp(A2:q A2:q B2:q) | G2:q / C2 / | E2 / /:h | C2:q> / /> /:e / |
+  line "Keys"  tonic_octave 2                   | :h :q :q | :q :q :e :e :e :e | :q :e :e :q :e :e | trp(P1:e P8:e P15:e) :sx :sx :sx r:sx :q r:q|
+  line "Bass2"  tonic_octave 2  | trp(M6:q> M6:q M6:q) trp(M6:q M6:q M7:q) | P5:q / P1 / | M3 / /:h | P1:q> / /> /:e / |
   line "Beat"  | C4:q> / /> /           | / / / /             | C4 / / /       | / / / / |
 
 # G – Am
@@ -52,20 +55,20 @@ section "Verse TWO"
 #                G                        Am
   line "Keys"  sample_source  | V V V V V V V V | vi vi |
   line "Keys"                  | :q.> :e r:h | :h>> :h |
-  line "Bass2"  | G2:h  B2               | A2  /               |
+  line "Bass2"  tonic_octave 3  | -P4:h  -m2               | -m3  /               |
   line "Beat"  | C4:q> / /> /           | / / / /             |
 
 section "Verse THREE"
   key C major  meter 4/4  tempo 140 beats/min
 #                Baug                    Dm                 
   line "Keys"  | vii°:h /               | ii  /               | 
-  line "Bass2"  | B2:q.> /:e r:h | D2 D3 |
+  line "Bass2"  tonic_octave 2  | M7:q.> /:e r:h | M2 M9 |
   line "Beat"  | C4:q> / /> /           | / / / /             |
 
 section "Verse CLOSE"
   key C major  meter 4/4  tempo 140 beats/min
 #                Baug                    Dm                 
   line "Keys"  | vii°:h /               | ii  /               | 
-  line "Bass2"  | B2:q.> /:e r:h | D2 D3 |
+  line "Bass2"  tonic_octave 2  | M7:q.> /:e r:h | M2 M9 |
   line "Beat"  | C4:q> / /> /           | / / / /             |
 

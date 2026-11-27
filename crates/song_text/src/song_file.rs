@@ -6,21 +6,23 @@
 //! result is the song or all the mistakes found, in line order.
 
 use vocabulary::bar_meters::BarMeters;
+use vocabulary::interval::nearest_tonic;
 use vocabulary::key::Key;
 use vocabulary::midi_values::{
     ControllerNumber, ControllerValue, NoteNumber, ProgramNumber, Velocity,
 };
 use vocabulary::numeral_standard::NumeralStandard;
+use vocabulary::pitch::Pitch;
 use vocabulary::score_length::ScoreLength;
 use vocabulary::song::{
     Clef, CueDefinition, CueDestination, CueMessage, Line, LineRole, Section, Song, SongError,
-    Track, TrackKind, VoiceKind, VoiceLayerName, VoiceLayerNumber,
+    Track, TrackKind, TrackNotes, VoiceKind, VoiceLayerName, VoiceLayerNumber,
 };
 use vocabulary::tempo::{Tempo, TempoError};
 use vocabulary::ticks::TICKS_PER_QUARTER_NOTE;
 use vocabulary::time_signature::TimeSignature;
 
-use crate::contents_text::parse_key;
+use crate::contents_text::{NoteReading, parse_key};
 use crate::meter_pattern::parse_meter_pattern;
 use crate::parse_error::ParseError;
 use crate::song_line::{BarsText, build_line};
@@ -31,6 +33,8 @@ struct OpenTrack {
     name: String,
     line_number: usize,
     type_name: Option<String>,
+    /// `notes pitched` or `notes midi_note`.
+    notes: Option<TrackNotes>,
     clef: Option<Clef>,
     lead: bool,
     cues: Vec<CueDefinition>,
@@ -51,6 +55,9 @@ struct RawLine {
     sample_source: bool,
     /// `dynamics` written after the track's name: the line holds levels.
     dynamics: bool,
+    /// `tonic_octave n`: the octave of the tonic a pitched line's intervals
+    /// are measured from.
+    tonic_octave: Option<i8>,
     line_number: usize,
     parts: Vec<RawBarsText>,
 }
@@ -68,6 +75,9 @@ struct OpenSection {
     count_in: bool,
     repeat_count: Option<u32>,
     key: Option<Key>,
+    /// `key section`: on a song composition entry, play the section's own
+    /// key whatever key line stands above it. Refused anywhere else.
+    plays_section_key: bool,
     time_signature: Option<TimeSignature>,
     /// `grouping 2+2+3` written after the meter, as written: the pulses of
     /// each group.
@@ -89,6 +99,7 @@ impl OpenSection {
             count_in: false,
             repeat_count: None,
             key: None,
+            plays_section_key: false,
             time_signature: None,
             beat_grouping: None,
             tempo: None,
@@ -106,6 +117,8 @@ struct CompositionEntry {
     line_number: usize,
     repeat_count: u32,
     key: Option<Key>,
+    /// `key section`: the section's own key, whatever key line is above.
+    plays_section_key: bool,
     tempo: Option<WrittenTempo>,
     /// True for a `key` or `tempo` line standing between entries: it plays
     /// nothing, and every entry after it takes its values as the base.
@@ -128,6 +141,11 @@ struct OpenComposition {
 struct EntryOverrides {
     key: Option<Key>,
     tempo: Option<WrittenTempo>,
+    /// The key comes from a key line between entries, not the entry itself.
+    key_from_key_line: bool,
+    /// Where the entry is written, for a key override that is refused. Only
+    /// read when `key` is given, so the default 0 of no entry is never used.
+    line_number: usize,
 }
 
 /// A tempo as the song file writes it. How long a beat is comes from the
@@ -183,7 +201,11 @@ impl WrittenTempo {
 /// meter and stay the same beats per minute.
 #[derive(Clone)]
 struct CompositionBase {
+    /// The key a section with no key of its own plays in.
     key: Key,
+    /// The key of the last key line between entries: an override for every
+    /// entry below it (Song Notation, section 5). The starting key is not.
+    key_line: Option<Key>,
     tempo: Tempo,
     /// The meter whose beat `tempo` counts: the composition's own meter.
     beat_meter: TimeSignature,
@@ -224,6 +246,10 @@ fn milli_beats_text(milli_beats: u64) -> String {
         format!("{whole}.{}", decimals.trim_end_matches('0'))
     }
 }
+
+/// `key section` is only for a song composition entry.
+const SECTION_KEY_ON_ENTRY_ONLY: &str = "key section belongs on a song composition entry, where it \
+     plays the section's own key. Here write a key, e.g. key C major";
 
 struct SongReader<'a> {
     file_name: &'a str,
@@ -384,6 +410,7 @@ impl SongReader<'_> {
             name: name.to_string(),
             line_number,
             type_name: None,
+            notes: None,
             clef: None,
             lead: false,
             cues: Vec::new(),
@@ -399,6 +426,18 @@ impl SongReader<'_> {
         };
         if let Some(rest) = keyword_rest(line, "type") {
             track.type_name = Some(rest.to_string());
+        } else if let Some(rest) = keyword_rest(line, "notes") {
+            track.notes = Some(match rest {
+                "pitched" => TrackNotes::Pitched,
+                "midi_note" => TrackNotes::MidiNote,
+                other => {
+                    return Err(format!(
+                        "\"{other}\" is not what a track's notes can be. Write notes pitched \
+                         for music, or notes midi_note for notes a device uses to pick a gate \
+                         or a sample"
+                    ));
+                }
+            });
         } else if let Some(rest) = keyword_rest(line, "clef") {
             track.clef = Some(parse_clef(rest)?);
         } else if line == "lead" {
@@ -426,7 +465,7 @@ impl SongReader<'_> {
         } else {
             let _ = line_number;
             return Err(format!(
-                "\"{line}\" is not understood in a track. Expected type, clef, lead, \
+                "\"{line}\" is not understood in a track. Expected type, notes, clef, lead, \
                  voice_layer or cue"
             ));
         }
@@ -500,7 +539,24 @@ impl SongReader<'_> {
                         return Err(message);
                     }
                 };
-            let (sample_source, bars_text): (bool, &str) = read_sample_source(bars_text);
+            let (mut tonic_octave, bars_text): (Option<i8>, &str) =
+                match read_tonic_octave(bars_text) {
+                    Ok(read) => read,
+                    Err(message) => {
+                        section.continuing_line = false;
+                        return Err(message);
+                    }
+                };
+            let (sample_source, mut bars_text): (bool, &str) = read_sample_source(bars_text);
+            if tonic_octave.is_none() {
+                (tonic_octave, bars_text) = match read_tonic_octave(bars_text) {
+                    Ok(read) => read,
+                    Err(message) => {
+                        section.continuing_line = false;
+                        return Err(message);
+                    }
+                };
+            }
             let (dynamics, bars_text): (bool, &str) = read_dynamics(bars_text);
             // The bars may all be on the lines below, so a bare name is fine.
             let parts: Vec<RawBarsText> = if bars_text.trim().is_empty() {
@@ -516,6 +572,7 @@ impl SongReader<'_> {
                 voice_layer,
                 sample_source,
                 dynamics,
+                tonic_octave,
                 line_number,
                 parts,
             });
@@ -550,6 +607,11 @@ impl SongReader<'_> {
         };
         if self.errors.len() > open.errors_at_start {
             self.failed_section_names.push(open.name);
+            return;
+        }
+        if open.plays_section_key {
+            self.failed_section_names.push(open.name.clone());
+            self.report(open.line_number, String::from(SECTION_KEY_ON_ENTRY_ONLY));
             return;
         }
         if open.repeat_count.is_some() {
@@ -671,13 +733,59 @@ impl SongReader<'_> {
                 }
             },
         };
+        // A pitched line's intervals are measured from the section's own
+        // key; a count-in has no harmony and needs none.
+        if open.key.is_none() && !open.count_in {
+            let pitched: Option<&RawLine> = open.lines.iter().find(|raw: &&RawLine| {
+                self.track_notes(&raw.track_name) == Some(TrackNotes::Pitched)
+            });
+            if let Some(raw) = pitched {
+                self.report(
+                    open.line_number,
+                    format!(
+                        "section \"{}\" has a line on track \"{}\", whose notes are pitched, and \
+                         no key of its own. Add its key, e.g. key C major: its notes and chords \
+                         are measured from the key's tonic",
+                        open.name, raw.track_name
+                    ),
+                );
+                return None;
+            }
+        }
+        // An override changes the tonic only, so a major section stays major.
+        if let (Some(over), Some(own)) = (overrides.key, open.key)
+            && over.mode() != own.mode()
+        {
+            let message: String = if overrides.key_from_key_line {
+                format!(
+                    "\"{}\" is in {own}, and the key line above it overrides it with {over}. An \
+                     override keeps major or minor: write key section on this entry to play \
+                     {own}, or give it a {} key, e.g. \"{}\"  key {} {}",
+                    open.name,
+                    own.mode().text(),
+                    open.name,
+                    over.tonic(),
+                    own.mode().text()
+                )
+            } else {
+                format!(
+                    "\"{}\" is in {own}. Its key override must be {} too, e.g. {} {}",
+                    open.name,
+                    own.mode().text(),
+                    over.tonic(),
+                    own.mode().text()
+                )
+            };
+            self.report(overrides.line_number, message);
+            return None;
+        }
         // A count-in section needs no key, so it does not take the song's.
         let key: Option<Key> = if open.count_in {
             overrides.key.or(open.key)
         } else {
             Some(overrides.key.or(open.key).unwrap_or(base.key))
         };
-        let lines: Vec<Line> = self.build_lines(open, &bar_meters);
+        let lines: Vec<Line> = self.build_lines(open, &bar_meters, key, open.key);
         if self.errors.len() > errors_before {
             return None;
         }
@@ -695,7 +803,8 @@ impl SongReader<'_> {
         .and_then(|section: Section| match beat_grouping {
             Some(group_pulses) => section.with_beat_grouping(group_pulses),
             None => Ok(section),
-        });
+        })
+        .map(|section: Section| section.with_own_key(open.key));
         match built {
             Ok(section) => Some(section),
             Err(error) => {
@@ -745,7 +854,11 @@ impl SongReader<'_> {
         };
         if !line.starts_with('"') {
             if composition.entries.is_empty() {
-                return read_composition_start(&mut composition.start, line);
+                read_composition_start(&mut composition.start, line)?;
+                if composition.start.plays_section_key {
+                    return Err(String::from(SECTION_KEY_ON_ENTRY_ONLY));
+                }
+                return Ok(());
             }
             // After the first entry, a key or tempo line sets a new base for
             // the entries below it.
@@ -756,11 +869,15 @@ impl SongReader<'_> {
                     "the meter cannot change in song_composition. Write the meter on a section",
                 ));
             }
+            if written.plays_section_key {
+                return Err(String::from(SECTION_KEY_ON_ENTRY_ONLY));
+            }
             composition.entries.push(CompositionEntry {
                 name: String::new(),
                 line_number,
                 repeat_count: 1,
                 key: written.key,
+                plays_section_key: false,
                 tempo: written.tempo,
                 rebase: true,
             });
@@ -789,6 +906,7 @@ impl SongReader<'_> {
             line_number,
             repeat_count: written.repeat_count.unwrap_or(1),
             key: written.key,
+            plays_section_key: written.plays_section_key,
             tempo: written.tempo,
             rebase: false,
         });
@@ -838,6 +956,7 @@ impl SongReader<'_> {
         };
         Some(CompositionBase {
             key,
+            key_line: None,
             tempo,
             beat_meter: time_signature,
         })
@@ -897,9 +1016,19 @@ impl SongReader<'_> {
             if failed_names.contains(&entry.name) {
                 continue;
             }
+            // The entry's own override, else (unless it plays its section's
+            // key) the key line above it.
+            let key_from_key_line: bool =
+                entry.key.is_none() && !entry.plays_section_key && base.key_line.is_some();
             let overrides: EntryOverrides = EntryOverrides {
-                key: entry.key,
+                key: if entry.plays_section_key {
+                    None
+                } else {
+                    entry.key.or(base.key_line)
+                },
                 tempo: entry.tempo.clone(),
+                key_from_key_line,
+                line_number: entry.line_number,
             };
             // repeat 0 leaves the entry out, as if commented out: it is
             // checked where it stands, but does not play or change anything.
@@ -945,6 +1074,7 @@ impl SongReader<'_> {
     fn rebase(&mut self, base: &mut CompositionBase, entry: &CompositionEntry) {
         if let Some(key) = entry.key {
             base.key = key;
+            base.key_line = Some(key);
         }
         let Some(written) = entry.tempo.clone() else {
             return;
@@ -976,7 +1106,11 @@ impl SongReader<'_> {
                 );
                 return Err(());
             }
-            if raw.voice_layer.is_some() || raw.sample_source || raw.dynamics {
+            if raw.voice_layer.is_some()
+                || raw.sample_source
+                || raw.dynamics
+                || raw.tonic_octave.is_some()
+            {
                 self.report(
                     raw.line_number,
                     String::from(
@@ -1009,7 +1143,83 @@ impl SongReader<'_> {
         Ok(found)
     }
 
-    fn build_lines(&mut self, open: &OpenSection, bar_meters: &BarMeters) -> Vec<Line> {
+    /// A voice track's `notes`, by the track's name.
+    fn track_notes(&self, track_name: &str) -> Option<TrackNotes> {
+        self.tracks
+            .iter()
+            .find(|track: &&Track| track.name() == track_name)
+            .and_then(|track: &Track| match track.kind() {
+                TrackKind::Voice { notes, .. } => Some(*notes),
+                _ => None,
+            })
+    }
+
+    /// How `raw`'s notes are read: a pitched line's intervals from `key`'s
+    /// tonic nearest `own_key`'s in its `tonic_octave`, a MIDI note track's
+    /// note names. A
+    /// `tonic_octave` on a track that takes note names is refused.
+    fn note_reading(
+        raw: &RawLine,
+        track: &Track,
+        key: Option<Key>,
+        own_key: Option<Key>,
+    ) -> Result<NoteReading, String> {
+        let reading: NoteReading = match (track.kind(), raw.tonic_octave) {
+            (
+                TrackKind::Voice {
+                    notes: TrackNotes::Pitched,
+                    ..
+                },
+                Some(octave),
+            ) => match key {
+                Some(key) => {
+                    // The section's own tonic in the line's octave; under an
+                    // override, the override's tonic nearest it.
+                    let own_tonic: Pitch = Pitch::new(own_key.unwrap_or(key).tonic(), octave);
+                    NoteReading::Intervals {
+                        tonic: Some(nearest_tonic(own_tonic, key.tonic())),
+                        missing: "",
+                    }
+                }
+                None => NoteReading::Intervals {
+                    tonic: None,
+                    missing: "the section has no key, so an interval has no tonic. Add the \
+                              section's key, e.g. key C major",
+                },
+            },
+            (
+                TrackKind::Voice {
+                    notes: TrackNotes::Pitched,
+                    ..
+                },
+                None,
+            ) => NoteReading::Intervals {
+                tonic: None,
+                missing: "this line writes intervals and has no tonic_octave. Write the \
+                          octave of the tonic they are measured from after the track's \
+                          name, e.g. tonic_octave 2",
+            },
+            (_, Some(_)) => {
+                return Err(format!(
+                    "line \"{}\": tonic_octave is for a track whose notes are pitched. \
+                     Remove it: this track's notes are written as note names",
+                    raw.track_name
+                ));
+            }
+            (_, None) => NoteReading::NoteNames,
+        };
+        Ok(reading)
+    }
+
+    /// The lines of a section as an entry plays it: a pitched line's
+    /// intervals are read from `key`'s tonic, the key the entry plays in.
+    fn build_lines(
+        &mut self,
+        open: &OpenSection,
+        bar_meters: &BarMeters,
+        key: Option<Key>,
+        own_key: Option<Key>,
+    ) -> Vec<Line> {
         let mut lines: Vec<Line> = Vec::new();
         for raw in &open.lines {
             if self.failed_track_names.contains(&raw.track_name) {
@@ -1059,8 +1269,28 @@ impl SongReader<'_> {
                     | TrackKind::MeterControl,
                 ) => LineRole::VoiceLayer(VoiceLayerNumber::FIRST),
             };
-            match build_line(track, role, raw.line_number, &parts, bar_meters.clone()) {
-                Ok(line) => lines.push(line),
+            let reading: NoteReading = match Self::note_reading(raw, track, key, own_key) {
+                Ok(reading) => reading,
+                Err(message) => {
+                    self.report(raw.line_number, message);
+                    continue;
+                }
+            };
+            match build_line(
+                track,
+                role,
+                raw.line_number,
+                &parts,
+                bar_meters.clone(),
+                reading,
+            ) {
+                Ok(line) => {
+                    let tonic: Option<Pitch> = match reading {
+                        NoteReading::Intervals { tonic, .. } => tonic,
+                        NoteReading::NoteNames => None,
+                    };
+                    lines.push(line.with_tonic(raw.tonic_octave, tonic));
+                }
                 Err(error) => {
                     self.report(
                         error.line_number,
@@ -1141,6 +1371,13 @@ fn build_track(open: &OpenTrack) -> Result<Track, String> {
                     open.name
                 ));
             };
+            let Some(notes) = open.notes else {
+                return Err(format!(
+                    "track \"{}\" does not say what its notes are. Add notes pitched for music, \
+                     or notes midi_note for notes a device uses to pick a gate or a sample",
+                    open.name
+                ));
+            };
             let voice: VoiceKind = if type_name == "poly_voice" {
                 VoiceKind::Poly
             } else {
@@ -1148,12 +1385,14 @@ fn build_track(open: &OpenTrack) -> Result<Track, String> {
             };
             TrackKind::Voice {
                 voice,
+                notes,
                 clef,
                 lead: open.lead,
                 voice_layer_names: open.voice_layer_names.clone(),
             }
         }
         _ if open.clef.is_some() => return Err(voice_only("clef")),
+        _ if open.notes.is_some() => return Err(voice_only("notes")),
         _ if !open.voice_layer_names.is_empty() => return Err(voice_only("voice_layer")),
         _ if open.lead => return Err(voice_only("lead")),
         "clock_and_transport" => TrackKind::ClockAndTransport,
@@ -1198,13 +1437,14 @@ fn read_voice_layer(after_name: &str) -> Result<(Option<VoiceLayerNumber>, &str)
         if after_name.trim().is_empty()
             || after_name.trim_start().starts_with('|')
             || keyword_rest(after_name.trim(), "sample_source").is_some()
+            || keyword_rest(after_name.trim(), "tonic_octave").is_some()
             || keyword_rest(after_name.trim(), "dynamics").is_some()
         {
             return Ok((None, after_name));
         }
         return Err(format!(
             "\"{}\" after the track's name is not understood. Write voice_layer and its \
-             number, sample_source, dynamics, or the bars, e.g. line \"Keys\" voice_layer 2 | C4:q D4 E4 F4 |",
+             number, tonic_octave, sample_source, dynamics, or the bars, e.g. line \"Keys\" voice_layer 2 | C4:q D4 E4 F4 |",
             after_name.trim()
         ));
     };
@@ -1213,6 +1453,28 @@ fn read_voice_layer(after_name: &str) -> Result<(Option<VoiceLayerNumber>, &str)
     let number_text: &str = rest.split_whitespace().next().unwrap_or("");
     let number: VoiceLayerNumber = voice_layer_number(number_text)?;
     Ok((Some(number), rest[number_text.len()..].trim_start()))
+}
+
+/// `tonic_octave 2` and the text after it; the text as it is when the word
+/// is not there.
+fn read_tonic_octave(after: &str) -> Result<(Option<i8>, &str), String> {
+    let Some(rest) = keyword_rest(after.trim(), "tonic_octave") else {
+        return Ok((None, after));
+    };
+    // Nothing after the word reads as an empty number, which is reported
+    // as not a number: no value is invented.
+    let number_text: &str = rest.split_whitespace().next().unwrap_or("");
+    let octave: i8 = number_text
+        .parse::<i8>()
+        .ok()
+        .filter(|octave: &i8| (-1..=9).contains(octave))
+        .ok_or_else(|| {
+            format!(
+                "\"{number_text}\" is not an octave for tonic_octave. Write -1 to 9, e.g. \
+                 tonic_octave 2"
+            )
+        })?;
+    Ok((Some(octave), rest[number_text.len()..].trim_start()))
 }
 
 /// `sample_source` right after the track's name or its voice layer, and the
@@ -1390,13 +1652,22 @@ fn read_repeat<'a>(section: &mut OpenSection, after: &'a [Word]) -> Result<&'a [
 }
 
 fn read_key<'a>(section: &mut OpenSection, after: &'a [Word]) -> Result<&'a [Word], String> {
+    if let [word, rest @ ..] = after
+        && word.text == "section"
+    {
+        if section.key.is_some() || section.plays_section_key {
+            return Err(String::from("key is written twice here"));
+        }
+        section.plays_section_key = true;
+        return Ok(rest);
+    }
     let [tonic, mode, rest @ ..] = after else {
         return Err(String::from(
             "key needs a note and a mode, e.g. key C major",
         ));
     };
     let key: Key = parse_key(&tonic.text, &mode.text)?;
-    if section.key.replace(key).is_some() {
+    if section.plays_section_key || section.key.replace(key).is_some() {
         return Err(String::from("key is written twice in this section"));
     }
     Ok(rest)
@@ -1568,7 +1839,7 @@ mod tests {
             "../../../songs_canonical/song_file/undeclared_track.song"
         ));
         assert_eq!(errors.len(), 1);
-        assert!(errors[0].contains("test.song line 15:"));
+        assert!(errors[0].contains("test.song line 17:"));
         assert!(errors[0].contains("\"Drums\" is not a track of the song"));
     }
 
@@ -1617,7 +1888,7 @@ mod tests {
         // A third error follows (section "S" has no usable line, as track "A"
         // failed): the two track mistakes come first.
         assert!(errors.len() >= 2, "{errors:?}");
-        assert!(errors[0].contains("test.song line 7:"));
+        assert!(errors[0].contains("test.song line 8:"));
         assert!(errors[1].contains("\"bass_synth\" is not a track type"));
     }
 
@@ -1797,9 +2068,181 @@ mod tests {
             "{played:?}"
         );
         assert_eq!(played[1], played[2], "both follow the new base");
+        // The key line overrides "Riff"'s own C major, and the tempo line
+        // sets the tempo.
         assert!(
             played[1].0.contains('D') && played[1].1 == 190_000,
             "{played:?}"
+        );
+    }
+
+    /// Each pitch a track's line plays, entry by entry.
+    fn pitches_of_track(song: &Song, track: &str) -> Vec<Vec<String>> {
+        song.sections()
+            .iter()
+            .map(|section: &Section| {
+                section
+                    .lines()
+                    .iter()
+                    .find(|line: &&Line| line.track_name() == track)
+                    .unwrap()
+                    .elements()
+                    .iter()
+                    .filter_map(|line_element: &vocabulary::song::LineElement| {
+                        match line_element.contents() {
+                            Some(ElementContents::Notes(notes)) => Some(notes[0].to_string()),
+                            _ => None,
+                        }
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_key_override_keeps_the_sections_intervals() {
+        let song: Song = parse_song(
+            "test.song",
+            include_str!("../../../songs_canonical/song_file/key_override_keeps_intervals.song"),
+        )
+        .unwrap();
+        // One section, composed once: the override plays it on the new
+        // tonic, the chromatic A1 included (C#2 becomes E2, not Fb2).
+        assert_eq!(
+            pitches_of_track(&song, "Bass"),
+            vec![
+                vec!["C2", "C#2", "G2", "B1"],
+                vec!["Eb2", "E2", "Bb2", "D2"]
+            ]
+        );
+    }
+
+    #[test]
+    fn a_midi_note_track_is_never_transposed() {
+        let song: Song = parse_song(
+            "test.song",
+            include_str!(
+                "../../../songs_canonical/song_file/midi_note_track_with_several_notes.song"
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            pitches_of_track(&song, "Beat"),
+            vec![vec!["C4", "D4", "A4", "A4"], vec!["C4", "D4", "A4", "A4"]]
+        );
+        assert_eq!(
+            pitches_of_track(&song, "Keys"),
+            vec![vec!["C4", "E4"], vec!["Eb4", "G4"]]
+        );
+    }
+
+    #[test]
+    fn a_key_line_overrides_the_entries_below_it() {
+        let song: Song = parse_song(
+            "test.song",
+            include_str!("../../../songs_canonical/song_file/key_line_overrides.song"),
+        )
+        .unwrap();
+        let keys: Vec<String> = song
+            .sections()
+            .iter()
+            .map(|section: &Section| {
+                section
+                    .key()
+                    .map_or_else(String::new, |key| key.to_string())
+            })
+            .collect();
+        assert_eq!(keys, ["C major", "F major", "E major", "C major"]);
+        assert_eq!(
+            pitches_of_track(&song, "Bass"),
+            vec![vec!["C2"], vec!["F2"], vec!["E2"], vec!["C2"]]
+        );
+    }
+
+    #[test]
+    fn an_override_moves_to_the_nearest_tonic() {
+        let song: Song = parse_song(
+            "test.song",
+            include_str!("../../../songs_canonical/song_file/key_override_nearest_tonic.song"),
+        )
+        .unwrap();
+        assert_eq!(
+            pitches_of_track(&song, "Bass"),
+            vec![vec!["C2"], vec!["B1"], vec!["F#1"], vec!["E2"]]
+        );
+    }
+
+    #[test]
+    fn a_key_line_of_the_other_mode_is_refused_at_the_entry() {
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/key_line_other_mode.song"
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(errors[0].starts_with("test.song line 21:"), "{errors:?}");
+        assert!(errors[0].contains("write key section"), "{errors:?}");
+    }
+
+    #[test]
+    fn key_section_is_only_for_an_entry() {
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/key_section_on_a_section.song"
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(errors[0].starts_with("test.song line 14:"), "{errors:?}");
+        assert!(errors[0].contains("key section belongs on a song composition entry"));
+    }
+
+    #[test]
+    fn a_key_override_of_the_other_mode_is_refused() {
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/key_override_other_mode.song"
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert_eq!(
+            errors[0],
+            "test.song line 20: \"Riff\" is in C major. Its key override must be major too, \
+             e.g. A major"
+        );
+    }
+
+    #[test]
+    fn a_voice_track_must_say_what_its_notes_are() {
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/track_without_notes.song"
+        ));
+        assert!(errors[0].starts_with("test.song line 8:"), "{errors:?}");
+        assert!(errors[0].contains("Add notes pitched"), "{errors:?}");
+    }
+
+    #[test]
+    fn a_section_with_a_pitched_line_needs_its_own_key() {
+        let errors: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/pitched_section_without_key.song"
+        ));
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(errors[0].starts_with("test.song line 14:"), "{errors:?}");
+        assert!(errors[0].contains("Add its key"), "{errors:?}");
+    }
+
+    #[test]
+    fn each_track_takes_only_its_own_notation() {
+        let name_on_pitched: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/note_name_on_pitched_track.song"
+        ));
+        assert_eq!(name_on_pitched.len(), 1, "{name_on_pitched:?}");
+        assert!(
+            name_on_pitched[0].starts_with("test.song line 15:")
+                && name_on_pitched[0].contains("\"C2\" is a note name"),
+            "{name_on_pitched:?}"
+        );
+        let interval_on_midi: Vec<String> = errors_of(include_str!(
+            "../../../songs_canonical/song_file/interval_on_midi_note_track.song"
+        ));
+        assert_eq!(interval_on_midi.len(), 1, "{interval_on_midi:?}");
+        assert!(
+            interval_on_midi[0].starts_with("test.song line 21:")
+                && interval_on_midi[0].contains("\"P5\" is an interval"),
+            "{interval_on_midi:?}"
         );
     }
 
@@ -1937,7 +2380,7 @@ mod tests {
         ));
         // The refused track leaves its section without a line: a second
         // message follows from the first, so only the first is checked.
-        assert!(errors[0].starts_with("test.song line 11:"), "{}", errors[0]);
+        assert!(errors[0].starts_with("test.song line 12:"), "{}", errors[0]);
         assert!(errors[0].contains("+8va"), "{}", errors[0]);
     }
 
@@ -2001,7 +2444,7 @@ mod tests {
         ] {
             let errors: Vec<String> = errors_of(text);
             assert_eq!(errors.len(), 1, "{written}: {errors:?}");
-            assert!(errors[0].starts_with("test.song line 14:"), "{}", errors[0]);
+            assert!(errors[0].starts_with("test.song line 16:"), "{}", errors[0]);
         }
     }
 
@@ -2047,7 +2490,7 @@ mod tests {
         ));
         assert_eq!(errors.len(), 1, "{errors:?}");
         // Reported at the section's line, where the meter and tempo meet.
-        assert!(errors[0].starts_with("test.song line 13:"), "{}", errors[0]);
+        assert!(errors[0].starts_with("test.song line 15:"), "{}", errors[0]);
     }
 
     #[test]
@@ -2056,7 +2499,7 @@ mod tests {
             "../../../songs_canonical/song_file/meter_15_8.song"
         ));
         assert_eq!(errors.len(), 1, "{errors:?}");
-        assert!(errors[0].starts_with("test.song line 14:"), "{}", errors[0]);
+        assert!(errors[0].starts_with("test.song line 16:"), "{}", errors[0]);
         assert!(errors[0].contains("15/8 is not read yet"), "{}", errors[0]);
     }
 
@@ -2091,7 +2534,7 @@ mod tests {
             "../../../songs_canonical/song_file/grouping_not_filling_the_bar.song"
         ));
         assert_eq!(errors.len(), 1, "{errors:?}");
-        assert!(errors[0].starts_with("test.song line 10:"), "{}", errors[0]);
+        assert!(errors[0].starts_with("test.song line 11:"), "{}", errors[0]);
         assert!(
             errors[0].contains("the grouping 2+2+2 adds up to 6 pulses, but a bar of 7/8 has 7"),
             "{}",
@@ -2105,7 +2548,7 @@ mod tests {
             "../../../songs_canonical/song_file/grouping_not_numbers.song"
         ));
         assert_eq!(errors.len(), 1, "{errors:?}");
-        assert!(errors[0].starts_with("test.song line 11:"), "{}", errors[0]);
+        assert!(errors[0].starts_with("test.song line 12:"), "{}", errors[0]);
         assert!(
             errors[0].contains("\"2+x\" is not a grouping"),
             "{}",
@@ -2170,7 +2613,7 @@ mod tests {
     fn repeat_sign_error(text: &str) -> String {
         let errors: Vec<String> = errors_of(text);
         assert_eq!(errors.len(), 1, "{errors:?}");
-        assert!(errors[0].starts_with("test.song line 12:"), "{}", errors[0]);
+        assert!(errors[0].starts_with("test.song line 13:"), "{}", errors[0]);
         errors[0].clone()
     }
 
@@ -2276,7 +2719,7 @@ mod tests {
     fn euclid_error(text: &str) -> String {
         let errors: Vec<String> = errors_of(text);
         assert_eq!(errors.len(), 1, "{errors:?}");
-        assert!(errors[0].starts_with("test.song line 15:"), "{}", errors[0]);
+        assert!(errors[0].starts_with("test.song line 17:"), "{}", errors[0]);
         errors[0].clone()
     }
 
@@ -2339,7 +2782,7 @@ mod tests {
         ));
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert!(
-            errors[0].starts_with("test.song line 16: line \"Keys\": bar 3 is 4/4 and short"),
+            errors[0].starts_with("test.song line 18: line \"Keys\": bar 3 is 4/4 and short"),
             "{}",
             errors[0]
         );
@@ -2347,23 +2790,23 @@ mod tests {
 
     #[test]
     fn bars_not_under_a_line_are_refused() {
-        // Before any line in the section (line 15).
+        // Before any line in the section (line 17).
         let errors: Vec<String> = errors_of(include_str!(
             "../../../songs_canonical/song_file/bars_before_any_line.song"
         ));
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert!(
-            errors[0].starts_with("test.song line 15: bars with no line above them"),
+            errors[0].starts_with("test.song line 17: bars with no line above them"),
             "{}",
             errors[0]
         );
-        // After a setting (line 17), which ends the line above it.
+        // After a setting (line 19), which ends the line above it.
         let errors: Vec<String> = errors_of(include_str!(
             "../../../songs_canonical/song_file/bars_after_a_setting.song"
         ));
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert!(
-            errors[0].starts_with("test.song line 17: bars with no line above them"),
+            errors[0].starts_with("test.song line 19: bars with no line above them"),
             "{}",
             errors[0]
         );

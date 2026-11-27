@@ -10,31 +10,33 @@ track "Clock"
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 
 section "Steps"
   key C major  meter 4/4  tempo 100 beats/min
   line "Keys"  | I:w | I:w | tempo 120 beats/min IV:w | IV:w |
-  line "Bass"  | C2:q / / / | C2:q / / / | F2:q / / / | F2:q / / / |
+  line "Bass"  tonic_octave 2  | P1:q / / / | P1:q / / / | P4:q / / / | P4:q / / / |
 
-section "Carried"  meter 4/4
+section "Carried"  meter 4/4  key C major
   line "Keys"  | V:w | I:w |
-  line "Bass"  | G2:q / / / | C2:q / / / |
+  line "Bass"  tonic_octave 2  | P5:q / / / | P1:q / / / |
 
-section "Ramp"  meter 4/4
+section "Ramp"  meter 4/4  key C major
   tempo 120 beats/min
   line "Keys"  | I:w | tempo 120 ramp_to 60 beats/min 2_bars IV:w | V:w | I:w |
-  line "Bass"  | C2:q / / / | F2:q / / / | G2:q / / / | C2:q / / / |
+  line "Bass"  tonic_octave 2  | P1:q / / / | P4:q / / / | P5:q / / / | P1:q / / / |
 
-section "Again"  meter 4/4
+section "Again"  meter 4/4  key C major
   tempo 100 beats/min
   line "Keys"  | I:w | tempo 80 beats/min V:w |
-  line "Bass"  | C2:q / / / | G2:q / / / |
+  line "Bass"  tonic_octave 2  | P1:q / / / | P5:q / / / |
 
 song_composition
   key C major  meter 4/4  tempo 100 beats/min

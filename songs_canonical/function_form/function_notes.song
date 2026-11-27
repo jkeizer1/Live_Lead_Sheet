@@ -10,24 +10,25 @@ track "Clock"
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
   lead
 
 section "notes in a triplet"
   key C major  meter 4/4  tempo 100 beats/min
-  line "Bass"  | trp(F2:q A2:q C2:q) D2:h |
+  line "Bass"  tonic_octave 2  | trp(P4:q M6:q P1:q) M2:h |
 
-section "notes in a triplet, repeated by a slash"  meter 4/4
-  line "Bass"  | trp(F2:q A2:q C2:q) / |
+section "notes in a triplet, repeated by a slash"  meter 4/4  key C major
+  line "Bass"  tonic_octave 2  | trp(P4:q M6:q P1:q) / |
 
-section "bare lengths and notes mixed"  meter 4/4
-  line "Bass"  | C2:trp(q E2:q q) G2:h |
+section "bare lengths and notes mixed"  meter 4/4  key C major
+  line "Bass"  tonic_octave 2  | P1:trp(q M3:q q) P5:h |
 
-section "three eighths in a quarter"  meter 4/4
-  line "Bass"  | fitQ(F2:e A2:e C2:e) G2:q A2:h |
+section "three eighths in a quarter"  meter 4/4  key C major
+  line "Bass"  tonic_octave 2  | fitQ(P4:e M6:e P1:e) P5:q M6:h |
 
-section "fitBar with four notes"  meter 4/4
-  line "Bass"  | fitBar(C2:q D2:e E2:e F2:h) |
+section "fitBar with four notes"  meter 4/4  key C major
+  line "Bass"  tonic_octave 2  | fitBar(P1:q M2:e M3:e P4:h) |
 
 song_composition
   key C major  meter 4/4  tempo 100 beats/min

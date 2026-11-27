@@ -1,0 +1,33 @@
+# Read by crates/composer (mode_section.rs, test `a_major_section_is_copied_into_a_minor_key_by_scale_step`).
+# "Verse" in C major: chords I ii7 V7 vi, a bass with M3, M6, M7 and the chromatic A4, a beat on a MIDI note track. The second entry is to play it in A minor.
+song "Other mode"
+
+track "Clock"
+  type clock_and_transport
+
+track "Keys"
+  type poly_voice
+  notes pitched
+  clef treble
+  lead
+
+track "Bass"
+  type mono_voice
+  notes pitched
+  clef bass
+
+track "Beat"
+  type mono_voice
+  notes midi_note
+  clef treble
+
+section "Verse"  key C major  meter 4/4
+  line "Keys"  | I:q ii7 V7 vi |
+  line "Bass"  tonic_octave 2  | P1:e M3 P5 M6 M7 A4 P5 P1 |
+  line "Beat"  | C4:q> / / / |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "Verse"
+  "Verse"
+song_composition_close

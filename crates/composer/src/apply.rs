@@ -338,7 +338,7 @@ pub fn source_bars(
 mod tests {
     use super::*;
     use crate::line_bars::harmony_of_progression;
-    use crate::line_text::line_text;
+    use crate::line_text::{NoteSpelling, line_text};
     use song_text::contents_text::parse_chord;
     use song_text::rhythm_library::{RhythmLibraryEntry, parse_rhythm_library};
     use vocabulary::key::Mode;
@@ -384,7 +384,7 @@ mod tests {
             None,
         )
         .unwrap();
-        line_text("", "line \"X\"", &applied.bars)
+        line_text("", "line \"X\"", &applied.bars, NoteSpelling::NoteNames)
             .unwrap()
             .join("\n")
     }

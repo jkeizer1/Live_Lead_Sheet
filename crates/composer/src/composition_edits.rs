@@ -13,7 +13,7 @@ use vocabulary::time_signature::TimeSignature;
 
 use crate::edits::TextLines;
 use crate::line_bars::rest_bar;
-use crate::line_text::{WrittenBar, line_text};
+use crate::line_text::{NoteSpelling, WrittenBar, line_text};
 use crate::song_source::{
     CompositionRowSource, CompositionSource, SongSource, indentation, replace_setting,
 };
@@ -429,8 +429,14 @@ pub fn add_new_section(
         settings.push(format!("tempo {tempo}"));
     }
     let rest: Vec<WrittenBar> = vec![rest_bar(new.meter.bar_length().ticks())];
-    let bar_lines: Vec<String> = line_text("  ", &format!("line \"{}\"", track.name()), &rest)
-        .map_err(|error| error.to_string())?;
+    // A bar of rest: no notes, so the spelling is not used.
+    let bar_lines: Vec<String> = line_text(
+        "  ",
+        &format!("line \"{}\"", track.name()),
+        &rest,
+        NoteSpelling::NoteNames,
+    )
+    .map_err(|error| error.to_string())?;
     lines.lines.insert(at, format!("{indent}\"{}\"", new.name));
     if lines
         .lines
@@ -523,8 +529,9 @@ pub fn set_section_meter(
             .split('|')
             .next()
             .map_or_else(String::new, |words: &str| words.trim().to_string());
-        let rewritten: Vec<String> =
-            line_text(&indent, &header, &rests).map_err(|error| error.to_string())?;
+        // Rests only: no notes, so the spelling is not used.
+        let rewritten: Vec<String> = line_text(&indent, &header, &rests, NoteSpelling::NoteNames)
+            .map_err(|error| error.to_string())?;
         lines
             .lines
             .splice(line.first_index..=line.last_index, rewritten);
@@ -571,13 +578,13 @@ mod tests {
         assert!(started.contains("  key G major  meter 3/4  tempo 100 beats/min\n"));
         reads(&started);
         let changed: String =
-            set_change(ARRANGE, &source, 21, Some("D major"), Some("120 beats/min")).unwrap();
+            set_change(ARRANGE, &source, 23, Some("D major"), Some("120 beats/min")).unwrap();
         assert!(changed.contains("\n  key D major  tempo 120 beats/min\n"));
         reads(&changed);
-        let removed: String = remove_change(ARRANGE, &source, 21).unwrap();
-        assert!(!removed.contains("key E minor"));
+        let removed: String = remove_change(ARRANGE, &source, 23).unwrap();
+        assert!(!removed.contains("key E major"));
         reads(&removed);
-        assert!(set_change(ARRANGE, &source, 20, None, None).is_err());
+        assert!(set_change(ARRANGE, &source, 22, None, None).is_err());
     }
 
     #[test]
@@ -606,7 +613,7 @@ mod tests {
         reads(&entry);
         let moved: String = move_row(ARRANGE, &source, 3, -1).unwrap();
         assert!(moved.contains(
-            "  \"Intro\"  repeat 2\n  key E minor  tempo 120 beats/min\n  \"Riff\"  key A major\n"
+            "  \"Intro\"  repeat 2\n  key E major  tempo 120 beats/min\n  \"Riff\"  key A major\n"
         ));
         reads(&moved);
         // The Intro cannot leave the change line first after the start.
@@ -621,7 +628,7 @@ mod tests {
         let renamed: String = rename_section(ARRANGE, &source, "Riff", "Chainsaw").unwrap();
         assert!(renamed.contains("  \"Chainsaw\"  key A major\n"));
         assert!(renamed.contains("120 beats/min\n  \"Chainsaw\"\n"));
-        assert!(renamed.contains("section \"Chainsaw\"\n"));
+        assert!(renamed.contains("section \"Chainsaw\"  key G major\n"));
         assert!(!renamed.contains("Riff"));
         reads(&renamed);
         assert!(rename_section(ARRANGE, &source, "Riff", "Bridge").is_err());
@@ -635,14 +642,15 @@ mod tests {
         let new: NewSection = NewSection {
             name: String::from("Outro"),
             meter: TimeSignature::new(6, 8).unwrap(),
-            key: Some(key(NoteLetter::E, Accidental::Natural, Mode::Minor)),
+            // Major, as the key line above the new entry (E major) is.
+            key: Some(key(NoteLetter::E, Accidental::Natural, Mode::Major)),
             tempo_words: Some(String::from("72.5 beats/min")),
             count_in: false,
         };
         let added: String = add_new_section(ARRANGE, &source, &song, 5, &new).unwrap();
         assert!(added.contains("  \"Bridge\"\n  \"Outro\"\nsong_composition_close"));
         assert!(added.ends_with(
-            "section \"Outro\"\n  meter 6/8  key E minor  tempo 72.5 beats/min\n  line \"Keys\"  | r:h. |\n"
+            "section \"Outro\"\n  meter 6/8  key E major  tempo 72.5 beats/min\n  line \"Keys\"  | r:h. |\n"
         ));
         let added_song: Song = reads(&added);
         let added_source: SongSource = SongSource::read(&added);
@@ -654,7 +662,7 @@ mod tests {
             TimeSignature::new(5, 4).unwrap(),
         )
         .unwrap();
-        assert!(remetered.contains("  meter 5/4  key E minor"));
+        assert!(remetered.contains("  meter 5/4  key E major"));
         assert!(
             remetered.contains("  line \"Keys\"  | r:w r:q |"),
             "{remetered}"

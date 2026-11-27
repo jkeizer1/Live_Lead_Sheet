@@ -10,18 +10,19 @@ track "Clock"
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
   lead
 
 section "triplet then quarters"
   key C major  meter 4/4  tempo 100 beats/min
-  line "Bass"  | C2:trp(q q q) G2:q B2:q |
+  line "Bass"  tonic_octave 2  | P1:trp(q q q) P5:q M7:q |
 
-section "triplet repeated by a slash"  meter 4/4
-  line "Bass"  | C2:trp(q q q) / |
+section "triplet repeated by a slash"  meter 4/4  key C major
+  line "Bass"  tonic_octave 2  | P1:trp(q q q) / |
 
-section "rest and accents"  meter 4/4
-  line "Bass"  | C2:trp(q r q)> D2:h |
+section "rest and accents"  meter 4/4  key C major
+  line "Bass"  tonic_octave 2  | P1:trp(q r q)> M2:h |
 
 song_composition
   key C major  meter 4/4  tempo 100 beats/min

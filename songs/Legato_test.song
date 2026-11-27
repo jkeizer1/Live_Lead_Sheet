@@ -16,15 +16,18 @@ track "Clock"
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 
 track "Beat"
   type mono_voice
+  notes midi_note
   clef treble
 
 song_composition
@@ -34,6 +37,6 @@ song_composition_close
 
 section "One whole note, two source notes"
   key C major  meter 4/4  tempo 120 beats/min
-  line "Bass"  sample_source  | C1 G1 |
+  line "Bass"  tonic_octave 1  sample_source  | P1 P5 |
   line "Bass"                 | :w |
   line "Beat"                 | C4:q / / / |

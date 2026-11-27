@@ -7,6 +7,7 @@ track "Clock"
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
   lead
 
@@ -17,8 +18,8 @@ song_composition
   "Verse"
 song_composition_close
 
-section "Chorus"  meter 4/4
-  line "Bass" | G2:w |
+section "Chorus"  meter 4/4  key C major
+  line "Bass"  tonic_octave 3 | -P4:w |
 
-section "Verse"  meter 4/4
-  line "Bass" | C2:w |
+section "Verse"  meter 4/4  key C major
+  line "Bass"  tonic_octave 2 | P1:w |

@@ -243,9 +243,15 @@ pub fn rename_track(
     Ok(lines.joined())
 }
 
-/// Changes a track's type. A voice needs a clef (`treble` is written when
-/// there is none); a type that is not a voice drops the clef, `lead` and
-/// voice layer lines it cannot have.
+/// What a voice track made in Song settings plays: music. Song settings has
+/// no control for `notes` yet, so a track for a sample player or a gate is
+/// changed to `notes midi_note` in the text.
+const NEW_VOICE_NOTES: &str = "notes pitched";
+
+/// Changes a track's type. A voice needs its notes and a clef (`notes
+/// pitched` and `clef treble` are written when there are none); a type that
+/// is not a voice drops the notes, clef, `lead` and voice layer lines it
+/// cannot have.
 ///
 /// # Errors
 ///
@@ -263,18 +269,26 @@ pub fn set_type(
     let mut lines: TextLines = TextLines::of(text);
     replace_body(&mut lines, type_index, &format!("type {}", new_type.word()))?;
     if new_type.is_voice() {
+        let indent: String = lines
+            .lines
+            .get(type_index)
+            .map(|line: &String| indentation(line).to_string())
+            .unwrap_or_default();
+        // Inserted below the type line, the clef first so the notes end up
+        // above it.
         if track.clef_index.is_none() {
-            let indent: String = lines
-                .lines
-                .get(type_index)
-                .map(|line: &String| indentation(line).to_string())
-                .unwrap_or_default();
             lines
                 .lines
                 .insert(type_index + 1, format!("{indent}clef treble"));
         }
+        if track.notes_index.is_none() {
+            lines
+                .lines
+                .insert(type_index + 1, format!("{indent}{NEW_VOICE_NOTES}"));
+        }
     } else {
         let mut dropped: Vec<usize> = track.voice_layer_indices.clone();
+        dropped.extend(track.notes_index);
         dropped.extend(track.clef_index);
         dropped.extend(track.lead_index);
         remove_indices(&mut lines, &dropped);
@@ -371,6 +385,7 @@ pub fn add_track(
         format!("{indent}type {}", track_type.word()),
     ];
     if track_type.is_voice() {
+        block.push(format!("{indent}{NEW_VOICE_NOTES}"));
         block.push(format!("{indent}clef treble"));
         let song_has_voice: bool = song
             .tracks()

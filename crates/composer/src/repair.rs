@@ -430,7 +430,7 @@ mod tests {
             .lines()
             .find(|l| l.starts_with("# Tossed"))
             .expect("a note");
-        assert_eq!(note, "# Tossed 24 Nov 2026 (line 15): banana split");
+        assert_eq!(note, "# Tossed 24 Nov 2026 (line 17): banana split");
         // The note sits in the top comment block, before the song line.
         assert!(song.find("# Tossed").unwrap() < song.find("song \"").unwrap());
         assert!(repair.changed());

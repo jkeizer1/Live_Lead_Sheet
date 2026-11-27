@@ -10,12 +10,13 @@ track "Clock"
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 
 section "octaves"
   key C major  meter 4/4  tempo 100 beats/min
-  line "Keys"  | C4:w | +8va C4:w | C4:w | -8va C4:w | loco C4:w | I:w | +8va I:w | +8va C4:w | +8va C4:w |
+  line "Keys"  tonic_octave 4  | P1:w | +8va P1:w | P1:w | -8va P1:w | loco P1:w | I:w | +8va I:w | +8va P1:w | +8va P1:w |
 
 song_composition
   key C major  meter 4/4  tempo 100 beats/min

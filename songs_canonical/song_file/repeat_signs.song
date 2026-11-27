@@ -5,21 +5,23 @@ track "Clock"
   type clock_and_transport
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 section "twice"
   key C major  meter 4/4  tempo 120 beats/min
   line "Keys" | I:w |% ii7:w | V:w %| IV:w |
-  line "Bass" |% C2:w | G2:w | D2:w %|
-section "three"  meter 4/4
+  line "Bass"  tonic_octave 2 |% P1:w | P5:w | M2:w %|
+section "three"  meter 4/4  key C major
   line "Keys" |%3 I:w %|
-  line "Bass" |%3 C2:w %|
-section "carried"  meter 4/4
+  line "Bass"  tonic_octave 2 |%3 P1:w %|
+section "carried"  meter 4/4  key C major
   line "Keys" | I:w |% / %|
-  line "Bass" | C2:w |% / %|
+  line "Bass"  tonic_octave 2 | P1:w |% / %|
 
 song_composition
   key C major  meter 4/4  tempo 100 beats/min

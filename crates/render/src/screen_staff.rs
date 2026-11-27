@@ -25,7 +25,7 @@ use vocabulary::time_signature::TimeSignature;
 
 use crate::canvas::{Align, Canvas, HitTarget, rect};
 use crate::error::RenderError;
-use crate::screen::{PlayView, count_as_f32, key_label};
+use crate::screen::{PlayView, count_as_f32, key_label, key_label_of};
 use crate::screen_theme as colors;
 use crate::strip_layout::ScreenRect;
 
@@ -217,7 +217,18 @@ pub fn draw(
         (above_staff + STAFF_HEIGHT_SPACES + BELOW_STAFF_SPACES + second) * space
     };
     let chord_row: f32 = 3.0 * unit;
-    let mut budget: f32 = area.bottom_y_pixels - area.top_y_pixels - chord_row - 2.0 * unit;
+    // In the Section Editor, the section's key and the keys its entries
+    // transpose it to, above the staves.
+    let keys: Option<SectionKeys> = if session.mode == Mode::SectionEditor {
+        section_keys(timeline, session.selection.entry)
+    } else {
+        None
+    };
+    let keys_height: f32 = keys
+        .as_ref()
+        .map_or(0.0, |keys: &SectionKeys| keys.height(unit));
+    let mut budget: f32 =
+        area.bottom_y_pixels - area.top_y_pixels - chord_row - 2.0 * unit - keys_height;
     let selected_track: usize = session.selection.track;
     let mut priority: Vec<usize> = (0..timeline.tracks.len()).collect();
     priority.sort_by_key(|index| {
@@ -251,7 +262,10 @@ pub fn draw(
         )?;
     }
 
-    let top: f32 = area.top_y_pixels + 0.5 * unit;
+    if let Some(keys) = &keys {
+        draw_section_keys(canvas, area, unit, keys)?;
+    }
+    let top: f32 = area.top_y_pixels + 0.5 * unit + keys_height;
     // Every bar in view that plays the selected section is tinted, the
     // other times through and other entries of it too: an edit changes
     // them all, so the tint shows what belongs together.
@@ -519,6 +533,117 @@ impl Staff {
     }
 }
 
+/// The selected section's own key and the keys song composition entries
+/// play it in, each with the first entry that plays it so, for the Section
+/// Editor's header (Editor Draft, "The section's key in F3").
+struct SectionKeys {
+    own: Key,
+    /// The first entry that plays the section in its own key, if any does.
+    own_entry: Option<usize>,
+    /// Each other key an entry plays it in, once, with the first such entry.
+    transpositions: Vec<(Key, usize)>,
+    /// The key the selected entry plays it in: the one drawn.
+    drawn: Option<Key>,
+}
+
+/// Height of one line of the key header.
+const KEY_LINE_UNITS: f32 = 2.0;
+
+impl SectionKeys {
+    fn height(&self, unit: f32) -> f32 {
+        // One line for the section key, one per transposition, and a gap.
+        (count_as_f32(1 + self.transpositions.len()) * KEY_LINE_UNITS + 0.6) * unit
+    }
+}
+
+fn section_keys(timeline: &Timeline, selected_entry: usize) -> Option<SectionKeys> {
+    let selected: &EntryView = timeline.entries.get(selected_entry)?;
+    let own: Key = selected.section_key?;
+    let mut own_entry: Option<usize> = None;
+    let mut transpositions: Vec<(Key, usize)> = Vec::new();
+    for (index, entry) in timeline.entries.iter().enumerate() {
+        if entry.muted || entry.section_name != selected.section_name {
+            continue;
+        }
+        let Some(key) = entry.key else {
+            continue;
+        };
+        if key == own {
+            own_entry = own_entry.or(Some(index));
+        } else if !transpositions
+            .iter()
+            .any(|(listed, _): &(Key, usize)| *listed == key)
+        {
+            transpositions.push((key, index));
+        }
+    }
+    Some(SectionKeys {
+        own,
+        own_entry,
+        transpositions,
+        drawn: selected.key,
+    })
+}
+
+/// `Section Key: C major`, prominent, and below it each transposition; the
+/// one drawn is marked, and a click on a line draws the section in that key
+/// (it selects the first entry that plays it so).
+fn draw_section_keys(
+    canvas: &mut Canvas<'_>,
+    area: ScreenRect,
+    unit: f32,
+    keys: &SectionKeys,
+) -> Result<(), RenderError> {
+    let left: f32 = area.left_x_pixels + 0.5 * unit;
+    let mut line_top: f32 = area.top_y_pixels + 0.3 * unit;
+    let mut lines: Vec<(String, f32, Option<usize>, bool)> = vec![(
+        match keys.own_entry {
+            Some(_) => format!("Section Key: {}", key_label_of(keys.own)),
+            None => format!(
+                "Section Key: {}   (every entry transposes it)",
+                key_label_of(keys.own)
+            ),
+        },
+        1.35,
+        keys.own_entry,
+        keys.drawn == Some(keys.own),
+    )];
+    for (key, entry) in &keys.transpositions {
+        lines.push((
+            format!("Transposition: {}", key_label_of(*key)),
+            1.15,
+            Some(*entry),
+            keys.drawn == Some(*key),
+        ));
+    }
+    for (text, em_units, entry, drawn) in lines {
+        let em: f32 = em_units * unit;
+        let width: f32 = canvas.text_width(&text, em) + 1.6 * unit;
+        let line: ScreenRect = rect(left, line_top, width, (KEY_LINE_UNITS - 0.2) * unit);
+        if drawn {
+            canvas.fill(line, colors::selection_fill());
+            canvas.frame(line, 1.0, colors::selection_edge());
+        }
+        canvas.text(
+            &text,
+            left + 0.8 * unit,
+            line_top + 1.35 * unit,
+            em,
+            Align::Left,
+            if drawn {
+                colors::text()
+            } else {
+                colors::text_soft()
+            },
+        )?;
+        if let Some(entry) = entry {
+            canvas.hit(line, HitTarget::Bar { entry, bar: 0 });
+        }
+        line_top += KEY_LINE_UNITS * unit;
+    }
+    Ok(())
+}
+
 fn letter_index(letter: NoteLetter) -> i32 {
     match letter {
         NoteLetter::C => 0,
@@ -613,12 +738,14 @@ fn draw_track(
             colors::note(),
         )?;
         if let Some(staff) = layout.staves.last() {
-            canvas.text(
-                "derived",
+            // The staff shows the notes the rhythm takes from the source,
+            // not notes composed on it.
+            canvas.text_fitted(
+                "notes from source + rhythm",
                 layout.header_left + 0.5 * space,
                 staff.step_y(-5),
                 0.8 * space,
-                Align::Left,
+                (HEADER_SPACES - 1.0) * space,
                 colors::text_faint(),
             )?;
         }

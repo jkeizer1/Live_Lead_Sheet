@@ -29,7 +29,7 @@ use crate::library::{Libraries, LibraryRow, LibraryTab};
 use crate::session_music::{
     Step, Target, apply_progression, apply_rhythm, bass_from_roots, cycle_accent, is_sampled,
     make_coupled, make_sampled, move_contents, move_to_chord_tones, new_section_from_progression,
-    toggle_rest, transpose_section_notes,
+    retune_tonic_octaves, toggle_rest,
 };
 use crate::song_document::{SongDocument, read_song};
 use crate::song_source::SongSource;
@@ -1334,20 +1334,26 @@ impl Session {
         let section: &Section = self
             .selected_section()
             .ok_or_else(|| String::from("no section is selected"))?;
+        // The section's own key moves, not the one a key line above the
+        // entry plays it in.
+        let key: Key = section.own_key().unwrap_or(key);
+        let new_key: Key = if by_fifths {
+            key_by_fifths(key, amount)
+        } else {
+            transposed_key(key, amount)
+        };
+        // The notes are intervals from the key, so they move with it; only a
+        // line whose tonic crosses into another octave changes its text.
         let semitones: i16 = semitones_between(key, new_key);
-        let moved_notes: String =
-            transpose_section_notes(self.document.song(), text, section, new_key, semitones)?;
-        let new_source: SongSource = SongSource::read(&moved_notes);
-        let new_text: String = set_section_key(
-            &moved_notes,
-            &new_source,
-            section.name(),
-            &new_key.to_string(),
-        )?;
+        let retuned: String =
+            retune_tonic_octaves(text, source, section.name(), key, new_key, semitones)?;
+        let new_source: SongSource = SongSource::read(&retuned);
+        let new_text: String =
+            set_section_key(&retuned, &new_source, section.name(), &new_key.to_string())?;
         Ok((
             new_text,
             format!(
-                "Section \"{}\" now in {new_key}, written notes moved with it",
+                "Section \"{}\" now in {new_key}, its notes moved with it",
                 section.name()
             ),
         ))
@@ -1698,7 +1704,7 @@ mod tests {
             session
                 .document()
                 .text()
-                .contains("line \"Bass\"  | C2:w> | A2:q E2 A2 E2 |")
+                .contains("line \"Bass\"  tonic_octave 2  | P1:w> | M6:q M3 M6 M3 |")
         );
         session.handle(Command::SelectTrack(0));
         session.handle(Command::SwitchPane);
@@ -1721,13 +1727,14 @@ mod tests {
         assert_eq!(symbols(&session, 1)[0], "Dm");
         session.handle(Command::KeyBySemitones(2));
         expect_done(&session);
-        // The section moved to D major with its bass: C2 is now D2.
+        // The section moved to D major with its bass: its intervals stay,
+        // so P1, C2 before, is now D2.
         assert_eq!(symbols(&session, 1)[1], "Bm");
+        let text: &str = session.document().text();
+        assert!(text.contains("section \"Verse\"  key D major"), "{text}");
         assert!(
-            session
-                .document()
-                .text()
-                .contains("line \"Bass\"  | D2:h A2 | B2:q F#2 B2 F#2 |")
+            text.contains("line \"Bass\"  tonic_octave 2  | P1:h P5 | M6:q M3 M6 M3 |"),
+            "{text}"
         );
         session.handle(Command::SetMode(Mode::ArrangeSongSections));
         session.handle(Command::Repeat(1));
@@ -1748,7 +1755,7 @@ mod tests {
             element,
             pass_number: 1,
         };
-        // Over the I chord (C E G), C2 up one tone is E2 ...
+        // Over the I chord (C E G), C2 (P1) up one tone is E2 (M3) ...
         session.handle(select(0, 0));
         session.handle(Command::ChordTone(1));
         expect_done(&session);
@@ -1756,9 +1763,9 @@ mod tests {
             session
                 .document()
                 .text()
-                .contains("line \"Bass\"  | E2:h G2 |")
+                .contains("line \"Bass\"  tonic_octave 2  | M3:h P5 |")
         );
-        // ... and G2 down two is C2 (passing E2).
+        // ... and G2 (P5) down two is C2 (P1), passing E2.
         session.handle(select(1, 0));
         session.handle(Command::ChordTone(-2));
         expect_done(&session);
@@ -1766,13 +1773,13 @@ mod tests {
             session
                 .document()
                 .text()
-                .contains("line \"Bass\"  | E2:h C2 |")
+                .contains("line \"Bass\"  tonic_octave 2  | M3:h P1 |")
         );
-        // Over ii7 (D F A C), D2 up one tone is F2.
+        // Over ii7 (D F A C), D2 (M2) up one tone is F2 (P4).
         session.handle(select(6, 2));
         session.handle(Command::ChordTone(1));
         expect_done(&session);
-        assert!(session.document().text().contains("| F2:h A2 |"));
+        assert!(session.document().text().contains("| P4:h M6 |"));
         // The lead plays chords, which chord tones do not move.
         session.handle(Command::SelectTrack(0));
         session.handle(Command::ChordTone(1));
@@ -1795,7 +1802,7 @@ mod tests {
             element,
             pass_number: 1,
         };
-        // The bass rest on beat 3 of the C bar becomes C2, a quarter note
+        // The bass rest on beat 3 of the C bar becomes C2 (P1), a quarter note
         // (written `/`, the same note again).
         session.handle(select(1, 0, 1));
         session.handle(Command::ToggleRest);
@@ -1804,7 +1811,7 @@ mod tests {
             session
                 .document()
                 .text()
-                .contains("line \"Bass\"  | C2:h /:q G2 |")
+                .contains("line \"Bass\"  tonic_octave 2  | P1:h /:q P5 |")
         );
         // And back to a rest.
         session.handle(Command::ToggleRest);
@@ -1813,7 +1820,7 @@ mod tests {
             session
                 .document()
                 .text()
-                .contains("line \"Bass\"  | C2:h r:q G2 |")
+                .contains("line \"Bass\"  tonic_octave 2  | P1:h r:q P5 |")
         );
         // The keys rest in the G bar becomes the lead's chord there, V.
         session.handle(select(0, 1, 2));
@@ -1900,7 +1907,7 @@ mod tests {
         let text: &str = session.document().text();
         assert!(
             text.contains(
-                "line \"Bass\"  sample_source  | C2 G2 | A2 E2 A2 E2 | D2 A2 | G2 D2 G2 B2 |"
+                "line \"Bass\"  tonic_octave 2  sample_source  | P1 P5 | M6 M3 M6 M3 | M2 M6 | P5 M2 P5 M7 |"
             ),
             "{text}"
         );
@@ -1948,7 +1955,10 @@ mod tests {
         // The bar held C2 and G2 as half notes; the quarters play them,
         // not the lead's root (C2) four times.
         let text: &str = session.document().text();
-        assert!(text.contains("line \"Bass\"  | C2:q> / G2 / |"), "{text}");
+        assert!(
+            text.contains("line \"Bass\"  tonic_octave 2  | P1:q> / P5 / |"),
+            "{text}"
+        );
     }
 
     #[test]
@@ -1988,7 +1998,7 @@ mod tests {
 #[cfg(test)]
 mod arrange_tests {
     use super::*;
-    use crate::arrange_editor::ArrangeKey;
+    use crate::arrange_editor::{ArrangeDialog, ArrangeKey};
 
     const ARRANGE: &str = include_str!("../../../songs_canonical/composer/arrange_song.song");
 
@@ -2055,6 +2065,40 @@ mod arrange_tests {
         // Undo takes back the new section in one step.
         session.handle(Command::Undo);
         assert!(!session.document().text().contains("Outro"));
+    }
+
+    #[test]
+    fn f1_asks_for_a_section_of_its_own_for_a_key_of_the_other_mode() {
+        use ArrangeKey::{Down, Enter, Right, Up};
+        let document: SongDocument =
+            SongDocument::new("arrange_song.song", ARRANGE.to_string()).unwrap();
+        let libraries: Libraries = Libraries::read(
+            "p.library",
+            include_str!("../../../songs_canonical/composer/composer_progressions.library"),
+            "r.library",
+            include_str!("../../../songs_canonical/composer/composer_rhythms.library"),
+        )
+        .unwrap();
+        let mut session: Session = Session::new(document, libraries);
+        session.handle(Command::SetMode(Mode::ArrangeSongSections));
+        // The Riff entry's key (its own A major), turned to its relative
+        // minor, F# minor: the Riff is in G major, so the entry needs a
+        // section of its own.
+        press(&mut session, &[Down, Right, Right, Enter, Up]);
+        session.handle(Command::Arrange(Enter));
+        assert!(matches!(
+            session.arrange().dialog,
+            Some(ArrangeDialog::OtherModeSection { .. })
+        ));
+        assert_eq!(session.document().text(), ARRANGE, "nothing written yet");
+        press(&mut session, &[Enter]);
+        let text: &str = session.document().text();
+        assert!(text.contains("  \"Riff (F# minor)\"\n"), "{text}");
+        assert!(
+            text.contains("section \"Riff (F# minor)\"  key F# minor"),
+            "{text}"
+        );
+        assert!(text.contains("section \"Riff\"  key G major"), "{text}");
     }
 
     #[test]

@@ -17,6 +17,7 @@ pub mod key_signature;
 pub mod library;
 pub mod line_bars;
 pub mod line_text;
+pub mod mode_section;
 pub mod new_song;
 pub mod pitch_moves;
 pub mod repair;

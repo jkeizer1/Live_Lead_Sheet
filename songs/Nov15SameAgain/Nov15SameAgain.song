@@ -9,6 +9,7 @@ track "Clock"
 
 track "NTBass"
   type mono_voice
+  notes pitched
   clef bass
   lead
 
@@ -24,17 +25,17 @@ song_composition_close
 section "A"
   key C major
   meter 4/4  tempo 100 beats/min
-  line "NTBass"                   | D2:e_ A2:e_ F2:e_ D2:e  A2:e_ G2:e_ F2:e  r:e  | C3:h_  /  |  
-                                  | D2:e  A2:e  F2:e  D2:e  A2:e  r:e   F2:e  r:e  | C2:h   /  |  
+  line "NTBass"  tonic_octave 2   | M2:e_ M6:e_ P4:e_ M2:e  M6:e_ P5:e_ P4:e  r:e  | P8:h_  /  |  
+                                  | M2:e  M6:e  P4:e  M2:e  M6:e  r:e   P4:e  r:e  | P1:h   /  |  
 
 section "B"
   key C major
   meter 4/4  tempo 100 beats/min
-  line "NTBass"  sample_source    | D2    A2   F2   D2  A3  G3  F3  F2             | C3     D2    |
-  line "NTBass"                   | :e_   :e_  :e_  :e  :e_  /  /   r:e            | C3:h_  D2:h  |  
+  line "NTBass"  tonic_octave 2  sample_source    | M2    M6   P4   M2  M13  P12  P11  P4             | P8     M2    |
+  line "NTBass"  tonic_octave 2                   | :e_   :e_  :e_  :e  :e_  /  /   r:e            | P8:h_  M2:h  |  
 
-section "C"  meter 4/4
-  line "NTBass"                   | D2:e_  /    F2:e  D2:e  A2:e  r:e   F2:e  r:e  | C3:h   D3:h  |  
+section "C"  meter 4/4  key C major
+  line "NTBass"  tonic_octave 2                   | M2:e_  /    P4:e  M2:e  M6:e  r:e   P4:e  r:e  | P8:h   M9:h  |  
 
 
 #section "B" repeat 2

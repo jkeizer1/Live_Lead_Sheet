@@ -8,15 +8,18 @@ track "Clock"
 
 track "Beat"
   type mono_voice
+  notes midi_note
   clef treble
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 
 
@@ -28,6 +31,6 @@ song_composition_close
 
 section "Verse"
   key C major  meter 4/4  tempo 140 beats/min
-  line "Keys"  | I:h /                  | V  /                |  vi /          | B3:w       |
+  line "Keys"  tonic_octave 4  | I:h /                  | V  /                |  vi /          | -m2:w       |
   line "Beat"  | C4:q< / / / | C4:q<< / / / | C4:q / / / | C4:q> / / / |
 

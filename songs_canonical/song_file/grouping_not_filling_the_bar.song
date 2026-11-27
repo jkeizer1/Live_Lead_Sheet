@@ -5,6 +5,7 @@ track "Clock"
   type clock_and_transport
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 section "A"

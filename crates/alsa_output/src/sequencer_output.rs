@@ -14,8 +14,8 @@ use std::time::Duration as StdDuration;
 
 use alsa::Direction;
 use alsa::seq::{
-    Addr, EvCtrl, EvNote, EvQueueControl, Event, EventType, PortCap, PortSubscribe, PortType,
-    Remove, RemoveEvents, Seq,
+    Addr, ClientInfo, ClientIter, EvCtrl, EvNote, EvQueueControl, Event, EventType, PortCap,
+    PortSubscribe, PortType, Remove, RemoveEvents, Seq,
 };
 use vocabulary::duration::Duration;
 use vocabulary::instant::Instant;
@@ -131,6 +131,21 @@ impl SequencerOutput {
             .map_err(|e| AlsaOutputError::alsa("reading our sequencer client number", e))?;
 
         let mut warnings: Vec<OutputWarning> = Vec::new();
+        // A second client of the same name is most often a second copy of
+        // the program left open; a MIDI router that finds ports by client
+        // and port name cannot tell the two apart.
+        for other in ClientIter::new(&seq) {
+            let other: ClientInfo = other;
+            // A client whose name cannot be read is not ours to warn about.
+            if other.get_client() != own_client_id
+                && other.get_name().is_ok_and(|name: &str| name == client_name)
+            {
+                warnings.push(OutputWarning::SameNameClient {
+                    client_name: client_name.to_string(),
+                    other_client_id: other.get_client(),
+                });
+            }
+        }
         if let Err(e) = seq.set_client_pool_output(OUTPUT_POOL_EVENTS) {
             // The program still works with the default pool; only very fast
             // event rates are affected, so this is a warning, not a failure.

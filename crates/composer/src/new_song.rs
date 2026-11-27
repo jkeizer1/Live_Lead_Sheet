@@ -60,6 +60,7 @@ pub fn new_song_files(name: &str) -> Result<NewSongFiles, String> {
          \n\
          track \"Keys\"\n\
          \x20 type poly_voice\n\
+         \x20 notes pitched\n\
          \x20 clef grand\n\
          \x20 lead\n\
          \n\

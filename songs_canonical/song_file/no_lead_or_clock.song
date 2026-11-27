@@ -3,6 +3,7 @@
 song "T"
 track "Keys"
   type poly_voice
+  notes pitched
   clef treble
 section "A"
   key C major  meter 4/4  tempo 120 beats/min

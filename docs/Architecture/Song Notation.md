@@ -1,6 +1,6 @@
 # Live Lead Sheet — Song Notation
 
-Revision 28 — 26 Nov 2026 (Q19: scope of driving external sequencers, and what the code sends today on the clock port and cue ports)
+Revision 30 — 27 Nov 2026 (Q35: pitched lines written as intervals from the section's key; key overrides keep the intervals; `notes pitched` and `notes midi_note` tracks. Q36: a key line overrides the entries below it; `key section`. Q37: an override's tonic is the one nearest the section's)
 
 **Status: draft for trial.** *Decided* marks what Jim has decided;
 everything else is a proposal to try with a working player. Every open
@@ -376,14 +376,17 @@ sixteenth"), and the order LilyPond and ABC notation write it in.
   The plain voicing (EFS-5.5) is in root position, meaning the root is
   the lowest note, and in close position, meaning the other notes are
   stacked directly above the root within one octave. The root is placed
-  by the track's clef (section 5, "Tracks and their types"). Or notes:
-  `[D3 F3 A3 C4]`. A chord name followed by notes (`ii7[F3 A3 C4]`) is a
-  chord with its own voicing, for example without the root. A chord name
+  by the track's clef (section 5, "Tracks and their types"). Or notes, as
+  intervals from the section's tonic: `[M2 P4 M6 m7]` (D F A C in C
+  major). A chord name followed by notes (`ii7[P4 M6 m7]`) is a chord with
+  its own voicing, for example without the root. A chord name
   followed by an inversion, `ii7[1stInversion]`, `ii7[2ndInversion]` and
   so on, is that inversion as standard music uses the term: the third is
   the lowest note in the first inversion, the fifth in the second.
-- **Mono voice** (a track that can play one note at a time): one note with
-  its octave (`C2`, `F#2`, `Bb1`). Two sounding elements may not overlap.
+- **Mono voice** (a track that can play one note at a time): one note,
+  as an interval (`P1`, `m3`, `-P4`) on a `notes pitched` track, or as a
+  note name with its octave (`C2`, `F#2`, `Bb1`) on a `notes midi_note`
+  track. Two sounding elements may not overlap.
 - **Cue control track:** a cue's name in quotes (`"Start SQ-1"`).
 - **A rest:** `r`.
 - **Nothing written:** `:q`, a length with nothing before the colon. This
@@ -399,8 +402,65 @@ sixteenth"), and the order LilyPond and ABC notation write it in.
   and uncoupled lines"). A `/` takes its own length and marks: `/`, `/:e`,
   `/>`. A `/` with nothing before it is refused; on a rhythm line, write
   `:q` first. A cue control track names every cue; `/` is refused there.
-  - A beat pulse needs no section of its own: it is a mono voice that writes
-  the same note on each element, e.g. `| C4:q> / / / |`.
+  - A beat pulse needs no section of its own: it is a mono voice on a
+  `notes midi_note` track, e.g. `| C4:q> / / / |`.
+
+**Intervals.** A `notes pitched` track writes each note as its interval
+from the tonic of the section's key, so the section keeps its intervals in
+any key a song composition entry overrides it with (section 5, "Sections").
+
+- **The name gives the spelling.** An interval is its quality and its
+  number: `P` perfect, `M` major, `m` minor, `A` augmented, `d` diminished,
+  then the number (`P1`, `m2`, `A1`, `M3`, `d5`, `A4`, `P8`). Two
+  intervals of the same size are different notes on the staff: above C,
+  `A1` is C♯ and `m2` is D♭. Semitone counts are not used, because they
+  lose the spelling.
+
+  | Semitones | Intervals |
+  |---|---|
+  | 0 | P1 |
+  | 1 | m2, A1 |
+  | 2 | M2, d3 |
+  | 3 | m3, A2 |
+  | 4 | M3, d4 |
+  | 5 | P4, A3 |
+  | 6 | A4, d5 |
+  | 7 | P5, d6 |
+  | 8 | m6, A5 |
+  | 9 | M6, d7 |
+  | 10 | m7, A6 |
+  | 11 | M7, d8 |
+  | 12 | P8, A7 |
+
+- **Above the octave**, compound intervals: `M9` is an octave and a major
+  second, `P12` an octave and a fifth, `P15` two octaves, and so on.
+- **Below the tonic**, a minus sign: `-P4` is a perfect fourth below the
+  tonic, `-P8` an octave below.
+- **The register** is the line's `tonic_octave n`, written after the
+  track name (and voice layer): the octave of the tonic the line measures
+  from. `line "Bass"  tonic_octave 2  | P1:q P5 M2 P5 |` in C major plays
+  C2 G2 D2 G2; in a song composition entry that overrides the key with
+  E♭ major it plays E♭2 B♭2 F2 B♭2. A pitched line with notes and no
+  `tonic_octave` is refused, with a message saying to write it. Under an
+  override the tonic is the override's nearest the section's own tonic in
+  that octave, above or below; a tritone, equally far either way, goes
+  below. A C major line with `tonic_octave 2` overridden with B major plays
+  from B1, with A major from A1, with E major from E2, with F♯ major from F♯1.
+  A note that would need a double sharp or double flat is refused, saying to
+  write it as the interval on the next letter.
+- **Chromatic notes are intervals too.** `A4` in C major is F♯, and in G
+  major C♯: it keeps its place against the tonic.
+- **Diatonic** means in the scale of the key signature: in major P1 M2 M3
+  P4 P5 M6 M7, in minor (natural minor) P1 M2 m3 P4 P5 m6 m7, and their
+  compounds and the same below the tonic. Every other interval is
+  non-diatonic, and the staff marks it (EFS-1.9a).
+- **One notation per line.** A `notes pitched` track writes only
+  intervals, and a `notes midi_note` track only note names. The other
+  notation is refused, with a message saying which one the track takes:
+  `A4` would otherwise be both the note A in octave 4 and an augmented
+  fourth.
+- The octave annotations (`+8va`, `-8va`, `loco`) still move what follows
+  by an octave.
 
 **Lengths.** The note values and dots of section 3: `w h q e sx tx`, and up
 to three dots. **A length left off is the one before it** in the line,
@@ -435,6 +495,12 @@ and the length with its dots, then the marks, then `~` (`C2:q>>`,
 | A mark with no length (3/8) | `sx:C6 sxr sx>:C5 sxr sx:C4 sx:C5` | `C6:sx r C5> r C4 C5` |
 | A cue | `w:"Start SQ-1"` then `wr` | `"Start SQ-1":w` then `r` |
 
+The table records the change of order in Revision 15, so it keeps the note
+names of that time. Under the interval notation the pitched examples write
+intervals: the bass with rests, in C major with `tonic_octave 2`, is
+`P1:h r:q P5` then `P5 M7 M2 P5`; the beat pulse, on a `notes midi_note`
+track, is unchanged.
+
 In the first example `D4` is a sixteenth, carried from `Eb4:sx`; `Eb4:e~`
 is a tied eighth, and `Eb4:sx`, where the tie lands, is a sixteenth again.
 The Debussy case, a half note on beat 3 of an inner voice printed with no
@@ -464,15 +530,18 @@ track "Clock"
 
 track "Beat"
   type mono_voice
+  notes midi_note
   clef treble
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 
 track "Cues"
@@ -484,9 +553,10 @@ section "Count-in"  count-in
   line "Beat"  | C4:q> / / / |
 
 section "Verse"
+  key C major  meter 4/4
   line "Beat"  | C4:q> / / / | /> / / / |
   line "Keys"  | I:q / / / | r ii7:h V7:q |
-  line "Bass"  | C2:q / / / | r D2:h G2:q |
+  line "Bass"  tonic_octave 2  | P1:q / / / | r M2:h P5:q |
   line "Cues"  | "Start SQ-1":w | r |   --- fires on each pass: passes are not designed (EFS-4.4)
 
 song_composition
@@ -550,14 +620,27 @@ gate the velocity is the gate's level, so the accent levels in the studio
 file matter most there. The `retrigger_gap` of the studio file drops the
 gate between two notes.
 
-**A beat pulse is a mono voice** that writes one fixed pitch on each
-element, with `>` where the accent falls: `| C4:q> / / / |`. Its pitch is a
-pitch like any other (with `octave_offset` to suit the device, and the
-pitch CV it makes at a CV and gate output), and it needs no transport. It
-can clock a divider, or voice a metronome in the modular.
+**A beat pulse is a mono voice on a `notes midi_note` track**, with `>`
+where the accent falls: `| C4:q> / / / |`. Its notes are MIDI notes like
+any other (with `octave_offset` to suit the device, and the pitch CV they
+make at a CV and gate output), and it needs no transport. It can clock a
+divider, or voice a metronome in the modular. It may use any number of
+different notes, as a sample player does when each note selects a sample.
 
 Attributes of a voice track:
 
+- `notes` — required on every voice track, with no default, since the
+  program cannot tell the two kinds apart from the notes:
+  - `notes pitched`: the notes are music. Lines are written as intervals
+    from the section's tonic (section 4, "Intervals"), follow every key
+    override, and may be sample sources of chord numerals.
+  - `notes midi_note`: the notes are MIDI note numbers the receiver uses,
+    for example to select a sample or a gate. Lines are written as note
+    names (`C2`), are never transposed, by a key override or by a change of
+    the section's key, and are not marked diatonic or non-diatonic. A chord
+    numeral on such a track, in a coupled line or a sample source, is
+    refused, since it has no meaning there; the message says to write the
+    notes.
 - `clef` — `treble`, `bass`, `alto`, `tenor`, `percussion`, or `grand`
   (treble and bass braced, for chords that run well below middle C). The
   composer composes in the clef; the music stays on the staff and not on
@@ -585,7 +668,8 @@ Attributes of a voice track:
   transposition; that spelling is designed when `musician_voice` tracks
   are built.
 
-**Pitch is stored as sounding pitch.** A `musician_voice` for a trumpet
+**Pitch is stored as sounding pitch.** An interval names a sounding pitch
+once the key is known. A `musician_voice` for a trumpet
 is stored as the concert pitch that sounds, and drawn a major second
 higher, as notation software does. Transposing instruments (Appendix C)
 are the only place a written pitch differs from a sounding one.
@@ -606,10 +690,14 @@ track "Manual"
   lead
 
 section "Stollen"
-  line "Manual"  voice_layer 1  | G4:q G4 F4 Eb4 | …
-  line "Manual"  voice_layer 2  | Eb4:sx D4 Eb4:e~ Eb4:sx F4 Eb4 D4 C4:e D4~ D4 C4 | …
-  line "Manual"  voice_layer 3  | C4:sx B3 C4:e~ C4:sx B3 C4 G3 A3:e G3~ G3:sx G3 Ab3 Eb3 | …
+  key C minor
+  line "Manual"  voice_layer 1  tonic_octave 4  | P5:q P5 P4 m3 | …
+  line "Manual"  voice_layer 2  tonic_octave 4  | m3:sx M2 m3:e~ m3:sx P4 m3 M2 P1:e M2~ M2 P1 | …
+  line "Manual"  voice_layer 3  tonic_octave 3  | P8:sx M7 P8:e~ P8:sx M7 P8 P5 M6:e P5~ P5:sx P5 m6 m3 | …
 ```
+
+(In C minor, B♮ (`M7`) and A♮ (`M6`) are non-diatonic, and the staff marks
+them.)
 
 ((This is the opening of BWV 610, in C minor. The whole piece is
 `songs/LilyPond/bwv610.song`.)
@@ -684,19 +772,59 @@ key changes, as standard notation requires.
     only, so one section is reused in another key or at another tempo; the
     entry after it is back to what it was. An entry may not change the
     meter: the meter belongs to the section, because the bars are written
-    for it. The notes the section writes are not transposed: an entry's key
-    sets the key signature and what a chord numeral means.
+    for it.
+  - **A key override keeps the section's intervals.** The section is
+    composed once, in its own key. A song composition entry that overrides
+    the key plays the same section on the new tonic: every interval of a
+    `notes pitched` line, chromatic ones included, keeps its place against
+    the tonic, and every chord numeral means the chord on the new tonic.
+    The key signature is the override's. `notes midi_note` lines do not
+    move. No copy of the section is made, and an edit of the section is
+    heard in every song composition entry that names it.
+  - **An override keeps major or minor.** It changes the tonic only: a
+    major section is overridden with a major key, a minor section with a
+    minor key. A section overridden with the other mode is refused, e.g.
+    `"Verse" is in C major. Its key override must be major too, e.g. E major.`
+    Playing a section in the other mode needs a section of its own; the
+    editor makes one (Editor Draft, F1).
   - To change the key or the tempo for everything that follows, write
     `key` and `tempo` on a line of their own between entries (as `key E
     major  tempo 140 beats/min` above). Every entry below that line takes
-    them as the new base, until another such line. The meter cannot be
-    changed here either.
-  - What an entry plays in is taken, for each of key and tempo, from the
-    entry, else the section's own, else the composition's current value: the
-    starting key and tempo, or those of the last `key` or `tempo` line
-    above the entry. A section's own key, tempo and tempo marks affect that
-    section only; they do not change what the composition passes to the
-    entries below.
+    them as the new default, until another such line. The meter cannot be
+    changed here either. A key line is an override for each song
+    composition entry below it, as if written on the entry, so it keeps
+    each section's intervals and must keep its major or minor.
+  - **The key a song composition entry plays in**, in order:
+    - the entry's own override (`"Chorus"  key F major`);
+    - `key section` on the entry: its section's own key, whatever key line
+      stands above it (`"Bridge"  key section`);
+    - else the key of the last key line between entries above it;
+    - else, with no key line above it, its section's own key;
+    - else, for a section with no key of its own (a count-in, or only MIDI
+      note tracks), the key the song composition starts in.
+
+    The starting key of `song_composition` is not an override: it is the key
+    the song starts in, and the entries above the first key line play their
+    sections' own keys. So in
+
+    ```
+    song_composition
+      key C major  meter 4/4  tempo 100 beats/min
+      "Verse"
+      key E minor
+      "Chorus"  key F major
+      "Interlude"
+      "Bridge"  key section
+    song_composition_close
+    ```
+
+    "Verse" plays in its own key, "Chorus" in F major, "Interlude" in E
+    minor and "Bridge" in its own key.
+  - The tempo of an entry is taken from the entry, else the section's own,
+    else the composition's current tempo: the starting tempo, or that of the
+    last `tempo` line above the entry. A section's own key, tempo and tempo
+    marks affect that section only; they do not change what the composition
+    passes to the entries below.
   - `count-in` stays on the section, and is allowed only on the section of
     the first entry that plays.
   - A section written with `repeat n`, or a section with no lines to
@@ -709,13 +837,16 @@ key changes, as standard notation requires.
   for `repeat n`: `|%2` is twice and `|%3` three times; with no number
   the bars play twice. There  is no sign for "the previous bar again":
   `/` already plays the previous  note or chord again. 
-- **Carrying on.** A section that omits `key` or `tempo` plays in the
-  composition's current key and tempo. A section must write its own
+- **Carrying on.** A section that omits `tempo` plays in the composition's
+  current tempo. A section with a line on a `notes pitched` track must
+  write its own `key`, because its intervals and numerals are measured from
+  that key's tonic; one without such a line (a count-in, a section of
+  `notes midi_note` and control lines only) may omit it and has no key of
+  its own. A section must write its own
   `meter` (or have a `meter_control` line): it never takes the meter of
   the section played before it, so it can be edited without knowing the
   order of play. A section with no meter is refused.
-- A section with chords needs a key, written or carried; a count-in section
-  needs none. `count-in` is for the first section played only, one or two
+- A count-in section needs no key. `count-in` is for the first section played only, one or two
   bars.
 - **Tempo counts beats**, as the meter defines them (`Musical Time and
   Clock.md`, sections 2 and 13): `tempo 120 beats/min` or `tempo 2
@@ -796,8 +927,10 @@ line "Keys"                 | :h :q :q | :q :q :q :q |
 - **The same again, on the rhythm line.** A `/` after a `:q` is another
   `:q` with the same length: the source is read again at the `/`'s own
   place, not where the `:q` was. `| :q / / / |` over `| D2 A2 F2 D2 |`
-  plays D2, A2, F2, D2. After a note written on the rhythm line
-  (`G3:q /`), the `/` plays that note again.
+  plays D2, A2, F2, D2 (on a `notes midi_note` track; a pitched track
+  writes the source as intervals, `| M2 M6 P4 M2 |` in C major with
+  `tonic_octave 2`). After a note written on the rhythm line
+  (`P5:q /`), the `/` plays that note again.
 - **Track and hold.** If the source changes while an element is still
   sounding, the element changes to the new chord or note legato: the new
   notes are sent before the old ones are released, with no new gate and
@@ -1237,8 +1370,8 @@ The rules:
 6. The song keeps the result and no link to the library entries.
 
 *Example.* The progression `ii-V` and the rhythm `Rest, half, quarter` in
-C major give `| r:q ii7:h V7:q |` for the harmony track and `| r:q D2:h
-G2:q |` for the bass. The same progression under `q q q q` gives `| ii7:q /
+C major give `| r:q ii7:h V7:q |` for the harmony track and `| r:q M2:h
+P5:q |` for the bass (`tonic_octave 2`: D2 and G2). The same progression under `q q q q` gives `| ii7:q /
 V7 / |`. How the editor snaps to a grid, and what it asks when rule 4
 applies, are decided with the editor.
 
@@ -1517,9 +1650,42 @@ gates on every note on, to be heard as **legato**?
     on the System 35 chain (CM1A, 911, 902) and on the FH-2's CV and gate
     into Poly FM, and does not work in the NT's own MIDI mode (Poly FM).
 
-**OPEN_QUESTION Q35 (26 Nov 2026 20:00):** When the editor changes the key
+**Q35 (CLOSED, Jim, 27 Nov 2026):** When the editor changes the key
 an entry or a section plays in, how should it move the section's written
 notes with the key?
+- **Conclusion (Jim, 27 Nov 2026):** a section is composed once, in its own
+  key, and a song composition entry that overrides the key plays the same
+  section, keeping its interval structure. There is no copy.
+  - Every section with pitched lines states its own key (a count-in section
+    excepted); its intervals are measured from that key's tonic.
+  - A track declares what its notes are, with no default: `notes pitched`
+    or `notes midi_note`.
+  - A `notes pitched` line is written as intervals from the section's
+    tonic, by their full names, so the spelling survives (A1 is not m2):
+    P1, m3, P5, compound intervals above the octave (M9), a minus sign
+    below the tonic (`-P4`), and a `tonic_octave n` on the line for its
+    register. It follows every key override, chromatic notes included, and
+    F3 marks non-diatonic notes (outside the key signature's scale; natural
+    minor for minor) in a soft amber.
+  - A `notes midi_note` line is written as note names (C2), any number of
+    different notes, and is never transposed: its notes select samples or
+    gates on the receiver. It takes no sampled line.
+  - Absolute notes and intervals are never mixed in one line ("A4" would be
+    both the note and the augmented fourth).
+  - A key override keeps the section's major or minor and changes only the
+    tonic; the loader refuses a major section overridden with a minor key,
+    and the reverse.
+  - In F1, choosing an override of the other mode (major to minor, or minor
+    to major) prompts for a name for a new section; the program creates it
+    in the new key with a reasonable diatonic transposition of the notes
+    (each note kept on its scale step), and the musician then views and
+    edits the new section.
+  - The F3 header shows `Section Key: C major`, and below it each key a song
+    composition entry overrides it with, listed once (`Transposition: E
+    major`); clicking one draws the section in that key. Edits always go to
+    the one section.
+  - Changing a section's own key (F2) no longer rewrites its notes.
+  - The canonical song files are converted in the same step as the loader.
 - Context: a key written in `song_composition` (on an entry, or on a key
   line between entries) sets the key signature and what a chord numeral
   means; the section's written notes are not transposed (section 5). That
@@ -1542,6 +1708,54 @@ notes with the key?
   notes by the interval between the keys, notes written as scale degrees, or
   keeping them and warning.
 - Raised: Jim, 26 Nov 2026, while redesigning F1 (Arrange Song Sections).
+
+**Q36 (CLOSED, Jim, 27 Nov 2026):** Should a `key` line in
+`song_composition` (the starting key, or a key line between song
+composition entries) transpose the sections below it?
+- **Conclusion (Jim, 27 Nov 2026):** yes. A key line between song
+  composition entries sets a new default key, which holds until the next key
+  line: each entry below it is overridden with that key, as if the entry
+  wrote it, unless the entry writes its own override (which prevails) or
+  `key section` (which plays its section's own key). The starting key of
+  `song_composition` is not an override; the entries above the first key
+  line play their sections' own keys. Written into section 5.
+- Context: the key an entry plays in is taken from the song composition
+  entry, else the section's own, else the composition's current key
+  (section 5). Q35 made a key required on every section with a `notes
+  pitched` line. So for those sections the composition's key is never
+  used, and "key E major for everything that follows" changes nothing
+  they play. Before Q35 the same was already true of any section that
+  wrote its own key.
+- Options: (a) keep it: composition key lines apply only to sections with
+  no key of their own; (b) a key line between song composition entries is
+  an override for every entry below it, like an entry's own override
+  (keeping each section's major or minor), while the starting key stays a
+  default only; (c) remove key lines between entries, so every
+  transposition is written on a song composition entry.
+- Found: three canonical files write a key line between song composition
+  entries (`composer/arrange_song.song`, `composer/arrange_song_after_f1.song`,
+  `song_file/composition_rebase.song`); they were not checked for which
+  reading their tests rely on.
+- Raised: Claude, 27 Nov 2026, carrying Q35 into section 5.
+
+**Q37 (CLOSED, Jim, 27 Nov 2026):** Under a key override, which
+octave is the new tonic in?
+- **Conclusion (Jim, 27 Nov 2026):** option (b), the override's tonic
+  nearest the section's own tonic in the line's `tonic_octave`; a tritone,
+  equally far either way, goes below. Written into section 4.
+- Context: a pitched line measures its intervals from the tonic in its
+  `tonic_octave` (section 4). The loader takes the override's tonic in the
+  same octave number: a C major section with `tonic_octave 2` overridden
+  with B major plays from B2, eleven semitones above C2, not B1, one below.
+  Octave numbers start at C, so the overrides to A, A♭, B♭ and B move a line
+  up by most of an octave. F2's change of the section's own key already
+  moves by the semitones asked for: it rewrites `tonic_octave` where the new
+  tonic crosses into another octave.
+- Options: (a) keep it: the override's tonic in the line's `tonic_octave`;
+  (b) the override's tonic nearest the section's own tonic (B1 for C2), so
+  an override moves a line at most a tritone; (c) the override names its
+  direction (`key B major down`).
+- Raised: Claude, 27 Nov 2026, building the interval loader.
 
 ### Deferred (Jim, 11 Nov 2026)
 

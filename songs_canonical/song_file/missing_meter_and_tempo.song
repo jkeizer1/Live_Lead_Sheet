@@ -5,10 +5,11 @@ track "Clock"
   type clock_and_transport
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
   lead
-section "A"  meter 4/4
-  line "Bass" | C2:w |
+section "A"  meter 4/4  key C major
+  line "Bass"  tonic_octave 2 | P1:w |
 
 song_composition
   key C major

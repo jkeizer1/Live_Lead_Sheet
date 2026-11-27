@@ -8,15 +8,18 @@ track "Clock"
 
 track "Beat"
   type mono_voice
+  notes midi_note
   clef treble
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 
 song_composition
@@ -34,12 +37,12 @@ section "Verse"
   key C major  meter 4/4  tempo 120 beats/min
   line "Keys"  sample_source  | I | V |
   line "Keys"  | :w | :h :h |
-  line "Bass"  | G2:q> / C2 / | E2 / /:h |
+  line "Bass"  tonic_octave 2  | P5:q> / P1 / | M3 / /:h |
   line "Beat"  | D4:q> / /> / | / / / / |
 
 section "Close"
   key C major  meter 4/4  tempo 120 beats/min
   line "Keys"  sample_source  | I |
   line "Keys"  | :w |
-  line "Bass"  | C2:q> / /> /:e / |
+  line "Bass"  tonic_octave 2  | P1:q> / /> /:e / |
   line "Beat"  | C4:q> / /> / |

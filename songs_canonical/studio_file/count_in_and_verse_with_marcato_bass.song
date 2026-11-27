@@ -12,15 +12,18 @@ track "Clock"
 
 track "Beat"
   type mono_voice
+  notes midi_note
   clef treble
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 
 track "Cues"
@@ -35,7 +38,7 @@ section "Verse"
   key C major  meter 4/4  tempo 120 beats/min
   line "Beat"  | C4:q> / / /   | /> / / /       |
   line "Keys"  | I:q / / /     | r ii7:h V7:q   |
-  line "Bass"  | C2:q>> / / / | G2 /:h /:q |
+  line "Bass"  tonic_octave 2  | P1:q>> / / / | P5 /:h /:q |
   line "Cues"  | "Start SQ-1":w | r             |
 
 song_composition

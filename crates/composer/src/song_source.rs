@@ -42,6 +42,8 @@ pub struct TrackSource {
     /// comment.
     pub last_index: usize,
     pub type_index: Option<usize>,
+    /// The `notes pitched` or `notes midi_note` line of a voice track.
+    pub notes_index: Option<usize>,
     pub clef_index: Option<usize>,
     pub lead_index: Option<usize>,
     /// The `voice_layer` lines.
@@ -229,6 +231,7 @@ impl SongSource {
                     header_index: index,
                     last_index: index,
                     type_index: None,
+                    notes_index: None,
                     clef_index: None,
                     lead_index: None,
                     voice_layer_indices: Vec::new(),
@@ -288,6 +291,8 @@ fn read_track_line(track: &mut TrackSource, index: usize, line: &str) {
     track.last_index = index;
     if keyword_rest(line, "type").is_some() {
         track.type_index = Some(index);
+    } else if keyword_rest(line, "notes").is_some() {
+        track.notes_index = Some(index);
     } else if keyword_rest(line, "clef").is_some() {
         track.clef_index = Some(index);
     } else if line == "lead" {
@@ -551,8 +556,8 @@ mod tests {
                 CompositionRowSource::Entry(0),
                 CompositionRowSource::Entry(1),
                 CompositionRowSource::Change(ChangeSource {
-                    index: 21,
-                    key_words: Some(String::from("E minor")),
+                    index: 23,
+                    key_words: Some(String::from("E major")),
                     tempo_words: Some(String::from("120 beats/min")),
                 }),
                 CompositionRowSource::Entry(2),
@@ -563,7 +568,10 @@ mod tests {
         assert_eq!(bridge.key_words.as_deref(), Some("C major"));
         assert_eq!(bridge.meter_words.as_deref(), Some("3/4"));
         assert_eq!(bridge.tempo_words.as_deref(), Some("90 beats/min"));
-        assert_eq!(source.section("Riff").unwrap().key_words, None);
+        assert_eq!(
+            source.section("Riff").unwrap().key_words.as_deref(),
+            Some("G major")
+        );
     }
 
     #[test]

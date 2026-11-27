@@ -5,10 +5,12 @@ track "Clock"
   type clock_and_transport
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 section "A"
   key C major  meter 4/16  tempo 100.001 beats/min

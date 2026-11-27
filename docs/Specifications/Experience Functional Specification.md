@@ -1,6 +1,6 @@
 # Live Lead Sheet — Experience Functional Specification
 
-Revision 20 — 16 Nov 2026
+Revision 21 — 27 Nov 2026
 
 Builds on the Concept Brief, Revision 13, Architecture D-10 and D-11, and
 Song Notation, Revision 24. Covers
@@ -112,6 +112,11 @@ double barline and the new key signature at the bar where it takes
 effect, and the cautionary key signature at the end of the bar before.
 The cues panel lists it (EFS-1.11).
 
+**EFS-1.9a Non-diatonic notes.** On a pitched track, a note outside the
+scale of the key signature (natural minor for a minor key) has its note
+head drawn in a soft amber, so chromatic notes stand out. Notes of a MIDI
+note track (EFS-2.6) are never marked.
+
 **EFS-1.10** CANCELLED (Jim, 9 Nov 2026). The number stays so that other
 references remain valid.
 
@@ -180,9 +185,13 @@ other), not the program's. External sequencers are started, stopped and
 reset by phrase cues (EFS-4).
 
 **EFS-2.6 Beat pulse.** A beat pulse is an ordinary mono voice (EFS-3.3)
-that plays one fixed note on the elements of its rhythm, for clock
+on a MIDI note track: a track whose notes are MIDI notes the receiver uses
+(to make a gate, or to select a sample), not music, so they are never
+transposed. A track says whether its notes are pitched or MIDI notes. A
+beat pulse plays its notes on the elements of its rhythm, for clock
 dividers and devices that follow notes better than MIDI clock. The song
-writes the pitch and the accents like any voice (`| C4:q> / / / |`);
+writes the notes and the accents like any voice (`| C4:q> / / / |`), one
+note or several (a sample player selecting a sample per note);
 port, channel and velocities are set by the musician in the studio
 configuration (EFS-6.6), where an accent mark has its own velocity — 127
 and 64 in the usual setup. Where the accent falls is written in the
@@ -356,7 +365,8 @@ tempo (EFS-2.5).
 
 **EFS-5.2 Sections.** Add, name, reorder and remove sections, and mark
 the first as a count-in section. For each:
-key (twelve roots, major or minor, chosen from a list),
+key (twelve roots, major or minor, chosen from a list; required for a
+section with pitched tracks, whose notes are intervals from its tonic),
 meter, always written, with its beat grouping (or a repeating meter pattern, EFS-2.2a), and tempo (written, or the composition's), with optional tempo marks on the lead line (EFS-2.2). A section is a
 definition with a unique name; it plays only when the composition names it
 (EFS-5.2b). A section the composition does not name is allowed and does not
@@ -372,8 +382,13 @@ block that lists the sections in the order they play. It gives the key,
 meter and tempo the song starts in. Each entry names a section and may give
 a repeat count (the number of times it plays, default 1), and a key and a
 tempo that replace the section's own for that entry alone, so one section is
-reused in another key or at another tempo. A key or tempo line between
-entries instead sets the base for every entry below it. The meter cannot be
+reused in another key or at another tempo. A key override plays the same
+section on the new tonic with its intervals kept, chromatic notes included,
+and keeps the section's major or minor; MIDI note tracks (EFS-2.6) do not
+move. Editing the section changes it for every entry that names it. A key or tempo line between
+entries instead sets the default for every entry below it, until the next
+such line: a key line overrides each entry's key in the same way, unless the
+entry gives its own key or is marked to play its section's own key. The meter cannot be
 changed in the composition. A repeat count of 0 leaves the entry out, so the player can mute and
 restore an entry by changing one number, which is how a musician skips it
 while testing. A section may be named by several entries, which gives the

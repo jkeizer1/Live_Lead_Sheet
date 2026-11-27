@@ -1508,6 +1508,37 @@ fn parse_song_contents(cursor: &mut Cursor, element_text: &str) -> Result<Writte
             text.push_str(&octave);
             Ok(WrittenContents::Text(text))
         }
+        // An interval (`P5`, `m3`, `-P4`): it ends at its number, so a
+        // length may follow with no colon. `A4` is read above, as a note
+        // name is; the song parser says which the track writes.
+        Some(first) if "PMmd-".contains(first) => {
+            let mut text: String = String::new();
+            if first == '-' {
+                text.push('-');
+                cursor.next();
+            }
+            match cursor.peek() {
+                Some(quality) if "PMmdA".contains(quality) => {
+                    text.push(quality);
+                    cursor.next();
+                }
+                _ => {
+                    return Err(format!(
+                        "\"{element_text}\" is not an interval. Write P, M, m, A or d, then the \
+                         number, e.g. P5, m3 or -P4"
+                    ));
+                }
+            }
+            let number: String = cursor.take_while(char::is_ascii_digit);
+            if number.is_empty() {
+                return Err(format!(
+                    "\"{element_text}\" is not an interval: an interval needs its number, e.g. \
+                     P5, m3 or -P4"
+                ));
+            }
+            text.push_str(&number);
+            Ok(WrittenContents::Text(text))
+        }
         // A sharp before a chord numeral is part of the chord (#iv°); a
         // sharp anywhere else in front of an element is misplaced.
         Some('#')

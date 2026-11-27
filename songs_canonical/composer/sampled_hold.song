@@ -7,11 +7,13 @@ track "Clock"
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef treble
   lead
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 
 song_composition
@@ -19,8 +21,8 @@ song_composition
   "Verse"
 song_composition_close
 
-section "Verse"
+section "Verse"  key C major
   meter 4/4
   line "Keys"  | I:w |
-  line "Bass"  sample_source  | C2 G2 |
+  line "Bass"  tonic_octave 2  sample_source  | P1 P5 |
   line "Bass"                 | :w |

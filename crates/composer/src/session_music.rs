@@ -13,7 +13,8 @@ use vocabulary::progression::Progression;
 use vocabulary::rhythm_pattern::{ElementKind, ElementMarks};
 use vocabulary::roman_chord::RomanChord;
 use vocabulary::song::{
-    ElementContents, Line, LineRole, Section, Song, Track, TrackKind, VoiceKind, VoiceLayerNumber,
+    ElementContents, Line, LineRole, Section, Song, Track, TrackKind, TrackNotes, VoiceKind,
+    VoiceLayerNumber,
 };
 use vocabulary::time_signature::TimeSignature;
 
@@ -26,7 +27,12 @@ use crate::line_bars::{
     BarHarmony, PlacedContents, harmony_of_line, harmony_of_progression, rest_bar,
     written_bars_of_line,
 };
-use crate::line_text::{WrittenBar, WrittenElement, WrittenSound, line_text, source_text};
+use vocabulary::interval::nearest_tonic;
+
+use crate::line_text::{
+    NoteSpelling, WrittenBar, WrittenElement, WrittenSound, contents_text, line_text, source_text,
+    tonic_octave_for,
+};
 use crate::pitch_moves::{chord_tone_step, chromatic_step, diatonic_step, octave_step};
 use crate::song_source::SongSource;
 use crate::timeline::harmony_line;
@@ -139,6 +145,92 @@ fn source_bars(section: &Section, track_name: &str) -> Option<Vec<Vec<ElementCon
     )
 }
 
+/// The lowest note among `contents`, for choosing a new line's `tonic_octave`.
+fn lowest_pitch<'a>(contents: impl Iterator<Item = &'a ElementContents>) -> Option<Pitch> {
+    contents
+        .flat_map(|contents: &ElementContents| match contents {
+            ElementContents::Notes(notes) | ElementContents::ChordWithNotes { notes, .. } => {
+                notes.as_slice()
+            }
+            _ => &[],
+        })
+        .copied()
+        .min_by_key(|pitch: &Pitch| pitch.semitones_above_c_minus_1())
+}
+
+/// How `track`'s line writes its notes, and the `tonic_octave` its header
+/// carries. A pitched line is measured from the tonic the loader read it
+/// from (`written`: its `tonic_octave` and that tonic), so an edit writes
+/// the same intervals back whichever entry is selected. A line that has none
+/// yet gets a tonic near its lowest note in `played` (the key the entry
+/// plays the section in), and the `tonic_octave` of the tonic of `own` (the
+/// section's own key) that leads there (Song Notation, section 4). A MIDI note track writes note names. A
+/// line with no notes (a rhythm line, rests) writes none and needs no
+/// `tonic_octave`, so its spelling is never used.
+///
+/// # Errors
+///
+/// When a pitched line has notes and the section no key.
+fn spelling_for(
+    track: &Track,
+    played: Option<Key>,
+    own: Option<Key>,
+    written: Option<(i8, Pitch)>,
+    lowest: Option<Pitch>,
+) -> Result<(NoteSpelling, Option<i8>), String> {
+    if !matches!(
+        track.kind(),
+        TrackKind::Voice {
+            notes: TrackNotes::Pitched,
+            ..
+        }
+    ) {
+        return Ok((NoteSpelling::NoteNames, None));
+    }
+    let Some(lowest) = lowest else {
+        return Ok((NoteSpelling::NoteNames, None));
+    };
+    if let Some((octave, tonic)) = written {
+        return Ok((NoteSpelling::Intervals { tonic }, Some(octave)));
+    }
+    let no_key = || {
+        format!(
+            "track \"{}\" writes intervals, and the section has no key to measure them from. \
+             Give the section a key first",
+            track.name()
+        )
+    };
+    let played: Key = played.ok_or_else(no_key)?;
+    let own: Key = own.ok_or_else(no_key)?;
+    let tonic: Pitch = Pitch::new(played.tonic(), tonic_octave_for(played.tonic(), lowest));
+    // The octave of the section's own tonic whose nearest override tonic is
+    // `tonic`: one of the three octaves around it.
+    let octave: i8 = [-1_i8, 0, 1]
+        .into_iter()
+        .map(|offset: i8| tonic.octave().saturating_add(offset))
+        .find(|candidate: &i8| {
+            nearest_tonic(Pitch::new(own.tonic(), *candidate), played.tonic()) == tonic
+        })
+        .ok_or_else(|| format!("no tonic_octave of {own} leads to {tonic} in {played}"))?;
+    Ok((NoteSpelling::Intervals { tonic }, Some(octave)))
+}
+
+/// A sample source's chords and notes as words, bar by bar.
+fn source_words(
+    bars: &[Vec<ElementContents>],
+    spelling: NoteSpelling,
+) -> Result<Vec<Vec<String>>, String> {
+    bars.iter()
+        .map(|bar: &Vec<ElementContents>| {
+            bar.iter()
+                .map(|contents: &ElementContents| {
+                    contents_text(contents, spelling).map_err(|error| error.to_string())
+                })
+                .collect()
+        })
+        .collect()
+}
+
 /// Writes `bars` as the chosen line of the section, giving the new text.
 fn write_line(
     target: &Target<'_>,
@@ -147,24 +239,43 @@ fn write_line(
     sample_source: bool,
     bars: LineBars,
 ) -> Result<String, String> {
+    let role: LineRole = if sample_source {
+        FIRST_SOURCE
+    } else {
+        FIRST_LAYER
+    };
+    let written: Option<(i8, Pitch)> = line_of(target.section, target.track.name(), role)
+        .and_then(|line: &Line| line.tonic_octave().zip(line.tonic()));
+    let lowest: Option<Pitch> = match &bars {
+        LineBars::Rhythm(bars) => lowest_pitch(
+            bars.iter()
+                .flat_map(|bar: &WrittenBar| bar.elements.iter())
+                .filter_map(|element: &WrittenElement| match &element.sound {
+                    WrittenSound::Plays(contents) => Some(contents),
+                    WrittenSound::Rest | WrittenSound::FromSource => None,
+                }),
+        ),
+        LineBars::Source(bars) => lowest_pitch(bars.iter().flatten()),
+    };
+    let (spelling, tonic_octave): (NoteSpelling, Option<i8>) = spelling_for(
+        target.track,
+        target.section.key(),
+        target.section.own_key(),
+        written,
+        lowest,
+    )?;
     let choice: LineChoice = LineChoice {
         track_name: target.track.name(),
         layer: 1,
         sample_source,
+        tonic_octave,
     };
     let indent: String = line_indent(text, source, target.section.name());
     let lines: Vec<String> = match bars {
-        LineBars::Rhythm(bars) => {
-            line_text(&indent, &choice.header(), &bars).map_err(|error| error.to_string())?
-        }
+        LineBars::Rhythm(bars) => line_text(&indent, &choice.header(), &bars, spelling)
+            .map_err(|error| error.to_string())?,
         LineBars::Source(bars) => {
-            let words: Vec<Vec<String>> = bars
-                .iter()
-                .map(|bar: &Vec<ElementContents>| {
-                    bar.iter().map(crate::line_text::contents_text).collect()
-                })
-                .collect();
-            source_text(&indent, &choice.header(), &words)
+            source_text(&indent, &choice.header(), &source_words(&bars, spelling)?)
         }
     };
     replace_line(text, source, target.section.name(), choice, lines)
@@ -410,6 +521,7 @@ pub fn make_coupled(target: &Target<'_>) -> Result<String, String> {
             track_name: name,
             layer: 1,
             sample_source: true,
+            tonic_octave: None,
         },
     )
 }
@@ -1059,104 +1171,68 @@ pub fn cycle_accent(target: &Target<'_>, element: usize) -> Result<String, Strin
     )
 }
 
-/// The section's written notes moved `semitones`, for a section whose key
-/// moves to `new_key`; chord numerals stay, since they follow the key.
+/// The section's lines measured from a tonic `semitones` away, for a
+/// section whose key moves from `key` to `new_key`. Its intervals and chord
+/// numerals follow the key by themselves; only a `tonic_octave` changes,
+/// where the new tonic lies in another octave, so the music moves by
+/// `semitones` and not by a leap to the new tonic's octave.
 ///
 /// # Errors
 ///
-/// When a line cannot be written back.
-pub fn transpose_section_notes(
-    song: &Song,
+/// When the section is not in the text, or `new_key`'s tonic is not
+/// `semitones` from `key`'s.
+pub fn retune_tonic_octaves(
     text: &str,
-    section: &Section,
+    source: &SongSource,
+    section_name: &str,
+    key: Key,
     new_key: Key,
     semitones: i16,
 ) -> Result<String, String> {
-    let mut text: String = text.to_string();
-    for line in section.lines() {
-        let has_pitches: bool = line.elements().iter().any(|element| {
-            matches!(
-                element.contents(),
-                Some(ElementContents::Notes(_) | ElementContents::ChordWithNotes { .. })
-            )
-        });
-        if !has_pitches {
+    let section = source
+        .section(section_name)
+        .ok_or_else(|| format!("could not find section \"{section_name}\" in the text"))?;
+    let mut lines: Vec<String> = text.split('\n').map(str::to_string).collect();
+    for line in &section.lines {
+        let Some(first) = lines.get(line.first_index) else {
             continue;
-        }
-        let Some(track) = song
-            .tracks()
-            .iter()
-            .find(|track: &&Track| track.name() == line.track_name())
+        };
+        let words: Vec<&str> = first.split_whitespace().collect();
+        let Some(position) = words.iter().position(|word: &&str| *word == "tonic_octave") else {
+            continue;
+        };
+        let Some(octave) = words
+            .get(position + 1)
+            .and_then(|word: &&str| word.parse::<i8>().ok())
         else {
             continue;
         };
-        // A beat pulse is a mono voice that writes one fixed pitch on each
-        // element (Song Notation, section 5); its pitch picks a device's
-        // gate, not a note of the harmony, so it does not move.
-        if is_beat_pulse(track, line) {
-            continue;
+        // semitones above C-1 of the new tonic = of the old + semitones;
+        // its octave is what remains after the new tonic's letter and
+        // accidental: (semitones − letter − accidental) ÷ 12 semitones/octave − 1.
+        let wanted_semitones: i16 =
+            Pitch::new(key.tonic(), octave).semitones_above_c_minus_1() + semitones;
+        let within_octave: i16 = new_key.tonic().letter().semitones_above_c()
+            + new_key.tonic().accidental().semitone_offset();
+        let new_octave: i16 = (wanted_semitones - within_octave).div_euclid(12) - 1;
+        let new_octave: i8 = i8::try_from(new_octave)
+            .ok()
+            .filter(|new_octave: &i8| {
+                Pitch::new(new_key.tonic(), *new_octave).semitones_above_c_minus_1()
+                    == wanted_semitones
+            })
+            .ok_or_else(|| {
+                format!(
+                    "{new_key} is not {semitones} semitones from {key}, so its notes cannot follow"
+                )
+            })?;
+        if new_octave != octave {
+            let old_words: String = format!("tonic_octave {octave}");
+            lines[line.first_index] =
+                first.replacen(&old_words, &format!("tonic_octave {new_octave}"), 1);
         }
-        let (layer, sample_source): (u8, bool) = match line.role() {
-            LineRole::VoiceLayer(number) => (number.value(), false),
-            LineRole::SampleSource(number) => (number.value(), true),
-            LineRole::CuePlacement | LineRole::Dynamics => continue,
-        };
-        let mut bars: Vec<WrittenBar> = written_bars_of_line(line, section.bar_meters());
-        for written in bars
-            .iter_mut()
-            .flat_map(|bar: &mut WrittenBar| bar.elements.iter_mut())
-        {
-            if let WrittenSound::Plays(contents) = &written.sound {
-                let moved_contents: ElementContents = match contents {
-                    ElementContents::Notes(notes) => ElementContents::Notes(
-                        notes
-                            .iter()
-                            .map(|pitch| chromatic_step(*pitch, new_key, semitones))
-                            .collect(),
-                    ),
-                    ElementContents::ChordWithNotes { chord, notes } => {
-                        ElementContents::ChordWithNotes {
-                            chord: *chord,
-                            notes: notes
-                                .iter()
-                                .map(|pitch| chromatic_step(*pitch, new_key, semitones))
-                                .collect(),
-                        }
-                    }
-                    other => other.clone(),
-                };
-                written.sound = WrittenSound::Plays(moved_contents);
-            }
-        }
-        let source: SongSource = SongSource::read(&text);
-        let choice: LineChoice = LineChoice {
-            track_name: track.name(),
-            layer,
-            sample_source,
-        };
-        let indent: String = line_indent(&text, &source, section.name());
-        let lines: Vec<String> = if sample_source {
-            let words: Vec<Vec<String>> = bars
-                .iter()
-                .map(|bar: &WrittenBar| {
-                    bar.elements
-                        .iter()
-                        .filter_map(|element| match &element.sound {
-                            WrittenSound::Plays(contents) => {
-                                Some(crate::line_text::contents_text(contents))
-                            }
-                            WrittenSound::Rest | WrittenSound::FromSource => None,
-                        })
-                        .collect()
-                })
-                .collect();
-            source_text(&indent, &choice.header(), &words)
-        } else {
-            line_text(&indent, &choice.header(), &bars).map_err(|error| error.to_string())?
-        };
-        text = replace_line(&text, &source, section.name(), choice, lines)?;
     }
-    Ok(text)
+    Ok(lines.join("\n"))
 }
 
 /// A new section after the entry `after_entry_index`, from a progression:
@@ -1222,8 +1298,8 @@ pub fn new_section_from_progression(
             }
             _ => continue,
         };
-        // The bass roots are written pitches, spelled in the key the new
-        // section first plays in (the entry before it).
+        // The bass roots are spelled in the key the new section first plays
+        // in (the entry before it), which it writes as its own.
         let applied: Applied = apply(
             &rhythm,
             &harmony,
@@ -1234,37 +1310,35 @@ pub fn new_section_from_progression(
             song.numeral_standard(),
         )
         .map_err(|error| error.to_string())?;
+        let lowest: Option<Pitch> = lowest_pitch(
+            applied
+                .bars
+                .iter()
+                .flat_map(|bar: &WrittenBar| bar.elements.iter())
+                .filter_map(|element: &WrittenElement| match &element.sound {
+                    WrittenSound::Plays(contents) => Some(contents),
+                    WrittenSound::Rest | WrittenSound::FromSource => None,
+                }),
+        );
+        let (spelling, tonic_octave): (NoteSpelling, Option<i8>) =
+            // The new section writes `key` as its own and plays in it.
+            spelling_for(track, key, key, None, lowest)?;
         let header: String = LineChoice {
             track_name: track.name(),
             layer: 1,
             sample_source: false,
+            tonic_octave,
         }
         .header();
-        block.extend(line_text("  ", &header, &applied.bars).map_err(|error| error.to_string())?);
+        block.extend(
+            line_text("  ", &header, &applied.bars, spelling).map_err(|error| error.to_string())?,
+        );
     }
     let new_text: String = add_section(text, source, after_entry_index, &name, block)?;
     Ok((
         declare_standard(new_text, progression, library_standard),
         name,
     ))
-}
-
-/// A mono voice line that plays one and the same pitch throughout.
-fn is_beat_pulse(track: &Track, line: &Line) -> bool {
-    if !matches!(voice_of(track), Some((VoiceKind::Mono, _))) {
-        return false;
-    }
-    let mut pitches = line
-        .elements()
-        .iter()
-        .filter_map(|element| match element.contents() {
-            Some(ElementContents::Notes(notes)) => notes.first().copied(),
-            _ => None,
-        });
-    let Some(first) = pitches.next() else {
-        return false;
-    };
-    pitches.all(|pitch: Pitch| pitch == first)
 }
 
 /// The kind of an element at an index of a line: whether it sounds.

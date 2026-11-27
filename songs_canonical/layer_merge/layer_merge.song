@@ -10,29 +10,30 @@ track "Clock"
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 
 # Bar 1: layer 1 holds C4 on beats 1 and 2, layer 2 on beats 2 and 3: one C4 from beat 1 to the end of beat 3.
 section "overlapping"
   key C major  meter 4/4  tempo 100 beats/min
-  line "Keys" voice_layer 1  | C4:h r:h |
-  line "Keys" voice_layer 2  | r:q C4:h r:q |
+  line "Keys" voice_layer 1  tonic_octave 4  | P1:h r:h |
+  line "Keys" voice_layer 2  tonic_octave 4  | r:q P1:h r:q |
 
 # Bar 2: layer 1 holds C4 on beat 1, layer 2 on beat 2: they only touch, so two notes.
-section "touching"  meter 4/4
-  line "Keys" voice_layer 1  | C4:q r:h. |
-  line "Keys" voice_layer 2  | r:q C4:q r:h |
+section "touching"  meter 4/4  key C major
+  line "Keys" voice_layer 1  tonic_octave 4  | P1:q r:h. |
+  line "Keys" voice_layer 2  tonic_octave 4  | r:q P1:q r:h |
 
 # Bar 3: both layers hold C4 for the whole bar: one note.
-section "identical"  meter 4/4
-  line "Keys" voice_layer 1  | C4:w |
-  line "Keys" voice_layer 2  | C4:w |
+section "identical"  meter 4/4  key C major
+  line "Keys" voice_layer 1  tonic_octave 4  | P1:w |
+  line "Keys" voice_layer 2  tonic_octave 4  | P1:w |
 
 # Bar 4: C4 in layer 1 and E4 in layer 2, overlapping: two notes, as they are different pitches.
-section "different pitches"  meter 4/4
-  line "Keys" voice_layer 1  | C4:h r:h |
-  line "Keys" voice_layer 2  | r:q E4:h r:q |
+section "different pitches"  meter 4/4  key C major
+  line "Keys" voice_layer 1  tonic_octave 4  | P1:h r:h |
+  line "Keys" voice_layer 2  tonic_octave 4  | r:q M3:h r:q |
 
 song_composition
   key C major  meter 4/4  tempo 100 beats/min

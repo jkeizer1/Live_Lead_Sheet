@@ -1,6 +1,6 @@
 # Live Lead Sheet — Editor, first draft
 
-Revision 3 — 26 Nov 2026
+Revision 4 — 27 Nov 2026
 
 A first working editor and player screen, built as a fast sprint to be tried,
 not a specification. It is the basis for writing the authoring view's
@@ -49,8 +49,21 @@ doubt what is composed:
 - a sampled line is three rows: its sample source as composed, labelled with
   where the source comes from and its play mode (*own, static* for every
   song today); its rhythm line; and a staff of the notes the rhythm takes
-  from the source, in a quieter colour and labelled *derived*. Once a source
-  marches, those notes are only where it starts (see Q9 and Q10).
+  from the source, in a quieter colour and labelled *notes from source +
+  rhythm*. Once a source marches, those notes are only where it starts (see
+  Q9 and Q10).
+
+**The section's key in F3.** The Section Editor's header states the key in
+words, prominently, and the staves carry its key signature:
+`Section Key: C major`. When song composition entries override the
+section's key, each override key is listed below it, once however many
+song composition entries use it (`Transposition: E major`,
+`Transposition: G major`). Clicking a line of that list draws the section's
+key signature and notes in that key; the section key is drawn when F3
+opens. Whatever key is drawn, an edit goes to the one section, as
+intervals from its own key, and is heard in every song composition entry
+that names it. A section with no key of its own (a count-in, or only MIDI
+note tracks) shows no key line.
 
 An applied rhythm or progression goes where the line's form says: a rhythm
 plays a coupled line's own notes or chords, or goes to a sampled line's
@@ -85,10 +98,36 @@ applied.
 mode: Shift+arrow a semitone, Ctrl+arrow a scale step, Alt+arrow an octave. A
 scale step moves a note to the key's next note and a chord to the next degree's
 own chord (`I` to `ii`, `IM7` to `ii7`), so the composer thinks in degrees and
-the letters follow. Changing a section's key (F2, or K and F) moves its
-composed notes with it; the chord numerals need no change, since they follow
-the key. A key written in the composition (F1) moves no notes, as the
-notation says; see Q1.
+the letters follow. A scale step on a section drawn in a transposition
+moves in that key's scale, and is written back as an interval of the
+section's own key. Changing a section's key (F2, or K and F) rewrites
+nothing: its notes are intervals and its chord numerals follow the key, so
+both sound on the new tonic. Notes of a `notes midi_note` track never move
+with a key; they are moved only by the semitone and octave keys.
+
+**A key override in F1.** A song composition entry's key override keeps the
+section's major or minor (Song Notation, section 5). Choosing an override
+of the same mode (major to major, minor to minor) sets it on the song
+composition entry, and the one section plays on the new tonic with its
+intervals kept. Choosing an override of the other mode (major to minor, or
+minor to major) asks for the name of a new section. The program creates
+that section in the chosen key, each note of the original kept on its
+scale step (C major to C minor: E, A and B become E♭, A♭ and B♭; C major
+to A minor: E, the 3rd step, becomes C; a chromatic note keeps its
+alteration from its step). A chord of the old key's scale becomes the new
+scale's chord on the same degree (`I` to `i`, `ii7` to `iiø7`, `vi` to
+`VI`), except the dominant, which stays major going into minor (`V`, `V7`),
+as minor music raises its seventh step for it; any other chord keeps its kind
+and its root's distance from the tonic. MIDI note tracks do not move. The
+program names the new section in the song composition entry and leaves the
+original section unchanged. The musician then views and edits the new
+section in F3.
+
+An entry's key picker also offers *the section's own key* (S, or its
+button), which writes `key section` on the entry, so the entry plays its
+section's own key whatever key line stands above it; Delete takes the
+entry's key off, and the entry then follows the key line above it, or its
+section's own key when there is none (Song Notation, section 5).
 
 **Apply** (Song Notation, section 7) is built as specified, rules 1 to 4: the
 rhythm and the harmony can each come from the library or from what the line
@@ -129,8 +168,17 @@ number and the date and time it was raised. Each block gives the question,
 its context, what was found, the options (a recommendation is not used until
 Jim confirms it), and where and when it was raised.
 
-**OPEN_QUESTION Q1 (2026-11-23 14:00):** Should an entry's own key also move
+**Q1 (CLOSED, Jim, 27 Nov 2026):** Should an entry's own key also move
 the notes its section composes?
+- **Conclusion (Jim, 27 Nov 2026):** yes, as option (b). Pitched lines are
+  written as intervals from the section's own key, so a song composition
+  entry's key override plays the one section in the new key with its
+  intervals kept, chromatic notes included. An override keeps the
+  section's major or minor; choosing the other mode in F1 prompts for a new
+  section, which the program makes by a diatonic transposition for the
+  musician to edit. Tracks declare `notes pitched` or `notes midi_note`;
+  `midi_note` lines are never transposed. The full conclusion is in Song
+  Notation Q35.
 - Context: the composition can play a section in another key
   (`"Chorus" key D major`). Chord numerals follow the key; composed notes do
   not (Song Notation, section 5: "The notes the section writes are not
@@ -160,6 +208,10 @@ pitch is fixed (a beat pulse), instead of the editor inferring it?
   pulse (Song Notation, section 5).
 - Options: (a) keep the inference; (b) a track attribute such as
   `fixed_pitch`. Recommendation: (b), so nothing is guessed.
+- Continued (27 Nov 2026): the conclusion of Q1 (Song Notation Q35) makes
+  every voice track declare `notes pitched` or `notes midi_note`; a beat
+  pulse is a `notes midi_note` track, which is option (b). Left open for
+  Jim to close.
 - Raised: Claude, building the editor draft, 23 Nov 2026.
 
 **OPEN_QUESTION Q3 (2026-11-23 14:00):** May the render crate read the

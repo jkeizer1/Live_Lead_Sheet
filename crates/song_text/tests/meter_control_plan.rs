@@ -172,8 +172,8 @@ fn bar_not_the_bars_meter() {
             .contains("bar 2 is 5/4 and short by a quarter note"),
         "{error}"
     );
-    // The Keys line is on line 15 of the file, counting its two comment lines.
-    assert_eq!(error.line_number(), 15);
+    // The Keys line is on line 16 of the file, counting its two comment lines.
+    assert_eq!(error.line_number(), 16);
 }
 
 #[test]

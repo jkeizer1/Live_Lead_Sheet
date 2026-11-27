@@ -10,6 +10,7 @@ track "Clock"
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 
@@ -17,14 +18,14 @@ section "slow"
   key C major  meter 4/4  tempo 100 beats/min
   line "Keys"  | I:w | IV:w |
 
-section "faster"  meter 4/4
+section "faster"  meter 4/4  key C major
   line "Keys"  | V:w | I:w |
 
-section "waltz"
+section "waltz"  key C major
   meter 3/4
   line "Keys"  | I:h. | IV:h. |
 
-section "six eight"
+section "six eight"  key C major
   meter 6/8
 
   line "Keys"  | I:h. |

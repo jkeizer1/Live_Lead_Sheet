@@ -12,15 +12,18 @@ track "Clock"
 
 track "Beat"
   type mono_voice
+  notes midi_note
   clef treble
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 
 # 90 beats/min, then 120 beats/min from bar 5.
@@ -35,20 +38,20 @@ song_composition_close
 section "Steps"
   key C major  meter 4/4  tempo 90 beats/min
   line "Keys"  | I:w | IV:w | V:w | I:w | tempo 120 beats/min I:w | IV:w | V:w | I:w |
-  line "Bass"  | C2:q / / / | F2:q / / / | G2:q / / / | C2:q / / / | C2:q / / / | F2:q / / / | G2:q / / / | C2:q / / / |
+  line "Bass"  tonic_octave 2  | P1:q / / / | P4:q / / / | P5:q / / / | P1:q / / / | P1:q / / / | P4:q / / / | P5:q / / / | P1:q / / / |
 
 # Writes no tempo: carries on at 120 beats/min.
-section "Carried"  meter 4/4
+section "Carried"  meter 4/4  key C major
   line "Keys"  | IV:w | V:w | I:w | I:w |
-  line "Bass"  | F2:q / / / | G2:q / / / | C2:q / / / | C2:q / / / |
+  line "Bass"  tonic_octave 2  | P4:q / / / | P5:q / / / | P1:q / / / | P1:q / / / |
 
 # Slows from 120 to 60 beats/min over the two bars of the ramp, then holds 60.
-section "Slowing"  meter 4/4
+section "Slowing"  meter 4/4  key C major
   line "Keys"  | tempo 120 ramp_to 60 beats/min 2_bars I:w | IV:w | V:w | I:w |
-  line "Bass"  | C2:q / / / | F2:q / / / | G2:q / / / | C2:q / / / |
+  line "Bass"  tonic_octave 2  | P1:q / / / | P4:q / / / | P5:q / / / | P1:q / / / |
 
 # Each play starts at 100 beats/min and drops to 80 beats/min in bar 3.
-section "Again"  meter 4/4
+section "Again"  meter 4/4  key C major
   tempo 100 beats/min
   line "Keys"  | I:w | IV:w | tempo 80 beats/min V:w | I:w |
-  line "Bass"  | C2:q / / / | F2:q / / / | G2:q / / / | C2:q / / / |
+  line "Bass"  tonic_octave 2  | P1:q / / / | P4:q / / / | P5:q / / / | P1:q / / / |

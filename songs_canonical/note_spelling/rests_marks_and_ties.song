@@ -5,11 +5,12 @@ track "Clock"
   type clock_and_transport
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 section "A"
   key C major  meter 4/4  tempo 120 beats/min
-  line "Keys"  | r:q C4:q> D4~ D4^ |
+  line "Keys"  tonic_octave 4  | r:q P1:q> M2~ M2^ |
 
 song_composition
   key C major  meter 4/4  tempo 100 beats/min

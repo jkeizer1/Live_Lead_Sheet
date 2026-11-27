@@ -50,6 +50,8 @@ pub enum ArrangeKey {
     Duplicate,
     /// The selected entry left out (repeat 0) or played once again (M).
     ToggleMute,
+    /// In an entry's key picker: play its section's own key (S).
+    SectionKey,
 }
 
 /// What a click in F1 lands on.
@@ -66,6 +68,8 @@ pub enum ArrangeTarget {
     },
     /// The "the composition's key" choice: no key of its own.
     NoKey,
+    /// An entry's "its section's own key" choice (`key section`).
+    SectionKey,
     MeterPreset {
         pulses_per_bar: u8,
         pulses_per_whole_note: u8,
@@ -288,6 +292,17 @@ pub enum ArrangeDialog {
         section_name: String,
         field: TextField,
     },
+    /// A key of the other mode chosen for an entry: a key override keeps
+    /// major or minor, so the entry needs a section of its own, made as a
+    /// close transposition (Editor Draft, "A key override in F1"). Asks its
+    /// name.
+    OtherModeSection {
+        entry: usize,
+        section_name: String,
+        section_key: Key,
+        key: Key,
+        field: TextField,
+    },
     Tempo {
         place: DialogPlace,
         field: TextField,
@@ -296,6 +311,8 @@ pub enum ArrangeDialog {
         place: DialogPlace,
         choice: KeyChoice,
         can_clear: bool,
+        /// An entry's picker: it may play its section's own key.
+        can_take_section_key: bool,
     },
     Meter {
         place: DialogPlace,
@@ -326,6 +343,18 @@ pub enum ArrangeEdit {
     EntryKey {
         entry: usize,
         key: Option<Key>,
+    },
+    /// `key section` on an entry: its section's own key, whatever key line
+    /// is above it.
+    EntrySectionKey {
+        entry: usize,
+    },
+    /// A copy of the entry's section in `key`, the other mode, named
+    /// `new_name`, which the entry then plays.
+    SectionInOtherMode {
+        entry: usize,
+        new_name: String,
+        key: Key,
     },
     EntryTempo {
         entry: usize,
@@ -561,7 +590,8 @@ impl ArrangeEditor {
             | ArrangeKey::Backspace
             | ArrangeKey::Home
             | ArrangeKey::End
-            | ArrangeKey::NextField => {}
+            | ArrangeKey::NextField
+            | ArrangeKey::SectionKey => {}
         }
         None
     }
@@ -650,6 +680,7 @@ impl ArrangeEditor {
                     place,
                     choice,
                     can_clear: !matches!(row, ArrangeRow::Start(_)),
+                    can_take_section_key: matches!(row, ArrangeRow::Entry(_)),
                 });
                 None
             }
@@ -783,6 +814,38 @@ impl ArrangeEditor {
         }
     }
 
+    /// A click on an entry's "the section's own key" choice.
+    fn click_section_key(&mut self, context: &ArrangeContext<'_>) -> Option<ArrangeRequest> {
+        let ArrangeDialog::Key {
+            can_take_section_key: true,
+            place: DialogPlace::Cell { row, column },
+            ..
+        } = self.dialog.as_ref()?
+        else {
+            return None;
+        };
+        let (row, column): (usize, ArrangeColumn) = (*row, *column);
+        self.dialog = None;
+        self.row = row;
+        self.column = column;
+        Self::write_section_key(context.rows.get(row)?)
+    }
+
+    /// `key section` on an entry's row.
+    fn write_section_key(row: &ArrangeRow) -> Option<ArrangeRequest> {
+        match row {
+            ArrangeRow::Entry(entry) => edit(
+                ArrangeEdit::EntrySectionKey {
+                    entry: entry.entry_index,
+                },
+                None,
+            ),
+            ArrangeRow::Start(_) | ArrangeRow::Change(_) => {
+                say_problem("Only an entry can play its section's own key.")
+            }
+        }
+    }
+
     fn write_key(row: &ArrangeRow, key: Option<Key>) -> Option<ArrangeRequest> {
         match row {
             ArrangeRow::Start(_) => match key {
@@ -862,7 +925,9 @@ impl ArrangeEditor {
             return;
         };
         match dialog {
-            ArrangeDialog::Rename { field, .. } => field.insert(typed),
+            ArrangeDialog::Rename { field, .. } | ArrangeDialog::OtherModeSection { field, .. } => {
+                field.insert(typed);
+            }
             ArrangeDialog::Tempo { field, .. } => type_tempo(field, typed),
             ArrangeDialog::Meter { choice, .. } => match typed {
                 "+" => choice.upper(1),
@@ -914,14 +979,24 @@ impl ArrangeEditor {
         }
         let dialog: &mut ArrangeDialog = self.dialog.as_mut()?;
         match dialog {
-            ArrangeDialog::Rename { field, .. } | ArrangeDialog::Tempo { field, .. } => {
+            ArrangeDialog::Rename { field, .. }
+            | ArrangeDialog::Tempo { field, .. }
+            | ArrangeDialog::OtherModeSection { field, .. } => {
                 edit_field(field, key);
             }
             ArrangeDialog::Key {
                 choice,
                 can_clear,
+                can_take_section_key,
                 place,
             } => match key {
+                ArrangeKey::SectionKey if *can_take_section_key => {
+                    let DialogPlace::Cell { row, column } = *place;
+                    self.dialog = None;
+                    self.row = row;
+                    self.column = column;
+                    return Self::write_section_key(context.rows.get(row)?);
+                }
                 ArrangeKey::Left => choice.step(-1),
                 ArrangeKey::Right => choice.step(1),
                 ArrangeKey::Up | ArrangeKey::Down => choice.toggle_mode(),
@@ -960,6 +1035,16 @@ impl ArrangeEditor {
                 ArrangeEdit::Rename {
                     old_name: section_name,
                     new_name: field.text().to_string(),
+                },
+                None,
+            ),
+            ArrangeDialog::OtherModeSection {
+                entry, key, field, ..
+            } => edit(
+                ArrangeEdit::SectionInOtherMode {
+                    entry,
+                    new_name: field.text().to_string(),
+                    key,
                 },
                 None,
             ),
@@ -1007,7 +1092,15 @@ impl ArrangeEditor {
                         let section: NewSection = NewSection {
                             name: form.name.text().to_string(),
                             meter,
-                            key: form.key.map(KeyChoice::key),
+                            // A section with a pitched line writes its own
+                            // key (Song Notation, section 5): left as the
+                            // composition's, it is written as the key in force
+                            // there. A count-in needs none.
+                            key: form.key.map(KeyChoice::key).or(if form.count_in {
+                                None
+                            } else {
+                                form.key_there
+                            }),
                             tempo_words,
                             count_in: form.count_in,
                         };
@@ -1040,6 +1133,24 @@ impl ArrangeEditor {
         self.column = column;
         let written: &ArrangeRow = context.rows.get(row)?;
         match value {
+            // An entry given a key of the other mode needs a section of its
+            // own: ask for its name.
+            CellValue::Key(Some(key))
+                if let ArrangeRow::Entry(entry) = written
+                    && let Some(section_key) = context
+                        .entry_view(entry.entry_index)
+                        .and_then(|view: &EntryView| view.section_key)
+                    && section_key.mode() != key.mode() =>
+            {
+                self.dialog = Some(ArrangeDialog::OtherModeSection {
+                    entry: entry.entry_index,
+                    section_name: entry.section_name.clone(),
+                    section_key,
+                    key,
+                    field: TextField::new(&format!("{} ({key})", entry.section_name)),
+                });
+                None
+            }
             CellValue::Key(key) => Self::write_key(written, key),
             CellValue::Tempo(words) => Self::write_tempo(written, words),
             CellValue::Meter(meter) => match written {
@@ -1101,6 +1212,7 @@ impl ArrangeEditor {
                     _ => None,
                 }
             }
+            ArrangeTarget::SectionKey => self.click_section_key(context),
             ArrangeTarget::NoKey => match self.dialog.as_mut()? {
                 ArrangeDialog::Key {
                     can_clear: true,

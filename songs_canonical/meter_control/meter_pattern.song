@@ -13,33 +13,35 @@ track "Meter"
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 
 section "Four and five"
   key C major  tempo 100 beats/min
   line "Meter"  | mp [4_4 5_4] |
   line "Keys"  | I:w | IV:w IV:q | V:w | I:w I:q |
-  line "Bass"  | C2:q / / / | F2:q / / / / | G2:q / / / | C2:q / / / / |
+  line "Bass"  tonic_octave 2  | P1:q / / / | P4:q / / / / | P5:q / / / | P1:q / / / / |
 
-section "Carried"
+section "Carried"  key C major
   line "Meter"  | mp [4_4 5_4] |
   line "Keys"  | I:w | IV:w IV:q |
-  line "Bass"  | C2:q / / / | F2:q / / / / |
+  line "Bass"  tonic_octave 2  | P1:q / / / | P4:q / / / / |
 
-section "Waltz"
+section "Waltz"  key C major
   meter 3/4
   line "Keys"  | I:h. | V:h. |
-  line "Bass"  | C2:q / / | G2:q / / |
+  line "Bass"  tonic_octave 2  | P1:q / / | P5:q / / |
 
-section "Six and nine"
+section "Six and nine"  key C major
   line "Meter"  | mp [6_8 9_8] |
   line "Keys"  | I:h. | IV:h. IV:q. |
-  line "Bass"  | C2:q. / | F2:q. / / |
+  line "Bass"  tonic_octave 2  | P1:q. / | P4:q. / / |
 
 song_composition
   key C major  meter 4/4  tempo 100 beats/min

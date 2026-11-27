@@ -33,6 +33,35 @@ impl NoteLetter {
         }
     }
 
+    /// Staff steps above C within the octave: C 0, D 1, … B 6.
+    #[must_use]
+    pub const fn steps_above_c(self) -> i16 {
+        match self {
+            NoteLetter::C => 0,
+            NoteLetter::D => 1,
+            NoteLetter::E => 2,
+            NoteLetter::F => 3,
+            NoteLetter::G => 4,
+            NoteLetter::A => 5,
+            NoteLetter::B => 6,
+        }
+    }
+
+    /// The letter `steps` staff steps above C, for 0 to 6.
+    #[must_use]
+    pub const fn from_steps_above_c(steps: i16) -> Option<NoteLetter> {
+        match steps {
+            0 => Some(NoteLetter::C),
+            1 => Some(NoteLetter::D),
+            2 => Some(NoteLetter::E),
+            3 => Some(NoteLetter::F),
+            4 => Some(NoteLetter::G),
+            5 => Some(NoteLetter::A),
+            6 => Some(NoteLetter::B),
+            _ => None,
+        }
+    }
+
     #[must_use]
     pub const fn letter(self) -> char {
         match self {
@@ -76,6 +105,18 @@ impl Accidental {
             Accidental::Flat => -1,
             Accidental::Natural => 0,
             Accidental::Sharp => 1,
+        }
+    }
+
+    /// The accidental that adds `semitones` to a letter: −1, 0 or +1.
+    /// `None` for anything a single accidental cannot write.
+    #[must_use]
+    pub const fn from_semitone_offset(semitones: i16) -> Option<Accidental> {
+        match semitones {
+            -1 => Some(Accidental::Flat),
+            0 => Some(Accidental::Natural),
+            1 => Some(Accidental::Sharp),
+            _ => None,
         }
     }
 
@@ -143,15 +184,28 @@ impl Pitch {
     }
 
     /// `(octave + 1) × 12 semitones/octave + letter semitones + accidental
-    /// semitones` → MIDI note number; C4 is 5 × 12 = 60.
+    /// semitones`: semitones above C−1, so C4 is 5 × 12 = 60. Not limited to
+    /// the MIDI range.
+    #[must_use]
+    pub fn semitones_above_c_minus_1(self) -> i16 {
+        (i16::from(self.octave) + 1) * 12
+            + self.name.letter.semitones_above_c()
+            + self.name.accidental.semitone_offset()
+    }
+
+    /// `octave × 7 steps/octave + letter steps`: staff steps above C0.
+    #[must_use]
+    pub fn staff_steps_above_c0(self) -> i16 {
+        i16::from(self.octave) * 7 + self.name.letter.steps_above_c()
+    }
+
+    /// The MIDI note number, from `semitones_above_c_minus_1`.
     ///
     /// # Errors
     ///
     /// When the pitch lies outside the MIDI range 0 to 127 (C−1 to G9).
     pub fn note_number(self) -> Result<NoteNumber, PitchError> {
-        let number: i16 = (i16::from(self.octave) + 1) * 12
-            + self.name.letter.semitones_above_c()
-            + self.name.accidental.semitone_offset();
+        let number: i16 = self.semitones_above_c_minus_1();
         u8::try_from(number)
             .ok()
             .and_then(|value: u8| NoteNumber::new(value).ok())

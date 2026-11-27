@@ -1,0 +1,21 @@
+# Canonical test song: crates/song_text/src/song_file.rs, test `a_key_override_keeps_the_sections_intervals`.
+# "Riff" is composed once in C major: C2, C#2 (A1), G2, B1 (-m2). The second entry overrides it with Eb major and plays Eb2, E2, Bb2, D2.
+song "Override"
+
+track "Clock"
+  type clock_and_transport
+
+track "Bass"
+  type mono_voice
+  notes pitched
+  clef bass
+  lead
+
+section "Riff"  key C major  meter 4/4
+  line "Bass"  tonic_octave 2  | P1:q A1 P5 -m2 |
+
+song_composition
+  key C major  meter 4/4  tempo 100 beats/min
+  "Riff"
+  "Riff"  key Eb major
+song_composition_close

@@ -10,27 +10,28 @@ track "Clock"
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 
 section "pp to ff over the bar, then ff holds"
   key C major  meter 4/4  tempo 100 beats/min
-  line "Keys"  | C4:q D4 E4 F4 | C4:w |
+  line "Keys"  tonic_octave 4  | P1:q M2 M3 P4 | P1:w |
   line "Keys"  dynamics  | pp < ff | ff:w |
 
 section "pp, a crescendo over a half note, ff"
   key C major  meter 4/4  tempo 100 beats/min
-  line "Keys"  | C4:q D4 E4 F4 |
+  line "Keys"  tonic_octave 4  | P1:q M2 M3 P4 |
   line "Keys"  dynamics  | pp:q < ff:q |
 
 section "pp then ff with no ramp"
   key C major  meter 4/4  tempo 100 beats/min
-  line "Keys"  | C4:q D4 E4 F4 |
+  line "Keys"  tonic_octave 4  | P1:q M2 M3 P4 |
   line "Keys"  dynamics  | pp:h ff:h |
 
 section "ff, a diminuendo that fills the bar, pp on the last beat"
   key C major  meter 4/4  tempo 100 beats/min
-  line "Keys"  | C4:q D4 E4 F4 |
+  line "Keys"  tonic_octave 4  | P1:q M2 M3 P4 |
   line "Keys"  dynamics  | ff > pp:q |
 
 song_composition

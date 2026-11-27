@@ -160,6 +160,8 @@ fn arrange_key(code: KeyCode, shift: bool, alt: bool, dialog: bool) -> Option<Ar
         KeyCode::Home => Some(ArrangeKey::Home),
         KeyCode::End => Some(ArrangeKey::End),
         KeyCode::Tab => Some(ArrangeKey::NextField),
+        // In an entry's key picker: its section's own key.
+        KeyCode::KeyS if dialog => Some(ArrangeKey::SectionKey),
         _ => None,
     };
     if dialog {

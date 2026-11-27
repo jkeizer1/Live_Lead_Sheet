@@ -1,5 +1,5 @@
 # Canonical test song (deliberately wrong): crates/song_text/tests/chord_inversion_plan.rs, test `a_third_inversion_of_a_triad_is_refused`.
-# I is a triad, so it has a first and a second inversion only. The loader must refuse [3rdInversion] at line 15 and say the highest is 2.
+# I is a triad, so it has a first and a second inversion only. The loader must refuse [3rdInversion] at line 16 and say the highest is 2.
 song "Chord inversion too high"
 
 track "Clock"
@@ -7,6 +7,7 @@ track "Clock"
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 

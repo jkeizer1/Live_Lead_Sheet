@@ -544,7 +544,7 @@ pub fn draw_dialog(
         colors::text_soft(),
     )?;
     let ok_label: &str = match dialog {
-        ArrangeDialog::NewSection(_) => "Make it",
+        ArrangeDialog::NewSection(_) | ArrangeDialog::OtherModeSection { .. } => "Make it",
         ArrangeDialog::AddEntry { .. } => "Add",
         _ => "OK",
     };
@@ -577,6 +577,19 @@ fn draw_dialog_body(
     unit: f32,
 ) -> Result<(), RenderError> {
     match dialog {
+        ArrangeDialog::OtherModeSection {
+            section_name,
+            key,
+            field,
+            ..
+        } => draw_other_mode_body(
+            canvas,
+            (left, body_top, inner_width),
+            unit,
+            section_name,
+            *key,
+            field,
+        )?,
         ArrangeDialog::Rename { field, .. } | ArrangeDialog::Tempo { field, .. } => {
             draw_field(
                 canvas,
@@ -587,7 +600,10 @@ fn draw_dialog_body(
             )?;
         }
         ArrangeDialog::Key {
-            choice, can_clear, ..
+            choice,
+            can_clear,
+            can_take_section_key,
+            ..
         } => {
             draw_key_grid(canvas, left, body_top, inner_width, unit, Some(*choice))?;
             if *can_clear {
@@ -598,6 +614,22 @@ fn draw_dialog_body(
                     unit,
                     false,
                     HitTarget::Arrange(ArrangeTarget::NoKey),
+                )?;
+            }
+            // Beside it, on the same row: an entry may play its section's key.
+            if *can_take_section_key {
+                dialog_button(
+                    canvas,
+                    rect(
+                        left + 27.0 * unit,
+                        body_top + 5.6 * unit,
+                        24.0 * unit,
+                        2.4 * unit,
+                    ),
+                    "The section's own key",
+                    unit,
+                    false,
+                    HitTarget::Arrange(ArrangeTarget::SectionKey),
                 )?;
             }
         }
@@ -637,9 +669,51 @@ fn draw_dialog_body(
     Ok(())
 }
 
+/// The prompt for a section in the other mode: what is made, and its name.
+fn draw_other_mode_body(
+    canvas: &mut Canvas<'_>,
+    (left, body_top, inner_width): (f32, f32, f32),
+    unit: f32,
+    section_name: &str,
+    key: Key,
+    field: &TextField,
+) -> Result<(), RenderError> {
+    let lines: [String; 2] = [
+        format!("A copy is made in {key}, each note on its scale step, and this entry plays it."),
+        format!("\"{section_name}\" stays as it is. Name the new section:"),
+    ];
+    for (index, line) in lines.iter().enumerate() {
+        canvas.text_fitted(
+            line,
+            left,
+            body_top + (1.2 + 1.5 * count_as_f32(index)) * unit,
+            1.1 * unit,
+            inner_width,
+            colors::text_soft(),
+        )?;
+    }
+    draw_field(
+        canvas,
+        rect(left, body_top + 3.8 * unit, 40.0 * unit, 2.8 * unit),
+        unit,
+        field,
+        true,
+    )
+}
+
 /// A dialog's title, the keys it takes, and its height in units.
 fn dialog_words(dialog: &ArrangeDialog) -> (String, &'static str, f32) {
     match dialog {
+        ArrangeDialog::OtherModeSection {
+            section_name,
+            section_key,
+            key,
+            ..
+        } => (
+            format!("\"{section_name}\" is in {section_key}: {key} needs a section of its own"),
+            "Enter makes it   Esc cancels",
+            17.0,
+        ),
         ArrangeDialog::Rename { section_name, .. } => (
             format!("Rename section \"{section_name}\" (every entry follows)"),
             "Enter renames   Esc cancels",
@@ -650,14 +724,22 @@ fn dialog_words(dialog: &ArrangeDialog) -> (String, &'static str, f32) {
             "Type a number such as 112.5   + and - change it by 1   Enter sets it   Esc cancels",
             12.0,
         ),
-        ArrangeDialog::Key { can_clear, .. } => (
+        ArrangeDialog::Key {
+            can_clear,
+            can_take_section_key,
+            ..
+        } => (
             String::from("Key"),
-            if *can_clear {
+            if *can_take_section_key {
+                "Left/Right round the circle of fifths   Up/Down major or minor   Enter picks   Delete inherits   S section's own key   Esc cancels"
+            } else if *can_clear {
                 "Left/Right round the circle of fifths   Up/Down major or minor   Enter picks   Delete: no key of its own   Esc cancels"
             } else {
                 "Left/Right round the circle of fifths   Up/Down major or minor   Enter picks   Esc cancels"
             },
-            15.0,
+            // The "No key of its own" button sits below the grid, so the
+            // hint and buttons move down to clear it.
+            if *can_clear { 17.5 } else { 15.0 },
         ),
         ArrangeDialog::Meter { .. } => (
             String::from("Meter"),

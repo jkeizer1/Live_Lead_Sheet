@@ -72,7 +72,7 @@ fn a_crescendo_with_no_level_after_it_is_refused() {
     let errors = parse_song("ramp.song", RAMP_WITHOUT_TARGET).unwrap_err();
     assert_eq!(errors.len(), 1, "{errors:?}");
     let message: String = errors[0].to_string();
-    assert!(message.starts_with("ramp.song line 16:"), "{message}");
+    assert!(message.starts_with("ramp.song line 17:"), "{message}");
     assert!(message.contains("target level"), "{message}");
 }
 
@@ -81,7 +81,7 @@ fn a_word_that_is_not_a_level_is_refused_with_the_marks_that_exist() {
     let errors = parse_song("word.song", WORD_NOT_KNOWN).unwrap_err();
     assert_eq!(errors.len(), 1, "{errors:?}");
     let message: String = errors[0].to_string();
-    assert!(message.starts_with("word.song line 16:"), "{message}");
+    assert!(message.starts_with("word.song line 17:"), "{message}");
     assert!(message.contains("is not a dynamics mark"), "{message}");
 }
 
@@ -149,6 +149,6 @@ fn a_ramp_with_no_time_left_in_its_bar_is_refused() {
     let errors = parse_song("no_time.song", RAMP_HAS_NO_TIME).unwrap_err();
     assert_eq!(errors.len(), 1, "{errors:?}");
     let message: String = errors[0].to_string();
-    assert!(message.starts_with("no_time.song line 16:"), "{message}");
+    assert!(message.starts_with("no_time.song line 17:"), "{message}");
     assert!(message.contains("has no time"), "{message}");
 }

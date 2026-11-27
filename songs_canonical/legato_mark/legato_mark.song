@@ -11,37 +11,38 @@ track "Clock"
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
   lead
 
 # Bar 1: D2 is joined to A2; A2 and F2 end as written.
 section "joined"
   key C major  meter 4/4  tempo 100 beats/min
-  line "Bass"  | D2:q_ A2:q F2:h |
+  line "Bass"  tonic_octave 2  | M2:q_ M6:q P4:h |
 
 # Bar 2: the same notes with no mark; nothing is joined.
-section "unmarked"  meter 4/4
-  line "Bass"  | D2:q A2:q F2:h |
+section "unmarked"  meter 4/4  key C major
+  line "Bass"  tonic_octave 2  | M2:q M6:q P4:h |
 
 # Bar 3: a rest follows the marked note, so there is nothing to join.
-section "rest after"  meter 4/4
-  line "Bass"  | D2:e_ r:e A2:q F2:h |
+section "rest after"  meter 4/4  key C major
+  line "Bass"  tonic_octave 2  | M2:e_ r:e M6:q P4:h |
 
 # Bars 4 and 5: the marked half note is joined to the first note of the next bar.
-section "across the barline"  meter 4/4
-  line "Bass"  | r:h D2:h_ | A2:w |
+section "across the barline"  meter 4/4  key C major
+  line "Bass"  tonic_octave 2  | r:h M2:h_ | M6:w |
 
 # Bar 6: the marked D2 is followed by D2: one half note, one gate.
-section "same pitch"  meter 4/4
-  line "Bass"  | D2:q_ D2:q A2:h |
+section "same pitch"  meter 4/4  key C major
+  line "Bass"  tonic_octave 2  | M2:q_ M2:q M6:h |
 
 # Bar 7: three D2 joined into one dotted half note, which is then joined to A2.
-section "chain"  meter 4/4
-  line "Bass"  | D2:q_ D2:q_ D2:q_ A2:q |
+section "chain"  meter 4/4  key C major
+  line "Bass"  tonic_octave 2  | M2:q_ M2:q_ M2:q_ M6:q |
 
 # Bar 8: staccato cuts the note to an eighth note, so it touches nothing.
-section "staccato"  meter 4/4
-  line "Bass"  | D2:q'_ A2:q F2:h |
+section "staccato"  meter 4/4  key C major
+  line "Bass"  tonic_octave 2  | M2:q'_ M6:q P4:h |
 
 song_composition
   key C major  meter 4/4  tempo 100 beats/min

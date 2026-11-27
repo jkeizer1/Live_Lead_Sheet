@@ -8,30 +8,32 @@ track "Clock"
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef treble
   lead
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 
 song_composition
   key G major  meter 4/4  tempo 100 beats/min
   "Intro"  repeat 2
   "Riff"  key A major
-  key E minor  tempo 120 beats/min
+  key E major  tempo 120 beats/min
   "Riff"
   "Bridge"
 song_composition_close
 
-section "Intro"
+section "Intro"  key G major
   meter 4/4
   line "Keys"  | I:w | V:w |
 
-section "Riff"
+section "Riff"  key G major
   meter 4/4
   line "Keys"  | I:h IV | V:w |
-  line "Bass"  | G2:h C2 | D2:w |
+  line "Bass"  tonic_octave 1  | P8:h P4 | P5:w |
 
 section "Bridge"
   meter 3/4  key C major  tempo 90 beats/min

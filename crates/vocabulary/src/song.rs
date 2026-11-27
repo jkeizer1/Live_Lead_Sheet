@@ -35,6 +35,29 @@ pub enum VoiceKind {
     Mono,
 }
 
+/// What a voice track's notes are (Song Notation, section 5, `notes`).
+/// Every voice track says which; nothing can tell them apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrackNotes {
+    /// Music: written as intervals from the section's tonic, so they follow
+    /// every key override.
+    Pitched,
+    /// MIDI notes the receiver uses (a gate, a sample): written as note
+    /// names and never transposed.
+    MidiNote,
+}
+
+impl TrackNotes {
+    /// As written in the files: `pitched`, `midi_note`.
+    #[must_use]
+    pub const fn text(self) -> &'static str {
+        match self {
+            TrackNotes::Pitched => "pitched",
+            TrackNotes::MidiNote => "midi_note",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Clef {
     Treble,
@@ -260,6 +283,7 @@ fn check_voice_layer_names(
 pub enum TrackKind {
     Voice {
         voice: VoiceKind,
+        notes: TrackNotes,
         clef: Clef,
         /// The song's harmony track: the chord symbols show its chords.
         lead: bool,
@@ -426,6 +450,13 @@ pub struct Line {
     /// Tempo marks, in bar order; only the lead track's first voice layer
     /// has any.
     tempo_marks: Vec<TempoMark>,
+    /// `tonic_octave n` on a pitched line: the octave of the section's own
+    /// tonic its intervals are measured from, as written.
+    tonic_octave: Option<i8>,
+    /// The tonic the intervals were read from as this entry plays the
+    /// section: the section's own, or under a key override the override's
+    /// nearest it. Kept so an edit writes the same intervals back.
+    tonic: Option<Pitch>,
 }
 
 impl Line {
@@ -494,7 +525,33 @@ impl Line {
             bar_count,
             elements,
             tempo_marks: Vec::new(),
+            tonic_octave: None,
+            tonic: None,
         })
+    }
+
+    /// The line with its `tonic_octave` as written, and the tonic its
+    /// intervals were read from as the entry plays it.
+    #[must_use]
+    pub fn with_tonic(self, tonic_octave: Option<i8>, tonic: Option<Pitch>) -> Line {
+        Line {
+            tonic_octave,
+            tonic,
+            ..self
+        }
+    }
+
+    /// The tonic the line's intervals were read from, as the entry plays
+    /// the section.
+    #[must_use]
+    pub fn tonic(&self) -> Option<Pitch> {
+        self.tonic
+    }
+
+    /// `tonic_octave n`, on a pitched line that writes notes.
+    #[must_use]
+    pub fn tonic_octave(&self) -> Option<i8> {
+        self.tonic_octave
     }
 
     /// The line with tempo marks, in bar order.
@@ -643,7 +700,7 @@ fn check_contents(track: &Track, line_element: &LineElement) -> Result<(), SongE
         // The clock and transport and meter control tracks are refused for
         // the whole line.
         (TrackKind::ClockAndTransport | TrackKind::MeterControl, _) => Ok(()),
-        (TrackKind::Voice { voice, .. }, Some(contents)) => match (voice, contents) {
+        (TrackKind::Voice { voice, notes, .. }, Some(contents)) => match (voice, contents) {
             (_, ElementContents::Cue(_)) => Err(wrong("a cue belongs on a cue control track")),
             (_, ElementContents::Dynamic(_)) => Err(wrong(
                 "a level or crescendo belongs on a dynamics line, e.g. line \"Keys\" dynamics | p:w | f |",
@@ -651,6 +708,15 @@ fn check_contents(track: &Track, line_element: &LineElement) -> Result<(), SongE
             (VoiceKind::Mono, ElementContents::Notes(notes)) if notes.len() == 1 => Ok(()),
             (VoiceKind::Mono, _) => Err(wrong(
                 "a mono voice plays one note at a time; write a single note such as C2",
+            )),
+            (
+                _,
+                ElementContents::Chord(_)
+                | ElementContents::ChordWithNotes { .. }
+                | ElementContents::InvertedChord { .. },
+            ) if *notes == TrackNotes::MidiNote => Err(wrong(
+                "its notes are midi_note, so a chord numeral means nothing to it; write the \
+                 notes, e.g. C4",
             )),
             (
                 VoiceKind::Poly,
@@ -684,6 +750,9 @@ pub struct Section {
     /// The key in effect, written or carried on; `None` until a key is
     /// given (a count-in section needs none).
     key: Option<Key>,
+    /// The key the section writes itself, which its intervals are measured
+    /// from; `None` for a section that writes none.
+    own_key: Option<Key>,
     /// The meter of every bar: the section's `meter`, or the repeating
     /// pattern of its `meter_control` line.
     bar_meters: BarMeters,
@@ -769,6 +838,7 @@ impl Section {
             count_in,
             repeat_count,
             key,
+            own_key: None,
             bar_meters,
             beat_grouping: None,
             tempo,
@@ -829,6 +899,18 @@ impl Section {
     #[must_use]
     pub fn key(&self) -> Option<Key> {
         self.key
+    }
+
+    /// The section with the key it writes itself.
+    #[must_use]
+    pub fn with_own_key(self, own_key: Option<Key>) -> Section {
+        Section { own_key, ..self }
+    }
+
+    /// The key the section writes itself; `key` is the one it plays in.
+    #[must_use]
+    pub fn own_key(&self) -> Option<Key> {
+        self.own_key
     }
 
     /// The meter of the first bar. Every meter of a section has the same
@@ -1520,6 +1602,7 @@ mod tests {
             "Keys",
             TrackKind::Voice {
                 voice: VoiceKind::Poly,
+                notes: TrackNotes::Pitched,
                 clef: Clef::Grand,
                 lead: true,
                 voice_layer_names: Vec::new(),
@@ -1532,6 +1615,7 @@ mod tests {
             "Bass",
             TrackKind::Voice {
                 voice: VoiceKind::Mono,
+                notes: TrackNotes::Pitched,
                 clef: Clef::Bass,
                 lead: false,
                 voice_layer_names: Vec::new(),
@@ -1772,6 +1856,7 @@ mod tests {
             "Keys",
             TrackKind::Voice {
                 voice: VoiceKind::Poly,
+                notes: TrackNotes::Pitched,
                 clef: Clef::Treble,
                 lead: false,
                 voice_layer_names: Vec::new(),
@@ -1915,6 +2000,7 @@ mod tests {
             "Manual",
             TrackKind::Voice {
                 voice,
+                notes: TrackNotes::Pitched,
                 clef: Clef::Grand,
                 lead: true,
                 voice_layer_names: names,

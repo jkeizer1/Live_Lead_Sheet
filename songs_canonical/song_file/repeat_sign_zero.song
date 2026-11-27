@@ -1,10 +1,11 @@
 # Canonical test song (deliberately wrong): crates/song_text/src/song_file.rs, test `a_repeat_sign_with_zero_plays_is_refused`.
-# |%0 plays the bars no times. The loader must refuse it at line 12 and say to use |%2.
+# |%0 plays the bars no times. The loader must refuse it at line 13 and say to use |%2.
 song "T"
 track "Clock"
   type clock_and_transport
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 section "A"

@@ -121,6 +121,29 @@ pub fn write_arrange_edit(
                 what,
             ))
         }
+        ArrangeEdit::SectionInOtherMode {
+            entry,
+            new_name,
+            key,
+        } => Ok((
+            crate::mode_section::section_in_other_mode(text, source, song, *entry, new_name, *key)?,
+            format!(
+                "New section \"{new_name}\" in {key}, each note on its scale step; the entry \
+                 plays it. Look it over in F3"
+            ),
+        )),
+        ArrangeEdit::EntrySectionKey { entry } => {
+            let name: String = entry_name(source, *entry);
+            Ok((
+                set_entry_key(
+                    text,
+                    source,
+                    *entry,
+                    Some(String::from(crate::arrangement::SECTION_KEY_WORD)),
+                )?,
+                format!("Entry \"{name}\" plays its section's own key"),
+            ))
+        }
         ArrangeEdit::EntryTempo { entry, tempo_words } => {
             let name: String = entry_name(source, *entry);
             let what: String = match tempo_words {

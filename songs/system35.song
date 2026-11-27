@@ -8,6 +8,7 @@ track "Clock"
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
   lead
 
@@ -21,11 +22,11 @@ song_composition_close
 section "tune"
   key C major
   meter 4/4  tempo 100 beats/min
-  line "Bass"     | A2:w |
+  line "Bass"  tonic_octave 3     | -m3:w |
 
-section "1"  meter 4/4
+section "1"  meter 4/4  key C major
 
-  line "Bass"     | D2:e_ A2:e_ F2:e_ D2:e  A2:e_ G2:e_ F2:e  r:e  | C3:h_  D2:h  |  
-                  | D2:e  A2:e  F2:e  D2:e  A2:e  r:e   F2:e  r:e  | C2:h   D1:h  |  
+  line "Bass"  tonic_octave 1     | M9:e_ M13:e_ P11:e_ M9:e  M13:e_ P12:e_ P11:e  r:e  | P15:h_  M9:h  |  
+                  | M9:e  M13:e  P11:e  M9:e  M13:e  r:e   P11:e  r:e  | P8:h   M2:h  |  
 
                   

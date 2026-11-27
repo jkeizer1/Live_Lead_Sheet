@@ -15,15 +15,18 @@ track "Meter"
 
 track "Beat"
   type mono_voice
+  notes midi_note
   clef treble
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 
 # A 4/4 bar, then a 5/4 bar, twice through, and the whole section twice.
@@ -41,33 +44,33 @@ section "Four and five"
   line "Meter"  | mp [4_4 5_4] |
   line "Beat"  | C4:q> / / / | C4:q> / / / / | C4:q> / / / | C4:q> / / / / |
   line "Keys"  | I:w | IV:w IV:q | V:w | I:w I:q |
-  line "Bass"  | C2:q / / / | F2:q / / / / | G2:q / / / | C2:q / / / / |
+  line "Bass"  tonic_octave 2  | P1:q / / / | P4:q / / / / | P5:q / / / | P1:q / / / / |
 
 # Three bars: 3/4, 3/4, 4/4. The tempo carries on, and so does the beat.
-section "Cadence"
+section "Cadence"  key C major
   line "Meter"  | mp [3_4 3_4 4_4] |
   line "Beat"  | C4:q> / / | C4:q> / / | C4:q> / / / |
   line "Keys"  | vi:h. | IV:h. | V:w |
-  line "Bass"  | A1:q / / | F1:q / / | G1:q / / / |
+  line "Bass"  tonic_octave 1  | M6:q / / | P4:q / / | P5:q / / / |
 
 # A plain meter, no pattern: every bar is 3/4.
-section "Waltz"
+section "Waltz"  key C major
   meter 3/4
   line "Beat"  | C4:q> / / | C4:q> / / |
   line "Keys"  | I:h. | V:h. |
-  line "Bass"  | C2:q / / | G2:q / / |
+  line "Bass"  tonic_octave 2  | P1:q / / | P5:q / / |
 
 # 6/8 then 9/8: both have a dotted quarter note as the beat, so 100 beats/min
 # is now 100 dotted quarter notes a minute.
-section "Six and nine"
+section "Six and nine"  key C major
   line "Meter"  | mp [6_8 9_8] |
   line "Beat"  | C4:q.> / | C4:q.> / / |
   line "Keys"  | I:h. | IV:h. IV:q. |
-  line "Bass"  | C2:q. / | F2:q. / / |
+  line "Bass"  tonic_octave 2  | P1:q. / | P4:q. / / |
 
 # Back to 4/4 to finish.
-section "Home"
+section "Home"  key C major
   meter 4/4
   line "Beat"  | C4:q> / / / |
   line "Keys"  | I:w |
-  line "Bass"  | C2:q / / / |
+  line "Bass"  tonic_octave 2  | P1:q / / / |

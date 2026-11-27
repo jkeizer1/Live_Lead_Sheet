@@ -3,6 +3,7 @@
 song "T"
 track "Beat"
  type mono_voice
+ notes midi_note
  clef treble
 section "A"
  meter 4/4  tempo 120 beats/min

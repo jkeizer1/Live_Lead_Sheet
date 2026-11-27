@@ -106,6 +106,24 @@ pub fn set_entry_key(
     })
 }
 
+/// The entry plays `section_name`, with `key_words` as its own key.
+///
+/// # Errors
+///
+/// When the entry does not exist.
+pub fn set_entry_section(
+    text: &str,
+    source: &SongSource,
+    entry_index: usize,
+    section_name: &str,
+    key_words: Option<String>,
+) -> Result<String, String> {
+    rewrite_entry(text, source, entry_index, |entry: &mut EntrySource| {
+        entry.section_name = section_name.to_string();
+        entry.key_words = key_words;
+    })
+}
+
 /// The entry's own tempo, as the song writes it (`132 beats/min`).
 ///
 /// # Errors
@@ -276,6 +294,9 @@ pub struct LineChoice<'a> {
     pub track_name: &'a str,
     pub layer: u8,
     pub sample_source: bool,
+    /// `tonic_octave n` on a pitched line that writes notes; not part of
+    /// which line it is.
+    pub tonic_octave: Option<i8>,
 }
 
 impl LineChoice<'_> {
@@ -286,12 +307,16 @@ impl LineChoice<'_> {
             && !line.dynamics
     }
 
-    /// `line "Keys"`, with `voice_layer n` and `sample_source` as needed.
+    /// `line "Keys"`, with `voice_layer n`, `tonic_octave n` and
+    /// `sample_source` as needed.
     #[must_use]
     pub fn header(&self) -> String {
         let mut words: Vec<String> = vec![format!("line \"{}\"", self.track_name)];
         if self.layer != 1 {
             words.push(format!("voice_layer {}", self.layer));
+        }
+        if let Some(octave) = self.tonic_octave {
+            words.push(format!("tonic_octave {octave}"));
         }
         if self.sample_source {
             words.push(String::from("sample_source"));
@@ -478,7 +503,7 @@ mod tests {
     fn section_settings_are_set_or_added() {
         let source: SongSource = SongSource::read(DEMO);
         let keyed: String = set_section_key(DEMO, &source, "Verse", "G major").unwrap();
-        assert!(keyed.contains("  meter 4/4  key G major"));
+        assert!(keyed.contains("section \"Verse\"  key G major"));
         reads(&keyed);
         let tempo: String = set_section_tempo(DEMO, &source, "Count-in", "100").unwrap();
         assert!(tempo.contains("tempo 100 beats/min"));
@@ -492,23 +517,26 @@ mod tests {
             track_name: "Bass",
             layer: 1,
             sample_source: false,
+            tonic_octave: None,
         };
         let replaced: String = replace_line(
             DEMO,
             &source,
             "Chorus",
             choice,
-            vec![String::from("  line \"Bass\"  | F2:w | G2:w |")],
+            vec![String::from(
+                "  line \"Bass\"  tonic_octave 2  | P4:w | P5:w |",
+            )],
         )
         .unwrap();
-        assert!(replaced.contains("line \"Bass\"  | F2:w | G2:w |"));
+        assert!(replaced.contains("line \"Bass\"  tonic_octave 2  | P4:w | P5:w |"));
         reads(&replaced);
         let added: String = replace_line(
             DEMO,
             &source,
             "Count-in",
             choice,
-            vec![String::from("  line \"Bass\"  | C2:w |")],
+            vec![String::from("  line \"Bass\"  | r:w |")],
         )
         .unwrap();
         reads(&added);

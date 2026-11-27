@@ -5,15 +5,17 @@ track "Clock"
   type clock_and_transport
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 section "A"
   key C major  meter 4/4  tempo 100 beats/min
   line "Keys"  | I:w | I:w |
-  line "Keys"  voice_layer 2  | tempo 90 beats/min C4:w | C4:w |
+  line "Keys"  voice_layer 2  tonic_octave 4  | tempo 90 beats/min P1:w | P1:w |
 
 song_composition
   key C major  meter 4/4  tempo 100 beats/min

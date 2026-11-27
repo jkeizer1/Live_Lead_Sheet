@@ -69,7 +69,7 @@ fn a_third_inversion_of_a_triad_is_refused() {
     let errors = parse_song("too_high.song", TOO_HIGH).unwrap_err();
     assert_eq!(errors.len(), 1, "{errors:?}");
     let message: String = errors[0].to_string();
-    assert!(message.starts_with("too_high.song line 15:"), "{message}");
+    assert!(message.starts_with("too_high.song line 16:"), "{message}");
     assert!(
         message.contains("inversion 3 does not exist for this chord: the highest is 2"),
         "{message}"

@@ -109,6 +109,9 @@ pub struct EntryView {
     /// The key the entry plays in, and whether the entry writes it itself.
     pub key: Option<Key>,
     pub key_written_on_entry: bool,
+    /// The key the section writes itself, which its intervals are measured
+    /// from; `None` for a section with none, or a muted entry never built.
+    pub section_key: Option<Key>,
     /// The meter of the first bar; `None` for a muted entry whose section
     /// no other entry plays, so it was never built.
     pub meter: Option<TimeSignature>,
@@ -209,7 +212,11 @@ impl Timeline {
                     muted: true,
                     count_in: false,
                     key: None,
-                    key_written_on_entry: written.key_words.is_some(),
+                    section_key: None,
+                    key_written_on_entry: written
+                        .key_words
+                        .as_deref()
+                        .is_some_and(|words: &str| words != crate::arrangement::SECTION_KEY_WORD),
                     meter: None,
                     milli_beats_per_minute: 0,
                     tempo_written_on_entry: written.tempo_words.is_some(),
@@ -367,7 +374,11 @@ fn entry_view(
         muted: false,
         count_in: section.count_in(),
         key,
-        key_written_on_entry: written.key_words.is_some(),
+        section_key: section.own_key(),
+        key_written_on_entry: written
+            .key_words
+            .as_deref()
+            .is_some_and(|words: &str| words != crate::arrangement::SECTION_KEY_WORD),
         meter: Some(section.time_signature()),
         milli_beats_per_minute: milli_beats_per_minute(section),
         tempo_written_on_entry: written.tempo_words.is_some(),
@@ -464,7 +475,12 @@ impl Speller {
             ),
             (ElementContents::Notes(notes), _) => (notes.clone(), names(notes)),
             (ElementContents::Cue(name), _) => (Vec::new(), name.clone()),
-            (other, _) => (Vec::new(), crate::line_text::contents_text(other)),
+            // Chords without a key, levels: no notes, so the spelling is not used.
+            (other, _) => (
+                Vec::new(),
+                crate::line_text::contents_text(other, crate::line_text::NoteSpelling::NoteNames)
+                    .unwrap_or_else(|error| error.to_string()),
+            ),
         }
     }
 }

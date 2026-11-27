@@ -7,12 +7,13 @@ track "Clock"
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
   lead
 
 section "A"
   key C major  meter 4/4  tempo 120 beats/min
-  line "Bass" sample_source | D2 A2 F2 D2 |
+  line "Bass"  tonic_octave 2 sample_source | M2 M6 P4 M2 |
   line "Bass"               | /:q :q :q :q |
 
 song_composition

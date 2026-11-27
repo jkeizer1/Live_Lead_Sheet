@@ -9,6 +9,7 @@ track "Clock"
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
   lead
 
@@ -19,4 +20,4 @@ song_composition_close
 
 section "Gate test"
   key C major  meter 4/4  tempo 120 beats/min
-  line "Bass"  | C2:e r G2 r D2 r A2 r           | C2 r C2 r C2 r C2 r             |
+  line "Bass"  tonic_octave 2  | P1:e r P5 r M2 r M6 r           | P1 r P1 r P1 r P1 r             |

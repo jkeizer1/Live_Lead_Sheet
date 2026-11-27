@@ -6,6 +6,7 @@ track "Clock"
   type clock_and_transport
 
 track "Beat"
+  notes midi_note
   clef treble
   lead
 

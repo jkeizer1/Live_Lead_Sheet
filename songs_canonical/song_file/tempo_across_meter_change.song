@@ -5,18 +5,19 @@ track "Clock"
   type clock_and_transport
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 section "A"
   key C major  meter 4/4
   line "Keys" | I:w |
-section "B"
+section "B"  key C major
   meter 3/4
   line "Keys" | I:h. |
-section "C"
+section "C"  key C major
   meter 6/8
   line "Keys" | I:h. |
-section "D"
+section "D"  key C major
   meter 4/4
   line "Keys" | I:w |
 

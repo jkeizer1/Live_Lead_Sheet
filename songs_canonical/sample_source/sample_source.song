@@ -13,11 +13,13 @@ track "Clock"
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef grand
   lead
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 
 section "Chords and bass from sources"
@@ -26,7 +28,7 @@ section "Chords and bass from sources"
   # half note on beat 3 starts on the second IV and moves to V.
   line "Keys"  sample_source  | I | IV IV V | vi | V |
   line "Keys"                 | :h :q :q | :h :h | :q :q :q :q | :w |
-  line "Bass"  sample_source  | C2 | F2 F2 G2 | A2 | G2 |
+  line "Bass"  tonic_octave 2  sample_source  | P1 | P4 P4 P5 | M6 | P5 |
   line "Bass"                 | :q :q :q :q | :q :q :q :q | :h :h | :q r :h |
 
 song_composition

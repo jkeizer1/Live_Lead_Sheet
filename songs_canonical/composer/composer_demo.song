@@ -7,15 +7,18 @@ track "Clock"
 
 track "Keys"
   type poly_voice
+  notes pitched
   clef treble
   lead
 
 track "Bass"
   type mono_voice
+  notes pitched
   clef bass
 
 track "Beat"
   type mono_voice
+  notes midi_note
   clef treble
 
 song_composition
@@ -32,22 +35,22 @@ section "Count-in"  count-in
   line "Beat"  | C4:q> / / / |
 
 # I – vi – ii – V
-section "Verse"
+section "Verse"  key C major
   meter 4/4
   line "Keys"  | I:h / | vi:q / / / |
                | ii7:h / | V7:q / / / |
-  line "Bass"  | C2:h G2 | A2:q E2 A2 E2 | D2:h A2 | G2:q D2 G2 B2 |
+  line "Bass"  tonic_octave 2  | P1:h P5 | M6:q M3 M6 M3 | M2:h M6 | P5:q M2 P5 M7 |
   line "Beat"  | C4:q> / / / | /> / / / | /> / / / | /> / / / |
 
-section "Chorus"
+section "Chorus"  key C major
   meter 4/4
   line "Keys"  | IV:q. I:e~ I:h | V:q. vi:e~ vi:h |
-  line "Bass"  | F2:q. C2:e~ C2:h | G2:q. A2:e~ A2:h |
+  line "Bass"  tonic_octave 2  | P4:q. P1:e~ P1:h | P5:q. M6:e~ M6:h |
   line "Beat"  | C4:q> / / / | /> / / / |
 
-section "Bridge"
+section "Bridge"  key C major
   meter 4/4
   line "Keys"  sample_source  | vi | IV V |
   line "Keys"                 | :q. :e~ :h | :q :q :q :q |
-  line "Bass"  | A2:w | F2:h G2 |
+  line "Bass"  tonic_octave 2  | M6:w | P4:h P5 |
   line "Beat"  | C4:q> / / / | /> / / / |
